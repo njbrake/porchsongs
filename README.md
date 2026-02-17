@@ -1,6 +1,22 @@
-# porchsongs
+<p align="center">
+  <img src="frontend/public/logo.svg" alt="porchsongs" width="120" />
+</p>
 
-A personal song lyric rewriter. Paste a chord chart, chat with an AI to workshop the lyrics into your own life, and play a song that actually sounds like you.
+<h1 align="center">porchsongs</h1>
+
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/python-3.11+-blue?logo=python&logoColor=white" />
+  <img alt="React" src="https://img.shields.io/badge/react-19-61dafb?logo=react&logoColor=white" />
+  <img alt="FastAPI" src="https://img.shields.io/badge/fastapi-0.115-009688?logo=fastapi&logoColor=white" />
+  <img alt="any-llm" src="https://img.shields.io/badge/LLM_providers-38+-c06830" />
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-green" />
+</p>
+
+<p align="center">
+  A personal song lyric rewriter. Paste a chord chart, chat with an AI to workshop the lyrics into your own life, and play a song that actually sounds like you.
+</p>
+
+---
 
 porchsongs preserves meter, rhyme scheme, chord alignment, and emotional meaning — it only swaps out the imagery that doesn't fit.
 

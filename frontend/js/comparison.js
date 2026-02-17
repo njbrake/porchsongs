@@ -18,6 +18,9 @@ const ComparisonView = {
     // Highlight changed lines
     this.highlightChanges(result.original_lyrics, result.rewritten_lyrics);
 
+    // Make rewritten lines clickable for workshopping
+    this.makeRewrittenLinesClickable();
+
     // Changes summary
     document.getElementById('changes-display').textContent = result.changes_summary;
 
@@ -54,6 +57,22 @@ const ComparisonView = {
         if (rSpan) rSpan.classList.add('line-changed');
       }
     }
+  },
+
+  makeRewrittenLinesClickable() {
+    const container = document.getElementById('rewritten-display');
+    container.querySelectorAll('span[data-line]').forEach(span => {
+      // Only make non-chord, non-empty lines clickable
+      if (span.classList.contains('line-chord')) return;
+      if (!span.textContent.trim()) return;
+
+      span.classList.add('line-clickable');
+      span.addEventListener('click', (e) => {
+        e.preventDefault();
+        const lineIndex = parseInt(span.dataset.line);
+        WorkshopManager.open(lineIndex);
+      });
+    });
   },
 
   isChordLine(line) {

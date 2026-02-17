@@ -30,20 +30,46 @@ const LibraryManager = {
     empty.classList.add('hidden');
     list.innerHTML = this.songs.map(song => this.renderCard(song)).join('');
 
-    // Attach event listeners
-    list.querySelectorAll('.library-card-header').forEach(header => {
-      header.addEventListener('click', () => {
-        const body = header.nextElementSibling;
-        body.classList.toggle('open');
-      });
-    });
+    // Attach event listeners via delegation
+    list.addEventListener('click', (e) => this.handleClick(e));
+  },
 
-    list.querySelectorAll('.delete-song-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.deleteSong(parseInt(btn.dataset.id));
-      });
-    });
+  handleClick(e) {
+    const target = e.target;
+
+    // Toggle card body
+    const header = target.closest('.library-card-header');
+    if (header && !target.closest('button')) {
+      const body = header.nextElementSibling;
+      body.classList.toggle('open');
+
+      // Load revisions on first open
+      const songId = header.dataset.songId;
+      if (body.classList.contains('open') && songId) {
+        this.loadRevisions(parseInt(songId), body);
+      }
+      return;
+    }
+
+    // Delete button
+    const deleteBtn = target.closest('.delete-song-btn');
+    if (deleteBtn) {
+      e.stopPropagation();
+      this.deleteSong(parseInt(deleteBtn.dataset.id));
+      return;
+    }
+
+    // Continue editing button
+    const editBtn = target.closest('.continue-edit-btn');
+    if (editBtn) {
+      e.stopPropagation();
+      const songId = parseInt(editBtn.dataset.id);
+      const song = this.songs.find(s => s.id === songId);
+      if (song) {
+        RewriteManager.loadSongForEditing(song);
+      }
+      return;
+    }
   },
 
   renderCard(song) {
@@ -51,15 +77,21 @@ const LibraryManager = {
     const title = song.title || 'Untitled';
     const artist = song.artist ? ` by ${song.artist}` : '';
     const model = song.llm_model ? ` &middot; ${song.llm_model}` : '';
+    const statusClass = song.status === 'completed' ? 'completed' : 'draft';
+    const statusLabel = song.status === 'completed' ? 'Completed' : 'Draft';
+    const versionInfo = song.current_version > 1 ? ` &middot; v${song.current_version}` : '';
 
     return `
       <div class="library-card">
-        <div class="library-card-header">
+        <div class="library-card-header" data-song-id="${song.id}">
           <div class="library-card-info">
-            <h3>${this.escapeHtml(title)}${this.escapeHtml(artist)}</h3>
-            <span class="meta">${date}${model}</span>
+            <h3>${this.escapeHtml(title)}${this.escapeHtml(artist)}
+              <span class="status-badge ${statusClass}">${statusLabel}</span>
+            </h3>
+            <span class="meta">${date}${model}${versionInfo}</span>
           </div>
           <div class="library-card-actions">
+            ${song.status !== 'completed' ? `<button class="btn secondary continue-edit-btn" data-id="${song.id}">Continue Editing</button>` : ''}
             <button class="btn danger delete-song-btn" data-id="${song.id}">Delete</button>
           </div>
         </div>
@@ -79,9 +111,37 @@ const LibraryManager = {
             <h3>Changes</h3>
             <div>${this.escapeHtml(song.changes_summary)}</div>
           </div>` : ''}
+          <div class="revision-list" id="revisions-${song.id}"></div>
         </div>
       </div>
     `;
+  },
+
+  async loadRevisions(songId, bodyEl) {
+    const container = bodyEl.querySelector(`#revisions-${songId}`);
+    if (!container || container.dataset.loaded) return;
+
+    try {
+      const revisions = await API.getSongRevisions(songId);
+      if (revisions.length <= 1) {
+        container.innerHTML = '';
+        return;
+      }
+
+      container.dataset.loaded = 'true';
+      container.innerHTML = `
+        <h4>Revision History (${revisions.length} versions)</h4>
+        ${revisions.map(rev => {
+          const date = new Date(rev.created_at).toLocaleString();
+          const typeLabel = rev.edit_type === 'line' ? 'Line edit' : 'Full rewrite';
+          return `<div class="revision-item">
+            v${rev.version} &mdash; ${typeLabel} &mdash; ${rev.changes_summary || 'No summary'} &mdash; ${date}
+          </div>`;
+        }).join('')}
+      `;
+    } catch (err) {
+      console.error('Failed to load revisions:', err);
+    }
   },
 
   async deleteSong(id) {

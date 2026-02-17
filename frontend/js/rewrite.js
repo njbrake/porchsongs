@@ -4,12 +4,13 @@
 const RewriteManager = {
   lastResult: null,
   lastMeta: null,
+  currentSongId: null,
 
   init() {
     document.getElementById('fetch-rewrite-btn').addEventListener('click', () => this.fetchAndRewrite());
     document.getElementById('manual-rewrite-btn').addEventListener('click', () => this.manualRewrite());
     document.getElementById('toggle-manual').addEventListener('click', () => this.toggleManual());
-    document.getElementById('save-btn').addEventListener('click', () => this.saveSong());
+    document.getElementById('save-btn').addEventListener('click', () => this.markComplete());
 
     // Enter key on URL input
     document.getElementById('ug-url').addEventListener('keydown', (e) => {
@@ -63,6 +64,7 @@ const RewriteManager = {
     if (!this.validateProfile() || !this.validateSettings()) return;
 
     this.showLoading(true);
+    this.currentSongId = null;
     document.getElementById('comparison-section').classList.add('hidden');
 
     try {
@@ -92,6 +94,9 @@ const RewriteManager = {
       };
 
       ComparisonView.show(result, tab.title, tab.artist);
+
+      // Auto-save as draft
+      await this.autoSaveDraft();
     } catch (err) {
       alert('Error: ' + err.message);
     } finally {
@@ -111,6 +116,7 @@ const RewriteManager = {
     const artist = document.getElementById('manual-artist').value.trim() || null;
 
     this.showLoading(true);
+    this.currentSongId = null;
     document.getElementById('comparison-section').classList.add('hidden');
 
     try {
@@ -135,6 +141,9 @@ const RewriteManager = {
       };
 
       ComparisonView.show(result, title, artist);
+
+      // Auto-save as draft
+      await this.autoSaveDraft();
     } catch (err) {
       alert('Error: ' + err.message);
     } finally {
@@ -142,11 +151,11 @@ const RewriteManager = {
     }
   },
 
-  async saveSong() {
+  async autoSaveDraft() {
     if (!this.lastResult || !this.lastMeta) return;
 
     try {
-      await API.saveSong({
+      const song = await API.saveSong({
         profile_id: this.lastMeta.profile_id,
         title: this.lastMeta.title,
         artist: this.lastMeta.artist,
@@ -158,14 +167,79 @@ const RewriteManager = {
         llm_model: this.lastMeta.llm_model,
       });
 
-      document.getElementById('save-btn').textContent = 'Saved!';
-      document.getElementById('save-btn').disabled = true;
+      this.currentSongId = song.id;
+      WorkshopManager.setSongId(song.id);
+
+      // Update button to show "Mark as Complete"
+      const saveBtn = document.getElementById('save-btn');
+      saveBtn.textContent = 'Mark as Complete';
+      saveBtn.disabled = false;
+    } catch (err) {
+      console.error('Auto-save draft failed:', err);
+    }
+  },
+
+  async markComplete() {
+    if (!this.currentSongId) {
+      // Fallback: if for some reason we don't have a song ID, do a regular save
+      await this.autoSaveDraft();
+      if (!this.currentSongId) return;
+    }
+
+    const llm = this.getLLMSettings();
+
+    try {
+      await API.updateSongStatus(this.currentSongId, {
+        status: 'completed',
+        provider: llm.provider,
+        model: llm.model,
+        api_key: llm.api_key,
+      });
+
+      const saveBtn = document.getElementById('save-btn');
+      saveBtn.textContent = 'Completed!';
+      saveBtn.disabled = true;
       setTimeout(() => {
-        document.getElementById('save-btn').textContent = 'Save to Library';
-        document.getElementById('save-btn').disabled = false;
+        saveBtn.textContent = 'Mark as Complete';
+        saveBtn.disabled = false;
       }, 2000);
     } catch (err) {
-      alert('Failed to save: ' + err.message);
+      alert('Failed to mark as complete: ' + err.message);
     }
+  },
+
+  /**
+   * Load a song back into the rewrite view for continued editing.
+   */
+  loadSongForEditing(song) {
+    this.lastResult = {
+      original_lyrics: song.original_lyrics,
+      rewritten_lyrics: song.rewritten_lyrics,
+      changes_summary: song.changes_summary || '',
+    };
+    this.lastMeta = {
+      title: song.title,
+      artist: song.artist,
+      source_url: song.source_url,
+      profile_id: song.profile_id,
+      llm_provider: song.llm_provider,
+      llm_model: song.llm_model,
+    };
+    this.currentSongId = song.id;
+    WorkshopManager.setSongId(song.id);
+
+    ComparisonView.show(this.lastResult, song.title, song.artist);
+
+    // Update button based on status
+    const saveBtn = document.getElementById('save-btn');
+    if (song.status === 'completed') {
+      saveBtn.textContent = 'Completed';
+      saveBtn.disabled = true;
+    } else {
+      saveBtn.textContent = 'Mark as Complete';
+      saveBtn.disabled = false;
+    }
+
+    App.switchTab('rewrite');
   },
 };

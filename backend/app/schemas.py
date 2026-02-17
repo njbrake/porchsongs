@@ -99,6 +99,77 @@ class SongOut(BaseModel):
     changes_summary: str | None
     llm_provider: str | None
     llm_model: str | None
+    status: str
+    current_version: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# --- Song Revisions ---
+class SongRevisionOut(BaseModel):
+    id: int
+    song_id: int
+    version: int
+    rewritten_lyrics: str
+    changes_summary: str | None
+    edit_type: str
+    edit_context: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# --- Song Status ---
+class SongStatusUpdate(BaseModel):
+    status: str  # "draft" or "completed"
+    provider: str | None = None
+    model: str | None = None
+    api_key: str | None = None
+
+
+# --- Workshop ---
+class WorkshopLineRequest(BaseModel):
+    song_id: int
+    line_index: int  # index of the lyrics-only line to workshop
+    instruction: str | None = None  # optional user instruction
+    provider: str
+    model: str
+    api_key: str
+
+
+class WorkshopAlternative(BaseModel):
+    text: str
+    reasoning: str
+
+
+class WorkshopLineResponse(BaseModel):
+    original_line: str
+    current_line: str
+    alternatives: list[WorkshopAlternative]
+
+
+# --- Apply Edit ---
+class ApplyEditRequest(BaseModel):
+    song_id: int
+    line_index: int  # lyrics-only line index
+    new_line_text: str
+
+
+class ApplyEditResponse(BaseModel):
+    rewritten_lyrics: str
+    version: int
+
+
+# --- Substitution Patterns ---
+class SubstitutionPatternOut(BaseModel):
+    id: int
+    profile_id: int
+    song_id: int
+    original_term: str
+    replacement_term: str
+    category: str | None
+    reasoning: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}

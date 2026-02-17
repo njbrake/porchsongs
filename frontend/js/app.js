@@ -9,6 +9,7 @@ const App = {
     this.initSettings();
     ProfileManager.init();
     RewriteManager.init();
+    WorkshopManager.init();
     LibraryManager.init();
     this.loadProviders();
   },

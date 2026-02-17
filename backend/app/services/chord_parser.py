@@ -246,3 +246,50 @@ def _snap_to_boundary(text: str, pos: int) -> int:
     if pos - left <= right - pos:
         return left
     return right
+
+
+def replace_line_with_chords(full_text: str, lyrics_line_index: int, new_line_text: str) -> str:
+    """Replace the Nth lyrics line in a chord-annotated text, re-placing chords.
+
+    Args:
+        full_text: Full text with chord lines above lyric lines.
+        lyrics_line_index: Zero-based index into lyrics-only lines.
+        new_line_text: Replacement text for that lyrics line.
+
+    Returns:
+        Full text with the line replaced and chords realigned.
+    """
+    parsed = separate_chords_and_lyrics(full_text)
+
+    # Find the Nth lyrics entry (entries that have actual lyric content or are non-chord)
+    lyrics_count = 0
+    target_entry_index = None
+    for idx, entry in enumerate(parsed):
+        # Count every entry as a lyrics line (mirrors extract_lyrics_only)
+        if lyrics_count == lyrics_line_index:
+            target_entry_index = idx
+            break
+        lyrics_count += 1
+
+    if target_entry_index is None:
+        raise IndexError(f"Lyrics line index {lyrics_line_index} out of range (max {lyrics_count - 1})")
+
+    entry = parsed[target_entry_index]
+
+    # Replace the lyrics text
+    old_lyric = entry["lyrics"]
+    entry["lyrics"] = new_line_text
+
+    # If this entry has chords, realign them
+    if entry["chords"] is not None and new_line_text.strip():
+        chord_positions = _extract_chord_positions(entry["chords"])
+        entry["chords"] = _place_chords(chord_positions, old_lyric, new_line_text)
+
+    # Reassemble the full text
+    result_lines = []
+    for e in parsed:
+        if e["chords"] is not None:
+            result_lines.append(e["chords"])
+        result_lines.append(e["lyrics"])
+
+    return "\n".join(result_lines)

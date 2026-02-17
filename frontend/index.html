@@ -67,6 +67,28 @@
             <pre id="rewritten-display" class="lyrics-display"></pre>
           </div>
         </div>
+        <!-- Workshop Panel -->
+        <div id="workshop-panel" class="workshop-panel hidden">
+          <div class="workshop-header">
+            <h3>Line Workshop</h3>
+            <button id="workshop-close-btn" class="modal-close">&times;</button>
+          </div>
+          <div class="workshop-body">
+            <div class="workshop-lines">
+              <div class="workshop-line-label">Original line:</div>
+              <div id="workshop-original-line" class="workshop-line-text"></div>
+              <div class="workshop-line-label">Current line:</div>
+              <div id="workshop-current-line" class="workshop-line-text"></div>
+            </div>
+            <div class="workshop-instruction-row">
+              <input type="text" id="workshop-instruction" placeholder="Optional: &quot;make it reference snowboarding&quot;" />
+              <button id="workshop-get-btn" class="btn primary">Get Alternatives</button>
+            </div>
+            <div id="workshop-alternatives" class="workshop-alternatives"></div>
+            <button id="workshop-apply-btn" class="btn secondary hidden">Apply Selected</button>
+          </div>
+        </div>
+
         <div class="changes-summary">
           <h3>Changes</h3>
           <div id="changes-display"></div>
@@ -165,6 +187,7 @@
   <script src="js/profile.js"></script>
   <script src="js/rewrite.js"></script>
   <script src="js/comparison.js"></script>
+  <script src="js/workshop.js"></script>
   <script src="js/library.js"></script>
   <script src="js/app.js"></script>
 </body>

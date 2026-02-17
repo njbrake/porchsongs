@@ -66,6 +66,10 @@ const API = {
     return this._fetch(`/songs${query}`);
   },
 
+  getSong(id) {
+    return this._fetch(`/songs/${id}`);
+  },
+
   saveSong(data) {
     return this._fetch('/songs', {
       method: 'POST',
@@ -75,6 +79,38 @@ const API = {
 
   deleteSong(id) {
     return this._fetch(`/songs/${id}`, { method: 'DELETE' });
+  },
+
+  updateSongStatus(id, data) {
+    return this._fetch(`/songs/${id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getSongRevisions(id) {
+    return this._fetch(`/songs/${id}/revisions`);
+  },
+
+  // Workshop
+  workshopLine(data) {
+    return this._fetch('/workshop-line', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  applyEdit(data) {
+    return this._fetch('/apply-edit', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Patterns
+  getPatterns(profileId) {
+    const query = profileId ? `?profile_id=${profileId}` : '';
+    return this._fetch(`/patterns${query}`);
   },
 
   // Providers

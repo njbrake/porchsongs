@@ -2,16 +2,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Profile
+from ..models import Profile, Song
 from ..schemas import (
     FetchTabRequest,
     FetchTabResponse,
     ProviderInfo,
     RewriteRequest,
     RewriteResponse,
+    WorkshopLineRequest,
+    WorkshopLineResponse,
 )
 from ..services import llm_service, tab_fetcher
-from ..services.chord_parser import inline_to_above_line
+from ..services.chord_parser import extract_lyrics_only, inline_to_above_line
 
 router = APIRouter()
 
@@ -49,6 +51,38 @@ async def rewrite(req: RewriteRequest, db: Session = Depends(get_db)):
     if "[" in lyrics and "]" in lyrics:
         lyrics = inline_to_above_line(lyrics)
 
+    # Load substitution patterns for this profile
+    from ..models import SubstitutionPattern
+
+    patterns = (
+        db.query(SubstitutionPattern)
+        .filter(SubstitutionPattern.profile_id == req.profile_id)
+        .all()
+    )
+    pattern_list = [
+        {
+            "original": p.original_term,
+            "replacement": p.replacement_term,
+            "category": p.category,
+            "reasoning": p.reasoning,
+        }
+        for p in patterns
+    ]
+
+    # Load one recent completed song as example
+    recent_completed = (
+        db.query(Song)
+        .filter(Song.profile_id == req.profile_id, Song.status == "completed")
+        .order_by(Song.created_at.desc())
+        .first()
+    )
+    example = None
+    if recent_completed:
+        example = {
+            "original_lyrics": extract_lyrics_only(recent_completed.original_lyrics),
+            "rewritten_lyrics": extract_lyrics_only(recent_completed.rewritten_lyrics),
+        }
+
     try:
         result = await llm_service.rewrite_lyrics(
             profile=profile_dict,
@@ -58,7 +92,33 @@ async def rewrite(req: RewriteRequest, db: Session = Depends(get_db)):
             provider=req.provider,
             model=req.model,
             api_key=req.api_key,
+            patterns=pattern_list,
+            example=example,
         )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"LLM error: {e}")
+
+    return result
+
+
+@router.post("/workshop-line", response_model=WorkshopLineResponse)
+async def workshop_line(req: WorkshopLineRequest, db: Session = Depends(get_db)):
+    song = db.query(Song).filter(Song.id == req.song_id).first()
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+
+    try:
+        result = await llm_service.workshop_line(
+            original_lyrics=song.original_lyrics,
+            rewritten_lyrics=song.rewritten_lyrics,
+            line_index=req.line_index,
+            instruction=req.instruction,
+            provider=req.provider,
+            model=req.model,
+            api_key=req.api_key,
+        )
+    except IndexError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {e}")
 

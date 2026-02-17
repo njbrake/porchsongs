@@ -1,0 +1,13 @@
+services:
+  porchsongs:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - db-data:/app/backend/data
+    env_file:
+      - .env
+    restart: unless-stopped
+
+volumes:
+  db-data:

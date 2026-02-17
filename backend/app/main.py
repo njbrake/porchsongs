@@ -47,6 +47,10 @@ app.include_router(profiles.router, prefix="/api")
 app.include_router(songs.router, prefix="/api")
 app.include_router(rewrite.router, prefix="/api")
 
+# Serve the React build output (frontend/dist) if it exists, otherwise serve frontend/ directly
+frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"
-if frontend_dir.exists():
+if frontend_dist.exists():
+    app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
+elif frontend_dir.exists():
     app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")

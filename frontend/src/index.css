@@ -40,6 +40,12 @@ header {
   box-shadow: 0 2px 12px rgba(0,0,0,0.15);
 }
 
+.header-logo {
+  width: 36px;
+  height: 36px;
+  margin-right: 0.6rem;
+}
+
 header h1 {
   font-size: 1.75rem;
   font-weight: 700;
@@ -50,6 +56,12 @@ header h1 {
   font-size: 0.85rem;
   opacity: 0.7;
   margin-left: 1rem;
+}
+
+.header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
 }
 
 .header-right {
@@ -116,14 +128,6 @@ main {
   max-width: 1100px;
   margin: 0 auto;
   padding: 2rem;
-}
-
-.tab-content {
-  display: none;
-}
-
-.tab-content.active {
-  display: block;
 }
 
 /* === Buttons === */
@@ -230,7 +234,7 @@ textarea:focus {
   border-color: var(--accent);
 }
 
-#rewrite-instruction {
+.instruction-field {
   margin-top: 0.75rem;
   font-family: var(--font-ui);
   font-size: 0.9rem;
@@ -363,7 +367,7 @@ textarea {
   margin-bottom: 0.5rem;
 }
 
-#changes-display {
+.changes-display {
   font-size: 0.85rem;
   color: var(--text-muted);
   line-height: 1.6;
@@ -465,7 +469,6 @@ textarea {
 }
 
 .library-card-body {
-  display: none;
   padding: 0 1rem 1rem;
   border-top: 1px solid var(--border);
 }
@@ -662,7 +665,7 @@ textarea {
   font-size: 0.85rem;
 }
 
-/* === Chat Workshop Panel === */
+/* === Chat Panel === */
 .chat-panel {
   margin-top: 1rem;
   background: var(--bg-card);
@@ -730,7 +733,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 0;
   color: var(--text-muted);
   font-size: 0.85rem;
 }
@@ -790,11 +793,6 @@ textarea {
 
 .revision-item:last-child {
   border-bottom: none;
-}
-
-/* === Utilities === */
-.hidden {
-  display: none !important;
 }
 
 /* === Responsive === */

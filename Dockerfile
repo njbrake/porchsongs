@@ -1,5 +1,13 @@
-FROM python:3.11-slim
+# Stage 1: Build React frontend
+FROM node:20-slim AS frontend-build
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm install
+COPY frontend/ ./
+RUN npm run build
 
+# Stage 2: Python backend
+FROM python:3.11-slim
 WORKDIR /app
 
 # Install uv
@@ -9,9 +17,11 @@ RUN pip install --no-cache-dir uv
 COPY pyproject.toml .
 RUN uv sync --no-dev
 
-# Copy application code
+# Copy backend code
 COPY backend/ ./backend/
-COPY frontend/ ./frontend/
+
+# Copy built frontend from stage 1
+COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
 WORKDIR /app/backend
 

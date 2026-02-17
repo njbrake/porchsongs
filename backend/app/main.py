@@ -33,7 +33,7 @@ def _run_migrations():
 
 _run_migrations()
 
-app = FastAPI(title="PorchSongs", version="1.0.0")
+app = FastAPI(title="porchsongs", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,

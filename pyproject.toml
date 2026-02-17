@@ -1,0 +1,20 @@
+[project]
+name = "porchsongs"
+version = "1.0.0"
+description = "Personal song lyric rewriter — make every song yours"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.34.0",
+    "sqlalchemy==2.0.36",
+    "pydantic==2.10.4",
+    "pydantic-settings==2.7.1",
+    "python-dotenv==1.0.1",
+    "requests==2.32.3",
+    "beautifulsoup4==4.12.3",
+    "any-llm-sdk>=1.8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -4,11 +4,14 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Profile, Song
 from ..schemas import (
+    ChatRequest,
+    ChatResponse,
     FetchTabRequest,
     FetchTabResponse,
-    ProviderInfo,
     RewriteRequest,
     RewriteResponse,
+    VerifyConnectionRequest,
+    VerifyConnectionResponse,
     WorkshopLineRequest,
     WorkshopLineResponse,
 )
@@ -94,6 +97,7 @@ async def rewrite(req: RewriteRequest, db: Session = Depends(get_db)):
             api_key=req.api_key,
             patterns=pattern_list,
             example=example,
+            instruction=req.instruction,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {e}")
@@ -125,6 +129,71 @@ async def workshop_line(req: WorkshopLineRequest, db: Session = Depends(get_db))
     return result
 
 
-@router.get("/providers", response_model=list[ProviderInfo])
+@router.post("/chat", response_model=ChatResponse)
+async def chat(req: ChatRequest, db: Session = Depends(get_db)):
+    from ..models import SongRevision
+
+    song = db.query(Song).filter(Song.id == req.song_id).first()
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+
+    profile = db.query(Profile).filter(Profile.id == song.profile_id).first()
+    profile_dict = {
+        "location_type": profile.location_type,
+        "location_description": profile.location_description,
+        "occupation": profile.occupation,
+        "hobbies": profile.hobbies,
+        "family_situation": profile.family_situation,
+        "daily_routine": profile.daily_routine,
+        "custom_references": profile.custom_references,
+    } if profile else {}
+
+    messages = [{"role": m.role, "content": m.content} for m in req.messages]
+
+    try:
+        result = await llm_service.chat_edit_lyrics(
+            song=song,
+            profile=profile_dict,
+            messages=messages,
+            provider=req.provider,
+            model=req.model,
+            api_key=req.api_key,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"LLM error: {e}")
+
+    # Persist the updated lyrics
+    song.rewritten_lyrics = result["rewritten_lyrics"]
+    song.changes_summary = result["changes_summary"]
+    song.current_version += 1
+
+    revision = SongRevision(
+        song_id=song.id,
+        version=song.current_version,
+        rewritten_lyrics=result["rewritten_lyrics"],
+        changes_summary=result["changes_summary"],
+        edit_type="chat",
+    )
+    db.add(revision)
+    db.commit()
+
+    return ChatResponse(
+        rewritten_lyrics=result["rewritten_lyrics"],
+        assistant_message=result["assistant_message"],
+        changes_summary=result["changes_summary"],
+        version=song.current_version,
+    )
+
+
+@router.get("/providers")
 def list_providers():
     return llm_service.get_providers()
+
+
+@router.post("/verify-connection", response_model=VerifyConnectionResponse)
+def verify_connection(req: VerifyConnectionRequest):
+    try:
+        models = llm_service.get_models(req.provider, req.api_key)
+        return VerifyConnectionResponse(ok=True, models=models)
+    except Exception as e:
+        return VerifyConnectionResponse(ok=False, error=str(e))

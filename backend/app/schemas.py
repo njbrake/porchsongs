@@ -64,6 +64,7 @@ class RewriteRequest(BaseModel):
     artist: str | None = None
     lyrics: str
     source_url: str | None = None
+    instruction: str | None = None
     provider: str
     model: str
     api_key: str
@@ -179,3 +180,36 @@ class SubstitutionPatternOut(BaseModel):
 class ProviderInfo(BaseModel):
     name: str
     models: list[str]
+
+
+# --- Chat ---
+class ChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
+
+class ChatRequest(BaseModel):
+    song_id: int
+    messages: list[ChatMessage]
+    provider: str
+    model: str
+    api_key: str
+
+
+class ChatResponse(BaseModel):
+    rewritten_lyrics: str
+    assistant_message: str
+    changes_summary: str
+    version: int
+
+
+# --- Verify Connection ---
+class VerifyConnectionRequest(BaseModel):
+    provider: str
+    api_key: str
+
+
+class VerifyConnectionResponse(BaseModel):
+    ok: bool
+    models: list[str] = []
+    error: str | None = None

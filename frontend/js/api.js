@@ -1,5 +1,5 @@
 /**
- * API client for PorchSongs backend.
+ * API client for porchsongs backend.
  */
 const API = {
   base: '/api',
@@ -113,8 +113,23 @@ const API = {
     return this._fetch(`/patterns${query}`);
   },
 
+  // Chat
+  chat(data) {
+    return this._fetch('/chat', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
   // Providers
   listProviders() {
     return this._fetch('/providers');
+  },
+
+  verifyConnection(data) {
+    return this._fetch('/verify-connection', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 };

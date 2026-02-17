@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PorchSongs — Personal Song Lyric Rewriter</title>
+  <title>porchsongs — Personal Song Lyric Rewriter</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <header>
     <div class="header-left">
-      <h1>PorchSongs</h1>
+      <h1>porchsongs</h1>
       <span class="tagline">Make every song yours</span>
     </div>
     <div class="header-right">
@@ -33,6 +33,7 @@
           <input type="url" id="ug-url" placeholder="https://tabs.ultimate-guitar.com/tab/..." />
           <button id="fetch-rewrite-btn" class="btn primary">Fetch &amp; Rewrite</button>
         </div>
+        <textarea id="rewrite-instruction" rows="2" placeholder="How should this song be rewritten? e.g., 'change truck references to cycling, keep the fatherhood theme'"></textarea>
 
         <button id="toggle-manual" class="link-btn">or paste lyrics manually &#9662;</button>
         <div id="manual-section" class="manual-section hidden">
@@ -86,6 +87,22 @@
             </div>
             <div id="workshop-alternatives" class="workshop-alternatives"></div>
             <button id="workshop-apply-btn" class="btn secondary hidden">Apply Selected</button>
+          </div>
+        </div>
+
+        <!-- Chat Workshop Panel -->
+        <div id="chat-panel" class="chat-panel hidden">
+          <div class="chat-header">
+            <h3>Chat Workshop</h3>
+          </div>
+          <div id="chat-messages" class="chat-messages"></div>
+          <div id="chat-typing" class="chat-typing hidden">
+            <div class="spinner"></div>
+            <span>Thinking...</span>
+          </div>
+          <div class="chat-input-row">
+            <input type="text" id="chat-input" placeholder="Tell the AI how to change the lyrics..." />
+            <button id="chat-send-btn" class="btn primary">Send</button>
           </div>
         </div>
 
@@ -171,12 +188,18 @@
           <select id="llm-provider"></select>
         </div>
         <div class="form-group">
-          <label for="llm-model">Model</label>
-          <select id="llm-model"></select>
-        </div>
-        <div class="form-group">
           <label for="llm-api-key">API Key</label>
           <input type="password" id="llm-api-key" placeholder="Your API key (stored locally only)" />
+        </div>
+        <div class="form-group">
+          <button id="verify-connection-btn" class="btn secondary">Verify Connection</button>
+          <span id="verify-status" class="verify-status"></span>
+        </div>
+        <div class="form-group">
+          <label for="llm-model">Model</label>
+          <select id="llm-model">
+            <option value="">Verify connection to load models</option>
+          </select>
         </div>
         <button id="save-settings-btn" class="btn primary">Save Settings</button>
       </div>
@@ -188,6 +211,7 @@
   <script src="js/rewrite.js"></script>
   <script src="js/comparison.js"></script>
   <script src="js/workshop.js"></script>
+  <script src="js/chat.js"></script>
   <script src="js/library.js"></script>
   <script src="js/app.js"></script>
 </body>

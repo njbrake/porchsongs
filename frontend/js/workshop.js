@@ -156,6 +156,9 @@ const WorkshopManager = {
       // Re-attach clickable handlers
       ComparisonView.makeRewrittenLinesClickable();
 
+      // Notify chat that a line was edited
+      ChatManager.addSystemNote(`Line ${this.selectedLineIndex + 1} was edited via line workshop to: "${newText}"`);
+
       this.close();
     } catch (err) {
       alert('Failed to apply edit: ' + err.message);

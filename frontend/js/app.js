@@ -10,6 +10,7 @@ const App = {
     ProfileManager.init();
     RewriteManager.init();
     WorkshopManager.init();
+    ChatManager.init();
     LibraryManager.init();
     this.loadProviders();
   },
@@ -39,6 +40,7 @@ const App = {
     const close = modal.querySelector('.modal-close');
     const backdrop = modal.querySelector('.modal-backdrop');
     const saveBtn = document.getElementById('save-settings-btn');
+    const verifyBtn = document.getElementById('verify-connection-btn');
 
     btn.addEventListener('click', () => {
       modal.classList.remove('hidden');
@@ -54,10 +56,7 @@ const App = {
       closeModal();
     });
 
-    // Provider change updates model list
-    document.getElementById('llm-provider').addEventListener('change', () => {
-      this.updateModelList();
-    });
+    verifyBtn.addEventListener('click', () => this.verifyConnection());
   },
 
   async loadProviders() {
@@ -65,38 +64,76 @@ const App = {
       this.providers = await API.listProviders();
     } catch (err) {
       console.error('Failed to load providers:', err);
-      // Fallback defaults
-      this.providers = [
-        { name: 'openai', models: ['gpt-4o', 'gpt-4o-mini'] },
-        { name: 'anthropic', models: ['claude-sonnet-4-5-20250929'] },
-      ];
+      this.providers = [];
     }
   },
 
   populateSettingsForm() {
     const providerSelect = document.getElementById('llm-provider');
-    const savedProvider = localStorage.getItem('porchsongs_provider') || 'openai';
+    const savedProvider = localStorage.getItem('porchsongs_provider') || '';
     const savedModel = localStorage.getItem('porchsongs_model') || '';
     const savedKey = localStorage.getItem('porchsongs_api_key') || '';
 
-    providerSelect.innerHTML = this.providers
-      .map(p => `<option value="${p.name}" ${p.name === savedProvider ? 'selected' : ''}>${p.name}</option>`)
-      .join('');
+    providerSelect.innerHTML = '<option value="">Select provider...</option>' +
+      this.providers.map(p => `<option value="${p}" ${p === savedProvider ? 'selected' : ''}>${p}</option>`).join('');
 
-    this.updateModelList(savedModel);
+    // If we have a saved model, show it in the model select
+    const modelSelect = document.getElementById('llm-model');
+    if (savedModel) {
+      modelSelect.innerHTML = `<option value="${savedModel}" selected>${savedModel}</option>`;
+    } else {
+      modelSelect.innerHTML = '<option value="">Verify connection to load models</option>';
+    }
+
     document.getElementById('llm-api-key').value = savedKey;
+    this.clearVerifyStatus();
   },
 
-  updateModelList(selectedModel) {
-    const providerName = document.getElementById('llm-provider').value;
-    const provider = this.providers.find(p => p.name === providerName);
-    const models = provider ? provider.models : [];
-    const saved = selectedModel || localStorage.getItem('porchsongs_model') || '';
+  async verifyConnection() {
+    const provider = document.getElementById('llm-provider').value;
+    const apiKey = document.getElementById('llm-api-key').value.trim();
+    const statusEl = document.getElementById('verify-status');
 
-    const modelSelect = document.getElementById('llm-model');
-    modelSelect.innerHTML = models
-      .map(m => `<option value="${m}" ${m === saved ? 'selected' : ''}>${m}</option>`)
-      .join('');
+    if (!provider) {
+      statusEl.textContent = 'Select a provider first.';
+      statusEl.className = 'verify-status error';
+      return;
+    }
+    if (!apiKey) {
+      statusEl.textContent = 'Enter an API key first.';
+      statusEl.className = 'verify-status error';
+      return;
+    }
+
+    statusEl.textContent = 'Verifying...';
+    statusEl.className = 'verify-status';
+
+    try {
+      const result = await API.verifyConnection({ provider, api_key: apiKey });
+      if (result.ok) {
+        statusEl.textContent = 'Connected!';
+        statusEl.className = 'verify-status success';
+
+        // Populate model dropdown
+        const modelSelect = document.getElementById('llm-model');
+        const savedModel = localStorage.getItem('porchsongs_model') || '';
+        modelSelect.innerHTML = result.models
+          .map(m => `<option value="${m}" ${m === savedModel ? 'selected' : ''}>${m}</option>`)
+          .join('');
+      } else {
+        statusEl.textContent = result.error || 'Connection failed.';
+        statusEl.className = 'verify-status error';
+      }
+    } catch (err) {
+      statusEl.textContent = err.message;
+      statusEl.className = 'verify-status error';
+    }
+  },
+
+  clearVerifyStatus() {
+    const el = document.getElementById('verify-status');
+    el.textContent = '';
+    el.className = 'verify-status';
   },
 
   saveSettings() {

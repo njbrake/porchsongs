@@ -230,6 +230,12 @@ textarea:focus {
   border-color: var(--accent);
 }
 
+#rewrite-instruction {
+  margin-top: 0.75rem;
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+}
+
 .manual-section {
   margin-top: 1rem;
   border-top: 1px solid var(--border);
@@ -522,6 +528,19 @@ textarea {
   margin-bottom: 1rem;
 }
 
+.verify-status {
+  font-size: 0.85rem;
+  margin-left: 0.75rem;
+}
+
+.verify-status.success {
+  color: #27ae60;
+}
+
+.verify-status.error {
+  color: #c0392b;
+}
+
 /* === Clickable Lines === */
 .line-clickable {
   cursor: pointer;
@@ -641,6 +660,90 @@ textarea {
 .error-text {
   color: #c0392b;
   font-size: 0.85rem;
+}
+
+/* === Chat Workshop Panel === */
+.chat-panel {
+  margin-top: 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.chat-header {
+  padding: 0.6rem 1rem;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.chat-header h3 {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.chat-messages {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.chat-msg {
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  max-width: 85%;
+  word-wrap: break-word;
+}
+
+.chat-msg-user {
+  background: var(--accent);
+  color: white;
+  align-self: flex-end;
+  border-bottom-right-radius: 2px;
+}
+
+.chat-msg-assistant {
+  background: var(--bg-panel);
+  color: var(--text);
+  align-self: flex-start;
+  border-bottom-left-radius: 2px;
+}
+
+.chat-msg-note {
+  background: #fef3c7;
+  color: #92400e;
+  align-self: center;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.chat-typing {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.chat-input-row input {
+  flex: 1;
 }
 
 /* === Status Badges === */

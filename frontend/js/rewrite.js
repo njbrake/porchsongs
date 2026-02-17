@@ -65,6 +65,7 @@ const RewriteManager = {
 
     this.showLoading(true);
     this.currentSongId = null;
+    ChatManager.reset();
     document.getElementById('comparison-section').classList.add('hidden');
 
     try {
@@ -74,12 +75,14 @@ const RewriteManager = {
       // Step 2: Rewrite
       const profileId = ProfileManager.getActiveProfileId();
       const llm = this.getLLMSettings();
+      const instruction = document.getElementById('rewrite-instruction').value.trim() || null;
       const result = await API.rewrite({
         profile_id: profileId,
         title: tab.title,
         artist: tab.artist,
         lyrics: tab.lyrics_with_chords,
         source_url: url,
+        instruction,
         ...llm,
       });
 
@@ -117,16 +120,19 @@ const RewriteManager = {
 
     this.showLoading(true);
     this.currentSongId = null;
+    ChatManager.reset();
     document.getElementById('comparison-section').classList.add('hidden');
 
     try {
       const profileId = ProfileManager.getActiveProfileId();
       const llm = this.getLLMSettings();
+      const instruction = document.getElementById('rewrite-instruction').value.trim() || null;
       const result = await API.rewrite({
         profile_id: profileId,
         title,
         artist,
         lyrics,
+        instruction,
         ...llm,
       });
 
@@ -169,6 +175,7 @@ const RewriteManager = {
 
       this.currentSongId = song.id;
       WorkshopManager.setSongId(song.id);
+      ChatManager.setSongId(song.id);
 
       // Update button to show "Mark as Complete"
       const saveBtn = document.getElementById('save-btn');
@@ -227,6 +234,8 @@ const RewriteManager = {
     };
     this.currentSongId = song.id;
     WorkshopManager.setSongId(song.id);
+    ChatManager.reset();
+    ChatManager.setSongId(song.id);
 
     ComparisonView.show(this.lastResult, song.title, song.artist);
 

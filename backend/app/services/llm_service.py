@@ -1,7 +1,7 @@
 import json
 import logging
 
-from any_llm import completion
+from any_llm import LLMProvider, completion, list_models
 
 from .chord_parser import extract_lyrics_only, realign_chords
 
@@ -29,42 +29,29 @@ Given original and rewritten lyrics, identify recurring substitution patterns
 the user has applied (e.g., changing vehicle types, locations, activities).
 Return ONLY valid JSON."""
 
-AVAILABLE_PROVIDERS = {
-    "openai": [
-        "gpt-4o",
-        "gpt-4o-mini",
-        "gpt-4-turbo",
-        "gpt-3.5-turbo",
-    ],
-    "anthropic": [
-        "claude-sonnet-4-5-20250929",
-        "claude-haiku-4-5-20251001",
-        "claude-3-5-sonnet-20241022",
-    ],
-    "google": [
-        "gemini-2.0-flash",
-        "gemini-1.5-pro",
-        "gemini-1.5-flash",
-    ],
-    "mistral": [
-        "mistral-large-latest",
-        "mistral-medium-latest",
-        "mistral-small-latest",
-    ],
-    "ollama": [
-        "llama3",
-        "mistral",
-        "codellama",
-    ],
-}
+CHAT_SYSTEM_PROMPT = """You are a songwriter's assistant having a conversation about adapting song lyrics.
+The user will ask you to make specific changes to the lyrics. Apply the requested changes while:
+1. Preserving syllable counts per line
+2. Maintaining rhyme scheme
+3. Keeping the song singable and natural
+4. Only changing what the user asks for
+
+Return your response in this exact format:
+
+---LYRICS---
+(the complete updated lyrics, every line, preserving blank lines and structure)
+---END---
+
+(A friendly explanation of what you changed and why)"""
+
+def get_providers() -> list[str]:
+    """Return list of all available provider names from the LLMProvider enum."""
+    return [p.value for p in LLMProvider]
 
 
-def get_providers() -> list[dict]:
-    """Return list of available providers and their models."""
-    return [
-        {"name": provider, "models": models}
-        for provider, models in AVAILABLE_PROVIDERS.items()
-    ]
+def get_models(provider: str, api_key: str) -> list[str]:
+    """Fetch available models for a provider using the provided API key."""
+    return list_models(provider=provider, api_key=api_key)
 
 
 def build_user_prompt(
@@ -74,6 +61,7 @@ def build_user_prompt(
     lyrics: str,
     patterns: list[dict] | None = None,
     example: dict | None = None,
+    instruction: str | None = None,
 ) -> str:
     """Build the user prompt for the LLM, including learned patterns and example."""
     prompt_parts = ["ABOUT THE SINGER:"]
@@ -131,6 +119,10 @@ def build_user_prompt(
 
     if song_label:
         prompt_parts.append(f"SONG: {song_label}")
+        prompt_parts.append("")
+
+    if instruction:
+        prompt_parts.append(f"USER INSTRUCTIONS: {instruction}")
         prompt_parts.append("")
 
     prompt_parts.append(
@@ -208,6 +200,7 @@ async def rewrite_lyrics(
     api_key: str,
     patterns: list[dict] | None = None,
     example: dict | None = None,
+    instruction: str | None = None,
 ) -> dict:
     """Rewrite lyrics using the configured LLM.
 
@@ -216,8 +209,8 @@ async def rewrite_lyrics(
     # Separate chords from lyrics
     lyrics_only = extract_lyrics_only(lyrics_with_chords)
 
-    # Build prompt with patterns and example
-    user_prompt = build_user_prompt(profile, title, artist, lyrics_only, patterns, example)
+    # Build prompt with patterns, example, and instruction
+    user_prompt = build_user_prompt(profile, title, artist, lyrics_only, patterns, example, instruction)
 
     # Call the LLM via any-llm-sdk
     response = completion(
@@ -315,6 +308,69 @@ async def workshop_line(
         "original_line": orig_lines[line_index] if line_index < len(orig_lines) else "",
         "current_line": rewrite_lines[line_index] if line_index < len(rewrite_lines) else "",
         "alternatives": alternatives[:3],
+    }
+
+
+def _parse_chat_response(raw: str) -> dict:
+    """Parse chat LLM response, extracting lyrics between markers and explanation."""
+    if "---LYRICS---" in raw and "---END---" in raw:
+        before_end = raw.split("---END---", 1)
+        lyrics_block = before_end[0].split("---LYRICS---", 1)[1].strip()
+        explanation = before_end[1].strip() if len(before_end) > 1 else ""
+    else:
+        # Fallback: treat entire response as lyrics
+        lyrics_block = raw.strip()
+        explanation = ""
+
+    return {"lyrics": lyrics_block, "explanation": explanation}
+
+
+async def chat_edit_lyrics(
+    song,
+    profile: dict,
+    messages: list[dict],
+    provider: str,
+    model: str,
+    api_key: str,
+) -> dict:
+    """Process a chat-based lyric edit.
+
+    Builds a multi-turn conversation with system context, sends to LLM,
+    parses the response for updated lyrics, and realigns chords.
+    """
+    current_lyrics_only = extract_lyrics_only(song.rewritten_lyrics)
+
+    # Build the messages array for the LLM
+    system_content = (
+        CHAT_SYSTEM_PROMPT
+        + "\n\nCURRENT LYRICS:\n"
+        + current_lyrics_only
+    )
+
+    llm_messages = [{"role": "system", "content": system_content}]
+    for msg in messages:
+        llm_messages.append({"role": msg["role"], "content": msg["content"]})
+
+    response = completion(
+        model=model,
+        provider=provider,
+        api_key=api_key,
+        messages=llm_messages,
+    )
+
+    raw_response = response.choices[0].message.content
+    parsed = _parse_chat_response(raw_response)
+
+    # Realign chords from current version onto new lyrics
+    rewritten_with_chords = realign_chords(song.rewritten_lyrics, parsed["lyrics"])
+
+    # Build a changes summary
+    changes_summary = parsed["explanation"] or "Chat edit applied."
+
+    return {
+        "rewritten_lyrics": rewritten_with_chords,
+        "assistant_message": raw_response,
+        "changes_summary": changes_summary,
     }
 
 

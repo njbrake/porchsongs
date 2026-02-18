@@ -5,6 +5,8 @@ export default function SettingsModal({ provider, model, savedModels, onSave, on
   const [providers, setProviders] = useState([]);
   const [localProvider, setLocalProvider] = useState('');
   const [localModel, setLocalModel] = useState('');
+  const [localApiBase, setLocalApiBase] = useState('');
+  const [connectionVerified, setConnectionVerified] = useState(false);
   const [models, setModels] = useState([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [error, setError] = useState('');
@@ -16,17 +18,31 @@ export default function SettingsModal({ provider, model, savedModels, onSave, on
       .catch(() => setProviders([]));
   }, []);
 
-  // Fetch models when provider changes
+  // Reset connection state when provider or base URL text changes
+  const handleProviderChange = (newProvider) => {
+    setLocalProvider(newProvider);
+    setLocalApiBase('');
+    setConnectionVerified(false);
+    setModels([]);
+    setLocalModel('');
+    setError('');
+  };
+
+  // For providers without a base URL, auto-fetch models on provider select
   useEffect(() => {
     if (!localProvider) {
       setModels([]);
       return;
     }
+    // If a base URL is present, wait for explicit verify
+    if (localApiBase) return;
     setLoadingModels(true);
     setError('');
+    setConnectionVerified(false);
     api.listProviderModels(localProvider)
       .then(modelList => {
         setModels(modelList);
+        setConnectionVerified(true);
         if (modelList.length && !modelList.includes(localModel)) {
           setLocalModel(modelList[0]);
         }
@@ -38,11 +54,35 @@ export default function SettingsModal({ provider, model, savedModels, onSave, on
       .finally(() => setLoadingModels(false));
   }, [localProvider]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleVerifyConnection = () => {
+    if (!localProvider) return;
+    setLoadingModels(true);
+    setError('');
+    setConnectionVerified(false);
+    api.listProviderModels(localProvider, localApiBase || undefined)
+      .then(modelList => {
+        setModels(modelList);
+        setConnectionVerified(true);
+        if (modelList.length && !modelList.includes(localModel)) {
+          setLocalModel(modelList[0]);
+        }
+      })
+      .catch(err => {
+        setError(err.message);
+        setModels([]);
+      })
+      .finally(() => setLoadingModels(false));
+  };
+
   const handleAdd = async () => {
     if (!localProvider || !localModel) return;
     setError('');
     try {
-      await onAddModel(localProvider, localModel);
+      const result = await onAddModel(localProvider, localModel, localApiBase || null);
+      if (!result) {
+        setError('Create a profile first (Profile tab) before adding models.');
+        return;
+      }
       onSave(localProvider, localModel);
     } catch (err) {
       setError(err.message);
@@ -103,6 +143,7 @@ export default function SettingsModal({ provider, model, savedModels, onSave, on
                               <span className="saved-model-provider">{sm.provider}</span>
                               <span className="saved-model-sep">/</span>
                               <span className="saved-model-name">{sm.model}</span>
+                              {sm.api_base && <span className="saved-model-base" style={{ fontSize: '0.8em', color: '#888', marginLeft: '0.5em' }}>@ {sm.api_base}</span>}
                             </span>
                             {isActive && <span className="saved-model-active-badge">Active</span>}
                           </button>
@@ -119,23 +160,44 @@ export default function SettingsModal({ provider, model, savedModels, onSave, on
                 <h3>Add Model</h3>
                 <div className="form-group">
                   <label>Provider</label>
-                  <select value={localProvider} onChange={e => setLocalProvider(e.target.value)}>
+                  <select value={localProvider} onChange={e => handleProviderChange(e.target.value)}>
                     <option value="">Select provider...</option>
                     {providers.map(p => (
                       <option key={p.name} value={p.name}>{p.name}</option>
                     ))}
                   </select>
                 </div>
-                <div className="form-group">
-                  <label>Model</label>
-                  <select value={localModel} onChange={e => setLocalModel(e.target.value)} disabled={loadingModels}>
-                    {loadingModels && <option value="">Loading models...</option>}
-                    {!loadingModels && models.length === 0 && <option value="">Select a provider first</option>}
-                    {!loadingModels && models.map(m => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
-                </div>
+                {localProvider && (
+                  <div className="form-group">
+                    <label>Base URL <span style={{ fontWeight: 'normal', color: '#888' }}>(optional, for local LLMs)</span></label>
+                    <div style={{ display: 'flex', gap: '0.5em' }}>
+                      <input
+                        type="text"
+                        value={localApiBase}
+                        onChange={e => { setLocalApiBase(e.target.value); setConnectionVerified(false); setModels([]); setLocalModel(''); }}
+                        placeholder="http://localhost:11434"
+                        style={{ flex: 1 }}
+                      />
+                      {localApiBase && (
+                        <button className="btn" onClick={handleVerifyConnection} disabled={loadingModels}>
+                          {loadingModels ? 'Verifying...' : 'Verify'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {connectionVerified && (
+                  <div className="form-group">
+                    <label>Model</label>
+                    <select value={localModel} onChange={e => setLocalModel(e.target.value)} disabled={loadingModels}>
+                      {loadingModels && <option value="">Loading models...</option>}
+                      {!loadingModels && models.length === 0 && <option value="">No models found</option>}
+                      {!loadingModels && models.map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 {error && <p style={{ color: '#c33' }}>{error}</p>}
                 <button className="btn primary" onClick={handleAdd} disabled={!localProvider || !localModel}>
                   Add Model

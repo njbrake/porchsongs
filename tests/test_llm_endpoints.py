@@ -297,3 +297,82 @@ def test_list_provider_models_failure(mock_list_models, client):
     resp = client.get("/api/providers/openai/models")
     assert resp.status_code == 502
     assert "Invalid API key" in resp.json()["detail"]
+
+
+# --- api_base passthrough tests ---
+
+
+@patch("app.services.llm_service.acompletion")
+def test_rewrite_passes_api_base(mock_acompletion, client):
+    """When a ProfileModel has api_base set, rewrite should pass it to acompletion."""
+    profile = client.post("/api/profiles", json={
+        "name": "Local LLM User",
+        "description": "Testing local LLM",
+    }).json()
+
+    # Save a ProfileModel with api_base
+    client.post(f"/api/profiles/{profile['id']}/models", json={
+        "provider": "ollama",
+        "model": "llama3",
+        "api_base": "http://localhost:11434",
+    })
+
+    mock_acompletion.return_value = _fake_completion_response(
+        "---ORIGINAL---\nHello world\n"
+        "---REWRITTEN---\nHi there world\n"
+        "---CHANGES---\nChanged hello"
+    )
+
+    resp = client.post("/api/rewrite", json={
+        "profile_id": profile["id"],
+        "lyrics": "Hello world",
+        "provider": "ollama",
+        "model": "llama3",
+    })
+    assert resp.status_code == 200
+
+    mock_acompletion.assert_called_once()
+    call_kwargs = mock_acompletion.call_args.kwargs
+    assert call_kwargs.get("api_base") == "http://localhost:11434"
+
+
+@patch("app.services.llm_service.acompletion")
+def test_rewrite_no_api_base_when_no_profile_model(mock_acompletion, client):
+    """When no ProfileModel exists, api_base should not be passed to acompletion."""
+    profile = client.post("/api/profiles", json={
+        "name": "Cloud User",
+        "description": "Uses cloud API",
+    }).json()
+
+    mock_acompletion.return_value = _fake_completion_response(
+        "---ORIGINAL---\nHello world\n"
+        "---REWRITTEN---\nHi there world\n"
+        "---CHANGES---\nChanged hello"
+    )
+
+    resp = client.post("/api/rewrite", json={
+        "profile_id": profile["id"],
+        "lyrics": "Hello world",
+        **LLM_SETTINGS,
+    })
+    assert resp.status_code == 200
+
+    mock_acompletion.assert_called_once()
+    call_kwargs = mock_acompletion.call_args.kwargs
+    assert "api_base" not in call_kwargs
+
+
+@patch("app.services.llm_service.alist_models")
+def test_list_models_with_api_base(mock_list_models, client):
+    """GET /providers/{provider}/models?api_base= should pass api_base to alist_models."""
+    mock_model = MagicMock()
+    mock_model.id = "llama3"
+    mock_list_models.return_value = [mock_model]
+
+    resp = client.get("/api/providers/ollama/models?api_base=http://localhost:11434")
+    assert resp.status_code == 200
+    assert "llama3" in resp.json()
+
+    mock_list_models.assert_called_once()
+    call_kwargs = mock_list_models.call_args.kwargs
+    assert call_kwargs.get("api_base") == "http://localhost:11434"

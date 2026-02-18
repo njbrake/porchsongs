@@ -130,9 +130,12 @@ def get_providers() -> list[str]:
     return [p.value for p in LLMProvider]
 
 
-async def get_models(provider: str) -> list[str]:
+async def get_models(provider: str, api_base: str | None = None) -> list[str]:
     """Fetch available models for a provider using env-var credentials."""
-    raw = await alist_models(provider=provider)
+    kwargs: dict[str, str] = {"provider": provider}
+    if api_base:
+        kwargs["api_base"] = api_base
+    raw = await alist_models(**kwargs)
     return [m.id if hasattr(m, "id") else str(m) for m in raw]
 
 
@@ -274,6 +277,7 @@ async def rewrite_lyrics(
     patterns: list[dict[str, str | None]] | None = None,
     example: dict[str, str] | None = None,
     instruction: str | None = None,
+    api_base: str | None = None,
 ) -> dict[str, str | None]:
     """Rewrite lyrics using the configured LLM.
 
@@ -286,14 +290,17 @@ async def rewrite_lyrics(
     )
 
     # Call the LLM via any-llm-sdk (uses env-var credentials automatically)
-    response = await acompletion(
-        model=model,
-        provider=provider,
-        messages=[
+    kwargs: dict[str, object] = {
+        "model": model,
+        "provider": provider,
+        "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-    )
+    }
+    if api_base:
+        kwargs["api_base"] = api_base
+    response = await acompletion(**kwargs)
 
     raw_response = _get_content(response)
 
@@ -392,6 +399,7 @@ async def workshop_line(
     instruction: str | None,
     provider: str,
     model: str,
+    api_base: str | None = None,
 ) -> dict[str, object]:
     """Get 3 alternative versions of a specific lyric line."""
     # Work with lyrics-only (no chords) for the LLM
@@ -402,14 +410,17 @@ async def workshop_line(
         orig_lyrics_only, rewrite_lyrics_only, line_index, instruction
     )
 
-    response = await acompletion(
-        model=model,
-        provider=provider,
-        messages=[
+    kwargs: dict[str, object] = {
+        "model": model,
+        "provider": provider,
+        "messages": [
             {"role": "system", "content": WORKSHOP_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-    )
+    }
+    if api_base:
+        kwargs["api_base"] = api_base
+    response = await acompletion(**kwargs)
 
     raw_response = _get_content(response)
 
@@ -474,6 +485,7 @@ async def chat_edit_lyrics(
     messages: list[dict[str, str]],
     provider: str,
     model: str,
+    api_base: str | None = None,
 ) -> dict[str, str]:
     """Process a chat-based lyric edit.
 
@@ -490,11 +502,14 @@ async def chat_edit_lyrics(
     for msg in messages:
         llm_messages.append({"role": msg["role"], "content": msg["content"]})
 
-    response = await acompletion(
-        model=model,
-        provider=provider,
-        messages=llm_messages,
-    )
+    kwargs: dict[str, object] = {
+        "model": model,
+        "provider": provider,
+        "messages": llm_messages,
+    }
+    if api_base:
+        kwargs["api_base"] = api_base
+    response = await acompletion(**kwargs)
 
     raw_response = _get_content(response)
     parsed = _parse_chat_response(raw_response)
@@ -514,6 +529,7 @@ async def extract_patterns(
     db: Session,
     provider: str,
     model: str,
+    api_base: str | None = None,
 ) -> list[dict[str, str]]:
     """Extract substitution patterns from a completed song and save them.
 
@@ -542,14 +558,17 @@ Example: [{{"original_term": "F-150", "replacement_term": "Subaru", "category": 
 
 Return ONLY the JSON array, no other text."""
 
-    response = await acompletion(
-        model=model,
-        provider=provider,
-        messages=[
+    kwargs: dict[str, object] = {
+        "model": model,
+        "provider": provider,
+        "messages": [
             {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-    )
+    }
+    if api_base:
+        kwargs["api_base"] = api_base
+    response = await acompletion(**kwargs)
 
     raw = _get_content(response).strip()
 

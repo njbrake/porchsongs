@@ -109,7 +109,10 @@ const api = {
 
   // Providers
   listProviders: () => _fetch('/providers'),
-  listProviderModels: (provider) => _fetch(`/providers/${provider}/models`),
+  listProviderModels: (provider, apiBase) => {
+    const query = apiBase ? `?api_base=${encodeURIComponent(apiBase)}` : '';
+    return _fetch(`/providers/${provider}/models${query}`);
+  },
 };
 
 export default api;

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import ChatMessage as ChatMessageModel
-from ..models import Profile, Song
+from ..models import Profile, ProfileModel, Song
 from ..schemas import (
     ChatRequest,
     ChatResponse,
@@ -15,6 +15,24 @@ from ..schemas import (
 from ..services import llm_service
 
 router = APIRouter()
+
+
+def _lookup_api_base(
+    db: Session, profile_id: int | None, provider: str | None, model: str | None
+) -> str | None:
+    """Look up api_base from the saved ProfileModel for a given profile+provider+model."""
+    if not profile_id or not provider or not model:
+        return None
+    pm = (
+        db.query(ProfileModel)
+        .filter(
+            ProfileModel.profile_id == profile_id,
+            ProfileModel.provider == provider,
+            ProfileModel.model == model,
+        )
+        .first()
+    )
+    return pm.api_base if pm else None
 
 
 @router.post("/rewrite", response_model=RewriteResponse)
@@ -59,6 +77,8 @@ async def rewrite(req: RewriteRequest, db: Session = Depends(get_db)) -> dict[st
             "rewritten_lyrics": recent_completed.rewritten_lyrics,
         }
 
+    api_base = _lookup_api_base(db, req.profile_id, req.provider, req.model)
+
     try:
         result = await llm_service.rewrite_lyrics(
             profile_description=profile_description,
@@ -70,6 +90,7 @@ async def rewrite(req: RewriteRequest, db: Session = Depends(get_db)) -> dict[st
             patterns=pattern_list,
             example=example,
             instruction=req.instruction,
+            api_base=api_base,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {e}") from None
@@ -91,6 +112,8 @@ async def workshop_line(
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
 
+    api_base = _lookup_api_base(db, song.profile_id, req.provider, req.model)
+
     try:
         result = await llm_service.workshop_line(
             original_lyrics=song.original_lyrics,
@@ -99,6 +122,7 @@ async def workshop_line(
             instruction=req.instruction,
             provider=req.provider,
             model=req.model,
+            api_base=api_base,
         )
     except IndexError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
@@ -120,6 +144,7 @@ async def chat(req: ChatRequest, db: Session = Depends(get_db)) -> ChatResponse:
     profile_description = profile.description if profile else ""
 
     messages = [{"role": m.role, "content": m.content} for m in req.messages]
+    api_base = _lookup_api_base(db, song.profile_id, req.provider, req.model)
 
     try:
         result = await llm_service.chat_edit_lyrics(
@@ -128,6 +153,7 @@ async def chat(req: ChatRequest, db: Session = Depends(get_db)) -> ChatResponse:
             messages=messages,
             provider=req.provider,
             model=req.model,
+            api_base=api_base,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {e}") from None
@@ -176,8 +202,8 @@ def list_providers() -> list[dict[str, str | None]]:
 
 
 @router.get("/providers/{provider}/models")
-async def list_provider_models(provider: str) -> list[str]:
+async def list_provider_models(provider: str, api_base: str | None = None) -> list[str]:
     try:
-        return await llm_service.get_models(provider)
+        return await llm_service.get_models(provider, api_base=api_base)
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e)) from None

@@ -1,9 +1,11 @@
-export default function Header({ profileName, onSettingsClick }) {
+export default function Header({ profileName, onSettingsClick, onHomeClick }) {
   return (
     <header>
       <div className="header-left">
-        <img src="/logo.svg" alt="" className="header-logo" />
-        <h1>porchsongs</h1>
+        <a className="home-link" href="/" onClick={e => { e.preventDefault(); onHomeClick(); }}>
+          <img src="/logo.svg" alt="" className="header-logo" />
+          <h1>porchsongs</h1>
+        </a>
         <span className="tagline">Make every song yours</span>
       </div>
       <div className="header-right">

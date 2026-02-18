@@ -1,11 +1,23 @@
 const BASE = '/api';
 
+function _getAuthHeaders() {
+  const secret = localStorage.getItem('porchsongs_app_secret');
+  if (secret) {
+    return { Authorization: `Bearer ${secret}` };
+  }
+  return {};
+}
+
 async function _fetch(path, options = {}) {
   const url = BASE + path;
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders(), ...options.headers },
     ...options,
   });
+  if (res.status === 401) {
+    window.dispatchEvent(new CustomEvent('porchsongs-auth-required'));
+    throw new Error('Authentication required. Please enter the app secret.');
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.detail || `Request failed: ${res.status}`);
@@ -21,9 +33,6 @@ const api = {
   updateProfile: (id, data) => _fetch(`/profiles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteProfile: (id) => _fetch(`/profiles/${id}`, { method: 'DELETE' }),
 
-  // Tab
-  fetchTab: (url) => _fetch('/fetch-tab', { method: 'POST', body: JSON.stringify({ url }) }),
-
   // Rewrite
   rewrite: (data) => _fetch('/rewrite', { method: 'POST', body: JSON.stringify(data) }),
 
@@ -34,6 +43,7 @@ const api = {
   },
   getSong: (id) => _fetch(`/songs/${id}`),
   saveSong: (data) => _fetch('/songs', { method: 'POST', body: JSON.stringify(data) }),
+  updateSong: (id, data) => _fetch(`/songs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteSong: (id) => _fetch(`/songs/${id}`, { method: 'DELETE' }),
   updateSongStatus: (id, data) => _fetch(`/songs/${id}/status`, { method: 'PUT', body: JSON.stringify(data) }),
   getSongRevisions: (id) => _fetch(`/songs/${id}/revisions`),
@@ -44,6 +54,8 @@ const api = {
 
   // Chat
   chat: (data) => _fetch('/chat', { method: 'POST', body: JSON.stringify(data) }),
+  getChatHistory: (songId) => _fetch(`/songs/${songId}/messages`),
+  saveChatMessages: (songId, messages) => _fetch(`/songs/${songId}/messages`, { method: 'POST', body: JSON.stringify(messages) }),
 
   // Patterns
   getPatterns: (profileId) => {
@@ -51,9 +63,14 @@ const api = {
     return _fetch(`/patterns${query}`);
   },
 
+  // Profile Models (saved provider+model combos)
+  listProfileModels: (profileId) => _fetch(`/profiles/${profileId}/models`),
+  addProfileModel: (profileId, data) => _fetch(`/profiles/${profileId}/models`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteProfileModel: (profileId, modelId) => _fetch(`/profiles/${profileId}/models/${modelId}`, { method: 'DELETE' }),
+
   // Providers
   listProviders: () => _fetch('/providers'),
-  verifyConnection: (data) => _fetch('/verify-connection', { method: 'POST', body: JSON.stringify(data) }),
+  listProviderModels: (provider) => _fetch(`/providers/${provider}/models`),
 };
 
 export default api;

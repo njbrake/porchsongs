@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../api';
 import ComparisonView from './ComparisonView';
-import WorkshopPanel from './WorkshopPanel';
 import ChatPanel from './ChatPanel';
+import ModelSelector from './ModelSelector';
 
 export default function RewriteTab({
   profile,
@@ -15,46 +15,69 @@ export default function RewriteTab({
   onNewRewrite,
   onSongSaved,
   onLyricsUpdated,
+  onChangeProvider,
+  onChangeModel,
+  savedModels,
+  onOpenSettings,
 }) {
-  const [url, setUrl] = useState('');
+  const [lyrics, setLyrics] = useState('');
   const [instruction, setInstruction] = useState('');
-  const [showManual, setShowManual] = useState(false);
-  const [manualTitle, setManualTitle] = useState('');
-  const [manualArtist, setManualArtist] = useState('');
-  const [manualLyrics, setManualLyrics] = useState('');
   const [loading, setLoading] = useState(false);
-  const [completedStatus, setCompletedStatus] = useState(null); // null | 'completed' | 'saving'
+  const [error, setError] = useState(null);
+  const [completedStatus, setCompletedStatus] = useState(null);
+  const [songTitle, setSongTitle] = useState('');
+  const [songArtist, setSongArtist] = useState('');
 
-  // Workshop state
-  const [workshopLine, setWorkshopLine] = useState(null);
-
-  const validate = () => {
-    if (!profile?.id) {
-      alert('Please create a profile first (Profile tab).');
-      return false;
+  // Sync title/artist from rewriteMeta (song-load case)
+  useEffect(() => {
+    if (rewriteMeta) {
+      setSongTitle(rewriteMeta.title || '');
+      setSongArtist(rewriteMeta.artist || '');
     }
-    if (!llmSettings.api_key) {
-      alert('Please configure your LLM API key in Settings (gear icon).');
-      return false;
-    }
-    return true;
-  };
+  }, [rewriteMeta]);
 
-  const doRewrite = async (rewriteData, meta) => {
-    if (!validate()) return;
+  // Reset completed status when switching songs (e.g. reopening from Library)
+  useEffect(() => {
+    setCompletedStatus(null);
+  }, [currentSongId]);
+
+  const needsProfile = !profile?.id;
+  const canRewrite = !needsProfile && llmSettings.provider && llmSettings.model && !loading && lyrics.trim().length > 0;
+
+  const handleRewrite = async () => {
+    const trimmedLyrics = lyrics.trim();
+    if (!trimmedLyrics) return;
+
     setLoading(true);
+    setError(null);
     onNewRewrite(null, null);
 
+    // Seed chat immediately so it shows during loading
+    const preview = trimmedLyrics.length > 300
+      ? trimmedLyrics.slice(0, 300) + '\n...'
+      : trimmedLyrics;
+    const seedMessages = [{ role: 'user', content: preview, isNote: true }];
+    if (instruction.trim()) {
+      seedMessages.push({ role: 'user', content: instruction.trim(), isNote: true });
+    }
+    setChatMessages(seedMessages);
+
     try {
-      const result = await api.rewrite(rewriteData);
-      onNewRewrite(result, meta);
+      const result = await api.rewrite({
+        profile_id: profile.id,
+        lyrics: trimmedLyrics,
+        instruction: instruction.trim() || null,
+        ...llmSettings,
+      });
+      setSongTitle(result.title || '');
+      setSongArtist(result.artist || '');
+      onNewRewrite(result, { profile_id: profile.id, title: result.title, artist: result.artist });
 
       // Auto-save as draft
       const song = await api.saveSong({
-        profile_id: meta.profile_id,
-        title: meta.title,
-        artist: meta.artist,
-        source_url: meta.source_url,
+        profile_id: profile.id,
+        title: result.title || null,
+        artist: result.artist || null,
         original_lyrics: result.original_lyrics,
         rewritten_lyrics: result.rewritten_lyrics,
         changes_summary: result.changes_summary,
@@ -63,108 +86,62 @@ export default function RewriteTab({
       });
       onSongSaved(song.id);
       setCompletedStatus(null);
+
+      // Add the LLM's changes summary as the first assistant response
+      const allSeedMessages = [
+        ...seedMessages,
+        { role: 'assistant', content: result.changes_summary, isNote: true },
+      ];
+      setChatMessages(allSeedMessages);
+
+      // Persist seed messages to DB
+      api.saveChatMessages(song.id, allSeedMessages.map(m => ({
+        role: m.role,
+        content: m.content,
+        is_note: m.isNote ?? false,
+      }))).catch(() => {});
     } catch (err) {
-      alert('Error: ' + err.message);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFetchAndRewrite = async () => {
-    const trimmedUrl = url.trim();
-    if (!trimmedUrl) {
-      alert('Please paste an Ultimate Guitar URL.');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const tab = await api.fetchTab(trimmedUrl);
-      await doRewrite(
-        {
-          profile_id: profile.id,
-          title: tab.title,
-          artist: tab.artist,
-          lyrics: tab.lyrics_with_chords,
-          source_url: trimmedUrl,
-          instruction: instruction.trim() || null,
-          ...llmSettings,
-        },
-        {
-          title: tab.title,
-          artist: tab.artist,
-          source_url: trimmedUrl,
-          profile_id: profile.id,
-        }
-      );
-    } catch (err) {
-      alert('Error: ' + err.message);
-      setLoading(false);
-    }
-  };
-
-  const handleManualRewrite = async () => {
-    const lyrics = manualLyrics.trim();
-    if (!lyrics) {
-      alert('Please paste some lyrics.');
-      return;
-    }
-    const title = manualTitle.trim() || null;
-    const artist = manualArtist.trim() || null;
-
-    await doRewrite(
-      {
-        profile_id: profile.id,
-        title,
-        artist,
-        lyrics,
-        instruction: instruction.trim() || null,
-        ...llmSettings,
-      },
-      {
-        title: title || 'Untitled',
-        artist,
-        source_url: null,
-        profile_id: profile.id,
-      }
-    );
+  const handleNewSong = () => {
+    onNewRewrite(null, null);
+    setLyrics('');
+    setInstruction('');
+    setCompletedStatus(null);
+    setError(null);
+    setSongTitle('');
+    setSongArtist('');
   };
 
   const handleMarkComplete = async () => {
     if (!currentSongId) return;
     setCompletedStatus('saving');
     try {
-      await api.updateSongStatus(currentSongId, {
-        status: 'completed',
-        provider: llmSettings.provider,
-        model: llmSettings.model,
-        api_key: llmSettings.api_key,
-        api_base: llmSettings.api_base,
-      });
+      await api.updateSongStatus(currentSongId, { status: 'completed' });
       setCompletedStatus('completed');
     } catch (err) {
-      alert('Failed to mark as complete: ' + err.message);
+      setError('Failed to mark as complete: ' + err.message);
       setCompletedStatus(null);
     }
   };
 
-  const handleLineClick = (lineIndex) => {
-    if (!currentSongId) {
-      alert('Song must be saved as a draft before editing individual lines.');
-      return;
-    }
-    setWorkshopLine(lineIndex);
-  };
+  const handleTitleChange = useCallback((val) => {
+    setSongTitle(val);
+  }, []);
 
-  const handleWorkshopApply = useCallback((newLyrics) => {
-    onLyricsUpdated(newLyrics);
-    setWorkshopLine(null);
-    // Add system note to chat
-    setChatMessages(prev => [
-      ...prev,
-      { role: 'user', content: `[System note: A line was edited via line workshop]`, isNote: true },
-    ]);
-  }, [onLyricsUpdated, setChatMessages]);
+  const handleArtistChange = useCallback((val) => {
+    setSongArtist(val);
+  }, []);
+
+  const handleMetaBlur = useCallback(() => {
+    if (currentSongId) {
+      api.updateSong(currentSongId, { title: songTitle || null, artist: songArtist || null }).catch(() => {});
+    }
+  }, [currentSongId, songTitle, songArtist]);
 
   const handleChatUpdate = useCallback((newLyrics) => {
     onLyricsUpdated(newLyrics);
@@ -172,103 +149,94 @@ export default function RewriteTab({
 
   return (
     <div>
-      <div className="input-section">
-        <label>Paste an Ultimate Guitar link:</label>
-        <div className="url-row">
-          <input
-            type="url"
-            value={url}
-            onChange={e => setUrl(e.target.value)}
-            placeholder="https://tabs.ultimate-guitar.com/tab/..."
-            onKeyDown={e => e.key === 'Enter' && handleFetchAndRewrite()}
-          />
-          <button className="btn primary" onClick={handleFetchAndRewrite} disabled={loading}>
-            Fetch &amp; Rewrite
-          </button>
-        </div>
-        <textarea
-          className="instruction-field"
-          rows="2"
-          value={instruction}
-          onChange={e => setInstruction(e.target.value)}
-          placeholder="How should this song be rewritten? e.g., 'change truck references to cycling, keep the fatherhood theme'"
-        />
-        <button className="link-btn" onClick={() => setShowManual(!showManual)}>
-          or paste lyrics manually {showManual ? '\u25B4' : '\u25BE'}
-        </button>
-        {showManual && (
-          <div className="manual-section">
-            <div className="manual-fields">
-              <div className="field-row">
-                <input type="text" value={manualTitle} onChange={e => setManualTitle(e.target.value)} placeholder="Song title (optional)" />
-                <input type="text" value={manualArtist} onChange={e => setManualArtist(e.target.value)} placeholder="Artist (optional)" />
-              </div>
-              <textarea rows="12" value={manualLyrics} onChange={e => setManualLyrics(e.target.value)}
-                placeholder="Paste lyrics here (with or without chords)..." />
-              <button className="btn primary" onClick={handleManualRewrite} disabled={loading}>Rewrite</button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {loading && (
-        <div className="loading">
-          <div className="spinner" />
-          <span>Rewriting your lyrics...</span>
+      {/* Setup warning */}
+      {needsProfile && (
+        <div className="setup-banner">
+          <span>Create a profile in the <strong>Profile</strong> tab to get started.</span>
         </div>
       )}
 
-      {rewriteResult && (
-        <div className="comparison-section">
-          <div className="comparison-header">
-            <h2>
-              {rewriteMeta?.title || 'Rewritten Song'}
-              {rewriteMeta?.artist ? ` — ${rewriteMeta.artist}` : ''}
-            </h2>
-            <button
-              className="btn secondary"
-              onClick={handleMarkComplete}
-              disabled={completedStatus === 'completed' || completedStatus === 'saving' || !currentSongId}
-            >
-              {completedStatus === 'completed' ? 'Completed!' :
-               completedStatus === 'saving' ? 'Saving...' : 'Mark as Complete'}
-            </button>
-          </div>
+      {/* Error display */}
+      {error && (
+        <div className="error-banner">
+          <span>{error}</span>
+          <button className="error-dismiss" onClick={() => setError(null)}>&times;</button>
+        </div>
+      )}
 
-          <ComparisonView
-            original={rewriteResult.original_lyrics}
-            rewritten={rewriteResult.rewritten_lyrics}
-            onLineClick={handleLineClick}
-            selectedLine={workshopLine}
+      <ModelSelector
+        provider={llmSettings.provider}
+        model={llmSettings.model}
+        savedModels={savedModels}
+        onChangeProvider={onChangeProvider}
+        onChangeModel={onChangeModel}
+        onOpenSettings={onOpenSettings}
+      />
+
+      {!rewriteResult && !loading && (
+        <div className="input-section">
+          <textarea
+            rows="14"
+            value={lyrics}
+            onChange={e => setLyrics(e.target.value)}
+            placeholder="Paste lyrics, chords, or a copy from a tab site — any format works"
           />
 
-          {workshopLine !== null && (
-            <WorkshopPanel
-              songId={currentSongId}
-              lineIndex={workshopLine}
-              originalLyrics={rewriteResult.original_lyrics}
-              rewrittenLyrics={rewriteResult.rewritten_lyrics}
-              llmSettings={llmSettings}
-              onApply={handleWorkshopApply}
-              onClose={() => setWorkshopLine(null)}
-            />
+          <textarea
+            className="instruction-field"
+            rows="2"
+            value={instruction}
+            onChange={e => setInstruction(e.target.value)}
+            placeholder="Optional: e.g., 'change truck references to cycling, keep the fatherhood theme'"
+          />
+
+          <button className="btn primary" style={{ marginTop: '0.75rem' }} onClick={handleRewrite} disabled={!canRewrite}>
+            Rewrite
+          </button>
+        </div>
+      )}
+
+      {(rewriteResult || loading) && (
+        <div className="comparison-section">
+          {rewriteResult && (
+            <>
+              <div className="comparison-header">
+                <div className="comparison-actions">
+                  <button className="btn secondary" onClick={handleNewSong}>
+                    New Song
+                  </button>
+                  <button
+                    className="btn secondary"
+                    onClick={handleMarkComplete}
+                    disabled={completedStatus === 'completed' || completedStatus === 'saving' || !currentSongId}
+                  >
+                    {completedStatus === 'completed' ? 'Completed!' :
+                     completedStatus === 'saving' ? 'Saving...' : 'Mark as Complete'}
+                  </button>
+                </div>
+              </div>
+
+              <ComparisonView
+                original={rewriteResult.original_lyrics}
+                rewritten={rewriteResult.rewritten_lyrics}
+                title={songTitle}
+                artist={songArtist}
+                onTitleChange={handleTitleChange}
+                onArtistChange={handleArtistChange}
+                onBlur={handleMetaBlur}
+              />
+            </>
           )}
 
-          {currentSongId && (
-            <ChatPanel
-              songId={currentSongId}
-              messages={chatMessages}
-              setMessages={setChatMessages}
-              llmSettings={llmSettings}
-              originalLyrics={rewriteResult.original_lyrics}
-              onLyricsUpdated={handleChatUpdate}
-            />
-          )}
-
-          <div className="changes-summary">
-            <h3>Changes</h3>
-            <div className="changes-display">{rewriteResult.changes_summary}</div>
-          </div>
+          <ChatPanel
+            songId={currentSongId}
+            messages={chatMessages}
+            setMessages={setChatMessages}
+            llmSettings={llmSettings}
+            originalLyrics={rewriteResult?.original_lyrics || ''}
+            onLyricsUpdated={handleChatUpdate}
+            initialLoading={loading}
+          />
         </div>
       )}
     </div>

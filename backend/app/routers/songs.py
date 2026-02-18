@@ -6,14 +6,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Song, SongRevision, SubstitutionPattern
+from ..models import ChatMessage, Song, SongRevision, SubstitutionPattern
 from ..schemas import (
     ApplyEditRequest,
     ApplyEditResponse,
+    ChatMessageCreate,
+    ChatMessageOut,
     SongCreate,
     SongOut,
     SongRevisionOut,
     SongStatusUpdate,
+    SongUpdate,
     SubstitutionPatternOut,
 )
 from ..services.chord_parser import replace_line_with_chords
@@ -58,14 +61,29 @@ def create_song(data: SongCreate, db: Session = Depends(get_db)) -> Song:
     return song
 
 
+@router.put("/songs/{song_id}", response_model=SongOut)
+def update_song(song_id: int, data: SongUpdate, db: Session = Depends(get_db)) -> Song:
+    song = db.query(Song).filter(Song.id == song_id).first()
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+    if data.title is not None:
+        song.title = data.title
+    if data.artist is not None:
+        song.artist = data.artist
+    db.commit()
+    db.refresh(song)
+    return song
+
+
 @router.delete("/songs/{song_id}")
 def delete_song(song_id: int, db: Session = Depends(get_db)) -> dict[str, bool]:
     song = db.query(Song).filter(Song.id == song_id).first()
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
-    # Delete related revisions and patterns
+    # Delete related revisions, patterns, and chat messages
     db.query(SongRevision).filter(SongRevision.song_id == song_id).delete()
     db.query(SubstitutionPattern).filter(SubstitutionPattern.song_id == song_id).delete()
+    db.query(ChatMessage).filter(ChatMessage.song_id == song_id).delete()
     db.delete(song)
     db.commit()
     return {"ok": True}
@@ -85,6 +103,37 @@ def list_revisions(song_id: int, db: Session = Depends(get_db)) -> list[Any]:
     return revisions
 
 
+@router.get("/songs/{song_id}/messages", response_model=list[ChatMessageOut])
+def list_messages(song_id: int, db: Session = Depends(get_db)) -> list[Any]:
+    song = db.query(Song).filter(Song.id == song_id).first()
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+    return (
+        db.query(ChatMessage)
+        .filter(ChatMessage.song_id == song_id)
+        .order_by(ChatMessage.created_at.asc())
+        .all()
+    )
+
+
+@router.post("/songs/{song_id}/messages", response_model=list[ChatMessageOut], status_code=201)
+def save_messages(
+    song_id: int, messages: list[ChatMessageCreate], db: Session = Depends(get_db)
+) -> list[Any]:
+    song = db.query(Song).filter(Song.id == song_id).first()
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+    rows = []
+    for msg in messages:
+        row = ChatMessage(song_id=song_id, role=msg.role, content=msg.content, is_note=msg.is_note)
+        db.add(row)
+        rows.append(row)
+    db.commit()
+    for row in rows:
+        db.refresh(row)
+    return rows
+
+
 @router.put("/songs/{song_id}/status", response_model=SongOut)
 async def update_song_status(
     song_id: int,
@@ -102,20 +151,16 @@ async def update_song_status(
     db.commit()
     db.refresh(song)
 
-    # If marked as completed and API key provided, extract substitution patterns
-    if data.status == "completed" and data.api_key:
+    # If marked as completed, extract substitution patterns using song's stored LLM settings
+    if data.status == "completed" and song.llm_provider and song.llm_model:
         from ..services import llm_service
 
-        provider = data.provider or song.llm_provider or "openai"
-        model = data.model or song.llm_model or "gpt-4o-mini"
         with contextlib.suppress(Exception):
-            await llm_service.extract_patterns_with_key(
+            await llm_service.extract_patterns(
                 song,
                 db,
-                provider,
-                model,
-                data.api_key,
-                api_base=data.api_base,
+                song.llm_provider,
+                song.llm_model,
             )
 
     return song

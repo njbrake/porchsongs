@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import TYPE_CHECKING
 
-from any_llm import LLMProvider, completion, list_models
+from any_llm import AnyLLM, LLMProvider, acompletion, alist_models
 
-from .chord_parser import extract_lyrics_only, realign_chords
+from .chord_parser import extract_lyrics_only
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -27,15 +28,46 @@ def _get_content(response: ChatCompletion | Iterator[ChatCompletionChunk]) -> st
     return content
 
 
-SYSTEM_PROMPT = """You are a songwriter's assistant. You adapt song lyrics so they feel personally
-relevant to the singer while preserving the song's musical structure perfectly.
+SYSTEM_PROMPT = """You are a songwriter's assistant. You take raw pasted song input (which may include
+ads, navigation text, duplicate sections, or formatting artifacts from tab sites) and produce
+two clean versions: a cleaned-up original and a personalized rewrite.
 
-ABSOLUTE RULES:
-1. SYLLABLE COUNT: Each line MUST have the same number of syllables as the original.
-2. RHYME SCHEME: Keep the exact same rhyme pattern.
-3. THEME & EMOTION: Same emotional arc. A love verse stays love. Nostalgia stays nostalgic.
-4. SINGABILITY: Words must sound natural when sung. No forced rhymes.
-5. MINIMAL CHANGES: Only change what doesn't fit. Leave lines that already work."""
+STEP 0 — IDENTIFY:
+- Determine the song's title and artist from the input
+- If you cannot determine either, use "UNKNOWN"
+
+STEP 1 — CLEAN UP:
+- Strip any ads, site navigation, duplicate headers, or non-song text
+- Preserve chord charts in above-line format (chords on their own line above the lyric line)
+- Keep section headers like [Verse], [Chorus], etc.
+- Preserve blank lines between sections
+
+STEP 2 — REWRITE:
+- Adapt the lyrics so they feel personally relevant to the singer
+- Preserve the chord chart format exactly (same chords, same positions)
+- SYLLABLE COUNT: Each lyric line MUST have the same number of syllables as the original
+- RHYME SCHEME: Keep the exact same rhyme pattern
+- THEME & EMOTION: Same emotional arc
+- SINGABILITY: Words must sound natural when sung
+- MINIMAL CHANGES: Only change what doesn't fit. Leave lines that already work
+
+YOU MUST RESPOND WITH ALL FOUR SECTIONS using these exact XML tags:
+
+<meta>
+Title: <song title or UNKNOWN>
+Artist: <artist name or UNKNOWN>
+</meta>
+<original>
+(the cleaned-up version of the pasted input — this is critical, do NOT skip this section)
+</original>
+<rewritten>
+(personalized rewrite with chords preserved)
+</rewritten>
+<changes>
+(brief summary of what you changed and why; if title or artist is UNKNOWN, mention this and ask the user to fill them in)
+</changes>
+
+All four sections are required. The <original> section must contain the cleaned-up input."""
 
 WORKSHOP_SYSTEM_PROMPT = """You are a songwriter's assistant helping refine individual lyric lines.
 You suggest alternatives that:
@@ -64,20 +96,49 @@ Return your response in this exact format:
 
 (A friendly explanation of what you changed and why)"""
 
+# Keyless providers that need a base URL to be usable
+_KEYLESS_PROVIDERS = {"ollama", "llamafile", "llamacpp", "lmstudio", "vllm"}
+
+
+def get_configured_providers() -> list[dict[str, str | None]]:
+    """Return providers that have their API key env var set.
+
+    For keyless providers (ollama, llamafile, etc.), include only if their
+    ENV_API_BASE_NAME env var is set.
+    """
+    configured = []
+    for provider in LLMProvider:
+        try:
+            cls = AnyLLM.get_provider_class(provider.value)
+        except Exception:
+            continue
+
+        env_key = getattr(cls, "ENV_API_KEY_NAME", None)
+        env_base = getattr(cls, "ENV_API_BASE_NAME", None)
+
+        if provider.value in _KEYLESS_PROVIDERS:
+            # Keyless provider — only include if base URL is configured
+            if env_base and os.getenv(env_base):
+                configured.append({"name": provider.value, "env_key": env_base})
+        elif env_key and os.getenv(env_key):
+            configured.append({"name": provider.value, "env_key": env_key})
+
+    return configured
+
 
 def get_providers() -> list[str]:
     """Return list of all available provider names from the LLMProvider enum."""
     return [p.value for p in LLMProvider]
 
 
-def get_models(provider: str, api_key: str, api_base: str | None = None) -> list[str]:
-    """Fetch available models for a provider using the provided API key."""
-    raw = list_models(provider=provider, api_key=api_key, api_base=api_base or None)
+async def get_models(provider: str) -> list[str]:
+    """Fetch available models for a provider using env-var credentials."""
+    raw = await alist_models(provider=provider)
     return [m.id if hasattr(m, "id") else str(m) for m in raw]
 
 
 def build_user_prompt(
-    profile: dict[str, str | None],
+    profile_description: str,
     title: str | None,
     artist: str | None,
     lyrics: str,
@@ -86,24 +147,12 @@ def build_user_prompt(
     instruction: str | None = None,
 ) -> str:
     """Build the user prompt for the LLM, including learned patterns and example."""
-    prompt_parts = ["ABOUT THE SINGER:"]
+    prompt_parts = []
 
-    if profile.get("location_description"):
-        prompt_parts.append(f"- Lives in: {profile['location_description']}")
-    if profile.get("location_type"):
-        prompt_parts.append(f"- Setting: {profile['location_type']}")
-    if profile.get("occupation"):
-        prompt_parts.append(f"- Works as: {profile['occupation']}")
-    if profile.get("hobbies"):
-        prompt_parts.append(f"- Hobbies: {profile['hobbies']}")
-    if profile.get("family_situation"):
-        prompt_parts.append(f"- Family: {profile['family_situation']}")
-    if profile.get("daily_routine"):
-        prompt_parts.append(f"- Daily life: {profile['daily_routine']}")
-    if profile.get("custom_references"):
-        prompt_parts.append(f"- Wants referenced: {profile['custom_references']}")
-
-    prompt_parts.append("")
+    if profile_description.strip():
+        prompt_parts.append("ABOUT THE SINGER:")
+        prompt_parts.append(profile_description.strip())
+        prompt_parts.append("")
 
     # Add learned substitution patterns
     if patterns:
@@ -148,16 +197,18 @@ def build_user_prompt(
         prompt_parts.append("")
 
     prompt_parts.append(
-        "Rewrite these lyrics to feel like the singer's own life. Same syllable count per line, "
-        "same rhyme scheme, same emotions. Only change imagery/references that don't fit."
+        "Clean up this pasted input (strip any non-song content, formatting artifacts, duplicates) "
+        "then rewrite the lyrics to feel like the singer's own life. Same syllable count per line, "
+        "same rhyme scheme, same emotions. Preserve chords in above-line format. "
+        "Only change imagery/references that don't fit."
     )
     prompt_parts.append("")
-    prompt_parts.append("ORIGINAL LYRICS:")
+    prompt_parts.append("PASTED INPUT:")
     prompt_parts.append(lyrics)
     prompt_parts.append("")
     prompt_parts.append(
-        "Return ONLY the rewritten lyrics (one line per original line, same line count).\n"
-        'Then add "---CHANGES---" followed by a brief list of what you changed and why.'
+        "Use the response format specified in your instructions "
+        "(<meta>, <original>, <rewritten>, <changes> XML sections)."
     )
 
     return "\n".join(prompt_parts)
@@ -215,36 +266,30 @@ def build_workshop_prompt(
 
 
 async def rewrite_lyrics(
-    profile: dict[str, str | None],
+    profile_description: str,
     title: str | None,
     artist: str | None,
     lyrics_with_chords: str,
     provider: str,
     model: str,
-    api_key: str,
     patterns: list[dict[str, str | None]] | None = None,
     example: dict[str, str] | None = None,
     instruction: str | None = None,
-    api_base: str | None = None,
-) -> dict[str, str]:
+) -> dict[str, str | None]:
     """Rewrite lyrics using the configured LLM.
 
-    Returns dict with: original_lyrics, rewritten_lyrics, changes_summary
+    Sends raw pasted input to the LLM which handles cleanup and chord formatting.
+    Returns dict with: original_lyrics, rewritten_lyrics, changes_summary, title, artist
     """
-    # Separate chords from lyrics
-    lyrics_only = extract_lyrics_only(lyrics_with_chords)
-
-    # Build prompt with patterns, example, and instruction
+    # Build prompt with patterns, example, and instruction — send raw text
     user_prompt = build_user_prompt(
-        profile, title, artist, lyrics_only, patterns, example, instruction
+        profile_description, title, artist, lyrics_with_chords, patterns, example, instruction
     )
 
-    # Call the LLM via any-llm-sdk
-    response = completion(
+    # Call the LLM via any-llm-sdk (uses env-var credentials automatically)
+    response = await acompletion(
         model=model,
         provider=provider,
-        api_key=api_key,
-        api_base=api_base or None,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
@@ -253,22 +298,91 @@ async def rewrite_lyrics(
 
     raw_response = _get_content(response)
 
-    # Parse the response: split on ---CHANGES---
-    if "---CHANGES---" in raw_response:
-        parts = raw_response.split("---CHANGES---", 1)
-        rewritten_lyrics_only = parts[0].strip()
-        changes_summary = parts[1].strip()
-    else:
-        rewritten_lyrics_only = raw_response.strip()
-        changes_summary = "No change summary provided by the model."
+    # Parse the 3-section response format
+    return _parse_rewrite_response(raw_response, lyrics_with_chords)
 
-    # Realign chords above the rewritten lyrics
-    rewritten_with_chords = realign_chords(lyrics_with_chords, rewritten_lyrics_only)
+
+def _extract_xml_section(raw: str, tag: str) -> str | None:
+    """Extract content between <tag> and </tag>, or None if not found."""
+    import re
+
+    pattern = re.compile(rf"<{tag}>\s*(.*?)\s*</{tag}>", re.DOTALL)
+    m = pattern.search(raw)
+    return m.group(1).strip() if m else None
+
+
+def _parse_meta_section(meta_text: str) -> dict[str, str | None]:
+    """Parse title/artist from a meta section. UNKNOWN maps to None."""
+    title: str | None = None
+    artist: str | None = None
+    for line in meta_text.split("\n"):
+        line = line.strip()
+        if line.lower().startswith("title:"):
+            val = line.split(":", 1)[1].strip()
+            title = None if val.upper() == "UNKNOWN" else val
+        elif line.lower().startswith("artist:"):
+            val = line.split(":", 1)[1].strip()
+            artist = None if val.upper() == "UNKNOWN" else val
+    return {"title": title, "artist": artist}
+
+
+def _parse_rewrite_response(raw: str, fallback_original: str) -> dict[str, str | None]:
+    """Parse the LLM rewrite response.
+
+    Supports two formats:
+    - XML tags: <meta>, <original>, <rewritten>, <changes>
+    - Legacy delimiters: ---ORIGINAL---/---REWRITTEN---/---CHANGES---
+
+    Returns dict with: original_lyrics, rewritten_lyrics, changes_summary, title, artist
+    """
+    original_lyrics = fallback_original
+    rewritten_lyrics = raw.strip()
+    changes_summary = "No change summary provided by the model."
+    title: str | None = None
+    artist: str | None = None
+
+    # Try XML tags first
+    xml_rewritten = _extract_xml_section(raw, "rewritten")
+    if xml_rewritten is not None:
+        rewritten_lyrics = xml_rewritten
+
+        xml_original = _extract_xml_section(raw, "original")
+        if xml_original is not None:
+            original_lyrics = xml_original
+
+        xml_changes = _extract_xml_section(raw, "changes")
+        if xml_changes is not None:
+            changes_summary = xml_changes
+
+        xml_meta = _extract_xml_section(raw, "meta")
+        if xml_meta is not None:
+            parsed_meta = _parse_meta_section(xml_meta)
+            title = parsed_meta["title"]
+            artist = parsed_meta["artist"]
+    elif "---REWRITTEN---" in raw:
+        # Legacy delimiter format
+        before_rewritten, after_rewritten = raw.split("---REWRITTEN---", 1)
+
+        if "---ORIGINAL---" in before_rewritten:
+            original_lyrics = before_rewritten.split("---ORIGINAL---", 1)[1].strip()
+
+        if "---CHANGES---" in after_rewritten:
+            rewritten_block, changes_block = after_rewritten.split("---CHANGES---", 1)
+            rewritten_lyrics = rewritten_block.strip()
+            changes_summary = changes_block.strip()
+        else:
+            rewritten_lyrics = after_rewritten.strip()
+    elif "---CHANGES---" in raw:
+        parts = raw.split("---CHANGES---", 1)
+        rewritten_lyrics = parts[0].strip()
+        changes_summary = parts[1].strip()
 
     return {
-        "original_lyrics": lyrics_with_chords,
-        "rewritten_lyrics": rewritten_with_chords,
+        "original_lyrics": original_lyrics,
+        "rewritten_lyrics": rewritten_lyrics,
         "changes_summary": changes_summary,
+        "title": title,
+        "artist": artist,
     }
 
 
@@ -279,8 +393,6 @@ async def workshop_line(
     instruction: str | None,
     provider: str,
     model: str,
-    api_key: str,
-    api_base: str | None = None,
 ) -> dict[str, object]:
     """Get 3 alternative versions of a specific lyric line."""
     # Work with lyrics-only (no chords) for the LLM
@@ -291,11 +403,9 @@ async def workshop_line(
         orig_lyrics_only, rewrite_lyrics_only, line_index, instruction
     )
 
-    response = completion(
+    response = await acompletion(
         model=model,
         provider=provider,
-        api_key=api_key,
-        api_base=api_base or None,
         messages=[
             {"role": "system", "content": WORKSHOP_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
@@ -361,75 +471,55 @@ def _parse_chat_response(raw: str) -> dict[str, str]:
 
 async def chat_edit_lyrics(
     song: Song,
-    profile: dict[str, str | None],
+    profile_description: str,
     messages: list[dict[str, str]],
     provider: str,
     model: str,
-    api_key: str,
-    api_base: str | None = None,
 ) -> dict[str, str]:
     """Process a chat-based lyric edit.
 
     Builds a multi-turn conversation with system context, sends to LLM,
-    parses the response for updated lyrics, and realigns chords.
+    parses the response for updated lyrics. The LLM handles chord formatting directly.
     """
-    current_lyrics_only = extract_lyrics_only(song.rewritten_lyrics)
-
     # Build the messages array for the LLM
-    system_content = CHAT_SYSTEM_PROMPT + "\n\nCURRENT LYRICS:\n" + current_lyrics_only
+    system_content = CHAT_SYSTEM_PROMPT
+    if profile_description.strip():
+        system_content += "\n\nABOUT THE SINGER:\n" + profile_description.strip()
+    system_content += "\n\nCURRENT LYRICS:\n" + song.rewritten_lyrics
 
     llm_messages = [{"role": "system", "content": system_content}]
     for msg in messages:
         llm_messages.append({"role": msg["role"], "content": msg["content"]})
 
-    response = completion(
+    response = await acompletion(
         model=model,
         provider=provider,
-        api_key=api_key,
-        api_base=api_base or None,
         messages=llm_messages,
     )
 
     raw_response = _get_content(response)
     parsed = _parse_chat_response(raw_response)
 
-    # Realign chords from current version onto new lyrics
-    rewritten_with_chords = realign_chords(song.rewritten_lyrics, parsed["lyrics"])
-
     # Build a changes summary
     changes_summary = parsed["explanation"] or "Chat edit applied."
 
     return {
-        "rewritten_lyrics": rewritten_with_chords,
+        "rewritten_lyrics": parsed["lyrics"],
         "assistant_message": raw_response,
         "changes_summary": changes_summary,
     }
 
 
-async def extract_and_save_patterns(song: Song, db: Session) -> list[dict[str, str]]:
-    """Extract substitution patterns from a completed song and save them.
-
-    Called when a song is marked as 'completed'.
-    Requires the song to have both original and rewritten lyrics.
-    Uses the same LLM settings — we need api_key, so we use a lightweight approach:
-    try to find a key from localStorage sent in recent requests, or skip.
-    """
-
-    # This is a no-op placeholder — extraction requires an API key which must be
-    # passed from the frontend. Use extract_patterns_with_key() instead.
-    logger.info("Pattern extraction skipped (no API key available server-side)")
-    return []
-
-
-async def extract_patterns_with_key(
+async def extract_patterns(
     song: Song,
     db: Session,
     provider: str,
     model: str,
-    api_key: str,
-    api_base: str | None = None,
 ) -> list[dict[str, str]]:
-    """Extract substitution patterns using provided API credentials."""
+    """Extract substitution patterns from a completed song and save them.
+
+    Called when a song is marked as 'completed'. Uses env-var credentials.
+    """
     from ..models import SubstitutionPattern
 
     orig_lyrics = extract_lyrics_only(song.original_lyrics)
@@ -453,11 +543,9 @@ Example: [{{"original_term": "F-150", "replacement_term": "Subaru", "category": 
 
 Return ONLY the JSON array, no other text."""
 
-    response = completion(
+    response = await acompletion(
         model=model,
         provider=provider,
-        api_key=api_key,
-        api_base=api_base or None,
         messages=[
             {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},

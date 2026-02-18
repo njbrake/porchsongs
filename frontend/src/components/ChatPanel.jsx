@@ -3,7 +3,7 @@ import api from '../api';
 
 const MAX_MESSAGES = 20;
 
-export default function ChatPanel({ songId, messages, setMessages, llmSettings, originalLyrics, onLyricsUpdated }) {
+export default function ChatPanel({ songId, messages, setMessages, llmSettings, originalLyrics, onLyricsUpdated, initialLoading }) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef(null);
@@ -37,6 +37,9 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
       const assistantMsg = { role: 'assistant', content: result.changes_summary };
       setMessages(prev => [...prev, assistantMsg].slice(-MAX_MESSAGES));
       onLyricsUpdated(result.rewritten_lyrics);
+
+      // Persist the new messages (backend also saves, but this covers the frontend view)
+      // The backend chat handler already persists these, so no extra call needed here
     } catch (err) {
       const errorMsg = { role: 'assistant', content: 'Error: ' + err.message };
       setMessages(prev => [...prev, errorMsg]);
@@ -59,6 +62,12 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
             {msg.content}
           </div>
         ))}
+        {initialLoading && (
+          <div className="chat-typing">
+            <div className="spinner" />
+            <span>Rewriting your lyrics...</span>
+          </div>
+        )}
         {sending && (
           <div className="chat-typing">
             <div className="spinner" />
@@ -79,9 +88,9 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
               handleSend();
             }
           }}
-          disabled={sending}
+          disabled={sending || initialLoading}
         />
-        <button className="btn primary" onClick={handleSend} disabled={sending || !input.trim()}>
+        <button className="btn primary" onClick={handleSend} disabled={sending || initialLoading || !input.trim()}>
           Send
         </button>
       </div>

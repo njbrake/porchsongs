@@ -6,38 +6,20 @@ from pydantic import BaseModel
 # --- Profiles ---
 class ProfileCreate(BaseModel):
     name: str
-    location_type: str = "suburb"
-    location_description: str | None = None
-    occupation: str | None = None
-    hobbies: str | None = None
-    family_situation: str | None = None
-    daily_routine: str | None = None
-    custom_references: str | None = None
+    description: str | None = None
     is_default: bool = False
 
 
 class ProfileUpdate(BaseModel):
     name: str | None = None
-    location_type: str | None = None
-    location_description: str | None = None
-    occupation: str | None = None
-    hobbies: str | None = None
-    family_situation: str | None = None
-    daily_routine: str | None = None
-    custom_references: str | None = None
+    description: str | None = None
     is_default: bool | None = None
 
 
 class ProfileOut(BaseModel):
     id: int
     name: str
-    location_type: str
-    location_description: str | None
-    occupation: str | None
-    hobbies: str | None
-    family_situation: str | None
-    daily_routine: str | None
-    custom_references: str | None
+    description: str | None
     is_default: bool
     created_at: datetime
     updated_at: datetime
@@ -45,16 +27,22 @@ class ProfileOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# --- Tab Fetch ---
-class FetchTabRequest(BaseModel):
-    url: str
+# --- Profile Models ---
+class ProfileModelCreate(BaseModel):
+    provider: str
+    model: str
+    api_base: str | None = None
 
 
-class FetchTabResponse(BaseModel):
-    title: str
-    artist: str
-    lyrics_with_chords: str
-    chord_format: str  # "above-line" or "inline"
+class ProfileModelOut(BaseModel):
+    id: int
+    profile_id: int
+    provider: str
+    model: str
+    api_base: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 # --- Rewrite ---
@@ -67,14 +55,14 @@ class RewriteRequest(BaseModel):
     instruction: str | None = None
     provider: str
     model: str
-    api_key: str
-    api_base: str | None = None
 
 
 class RewriteResponse(BaseModel):
     original_lyrics: str
     rewritten_lyrics: str
     changes_summary: str
+    title: str | None = None
+    artist: str | None = None
 
 
 # --- Songs ---
@@ -122,13 +110,14 @@ class SongRevisionOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SongUpdate(BaseModel):
+    title: str | None = None
+    artist: str | None = None
+
+
 # --- Song Status ---
 class SongStatusUpdate(BaseModel):
     status: str  # "draft" or "completed"
-    provider: str | None = None
-    model: str | None = None
-    api_key: str | None = None
-    api_base: str | None = None
 
 
 # --- Workshop ---
@@ -138,8 +127,6 @@ class WorkshopLineRequest(BaseModel):
     instruction: str | None = None  # optional user instruction
     provider: str
     model: str
-    api_key: str
-    api_base: str | None = None
 
 
 class WorkshopAlternative(BaseModel):
@@ -191,13 +178,28 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class ChatMessageCreate(BaseModel):
+    role: str
+    content: str
+    is_note: bool = False
+
+
+class ChatMessageOut(BaseModel):
+    id: int
+    song_id: int
+    role: str
+    content: str
+    is_note: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class ChatRequest(BaseModel):
     song_id: int
     messages: list[ChatMessage]
     provider: str
     model: str
-    api_key: str
-    api_base: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -205,16 +207,3 @@ class ChatResponse(BaseModel):
     assistant_message: str
     changes_summary: str
     version: int
-
-
-# --- Verify Connection ---
-class VerifyConnectionRequest(BaseModel):
-    provider: str
-    api_key: str
-    api_base: str | None = None
-
-
-class VerifyConnectionResponse(BaseModel):
-    ok: bool
-    models: list[str] = []
-    error: str | None = None

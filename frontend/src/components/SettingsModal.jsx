@@ -1,108 +1,148 @@
 import { useState, useEffect } from 'react';
 import api from '../api';
 
-export default function SettingsModal({ provider, model, apiKey, apiBase, onSave, onClose }) {
+export default function SettingsModal({ provider, model, savedModels, onSave, onAddModel, onRemoveModel, onClose }) {
   const [providers, setProviders] = useState([]);
-  const [localProvider, setLocalProvider] = useState(provider);
-  const [localModel, setLocalModel] = useState(model);
-  const [localKey, setLocalKey] = useState(apiKey);
-  const [localBase, setLocalBase] = useState(apiBase || '');
-  const [models, setModels] = useState(model ? [model] : []);
-  const [verifyStatus, setVerifyStatus] = useState({ text: '', type: '' });
+  const [localProvider, setLocalProvider] = useState('');
+  const [localModel, setLocalModel] = useState('');
+  const [models, setModels] = useState([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [error, setError] = useState('');
 
+  // Fetch configured providers on mount
   useEffect(() => {
-    api.listProviders().then(setProviders).catch(() => setProviders([]));
+    api.listProviders()
+      .then(setProviders)
+      .catch(() => setProviders([]));
   }, []);
 
-  const handleVerify = async () => {
+  // Fetch models when provider changes
+  useEffect(() => {
     if (!localProvider) {
-      setVerifyStatus({ text: 'Select a provider first.', type: 'error' });
+      setModels([]);
       return;
     }
-    if (!localKey) {
-      setVerifyStatus({ text: 'Enter an API key first.', type: 'error' });
-      return;
-    }
-
-    setVerifyStatus({ text: 'Verifying...', type: '' });
-
-    try {
-      const result = await api.verifyConnection({
-        provider: localProvider,
-        api_key: localKey,
-        api_base: localBase || null,
-      });
-      if (result.ok) {
-        setVerifyStatus({ text: 'Connected!', type: 'success' });
-        setModels(result.models);
-        if (result.models.length && !result.models.includes(localModel)) {
-          setLocalModel(result.models[0]);
+    setLoadingModels(true);
+    setError('');
+    api.listProviderModels(localProvider)
+      .then(modelList => {
+        setModels(modelList);
+        if (modelList.length && !modelList.includes(localModel)) {
+          setLocalModel(modelList[0]);
         }
-      } else {
-        setVerifyStatus({ text: result.error || 'Connection failed.', type: 'error' });
+      })
+      .catch(err => {
+        setError(err.message);
+        setModels([]);
+      })
+      .finally(() => setLoadingModels(false));
+  }, [localProvider]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleAdd = async () => {
+    if (!localProvider || !localModel) return;
+    setError('');
+    try {
+      await onAddModel(localProvider, localModel);
+      onSave(localProvider, localModel);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleActivate = (sm) => {
+    onSave(sm.provider, sm.model);
+  };
+
+  const handleDelete = async (sm) => {
+    try {
+      await onRemoveModel(sm.id);
+      // If deleted model was the active one, clear selection
+      if (sm.provider === provider && sm.model === model) {
+        const remaining = savedModels.filter(m => m.id !== sm.id);
+        if (remaining.length > 0) {
+          onSave(remaining[0].provider, remaining[0].model);
+        } else {
+          onSave('', '');
+        }
       }
     } catch (err) {
-      setVerifyStatus({ text: err.message, type: 'error' });
+      setError(err.message);
     }
   };
 
-  const handleSave = () => {
-    onSave(localProvider, localModel, localKey, localBase);
-    onClose();
-  };
+  const noProviders = !providers.length;
 
   return (
     <div className="modal">
       <div className="modal-backdrop" onClick={onClose} />
-      <div className="modal-content">
+      <div className="modal-content settings-modal">
         <div className="modal-header">
           <h2>LLM Settings</h2>
           <button className="modal-close" onClick={onClose}>&times;</button>
         </div>
         <div className="modal-body">
-          <div className="form-group">
-            <label>Provider</label>
-            <select value={localProvider} onChange={e => setLocalProvider(e.target.value)}>
-              <option value="">Select provider...</option>
-              {providers.map(p => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>API Key</label>
-            <input
-              type="password"
-              value={localKey}
-              onChange={e => setLocalKey(e.target.value)}
-              placeholder="Your API key (stored locally only)"
-            />
-          </div>
-          <div className="form-group">
-            <label>Base URL <span style={{fontWeight: 'normal', color: '#888'}}>(optional)</span></label>
-            <input
-              type="url"
-              value={localBase}
-              onChange={e => setLocalBase(e.target.value)}
-              placeholder="e.g., http://localhost:8080/v1 for llamafile"
-            />
-          </div>
-          <div className="form-group">
-            <button className="btn secondary" onClick={handleVerify}>Verify Connection</button>
-            {verifyStatus.text && (
-              <span className={`verify-status ${verifyStatus.type}`}>{verifyStatus.text}</span>
-            )}
-          </div>
-          <div className="form-group">
-            <label>Model</label>
-            <select value={localModel} onChange={e => setLocalModel(e.target.value)}>
-              {models.length === 0 && <option value="">Verify connection to load models</option>}
-              {models.map(m => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          </div>
-          <button className="btn primary" onClick={handleSave}>Save Settings</button>
+          {noProviders ? (
+            <p style={{ color: '#888' }}>
+              No LLM providers configured. Add API keys (e.g. OPENAI_API_KEY) to your .env and restart.
+            </p>
+          ) : (
+            <>
+              {/* Section A: Saved Models */}
+              <div className="settings-section">
+                <h3>Saved Models</h3>
+                {savedModels.length === 0 ? (
+                  <p className="settings-empty">No models saved yet. Add one below.</p>
+                ) : (
+                  <div className="saved-models-list">
+                    {savedModels.map(sm => {
+                      const isActive = sm.provider === provider && sm.model === model;
+                      return (
+                        <div key={sm.id} className={`saved-model-item${isActive ? ' active' : ''}`}>
+                          <button className="saved-model-use" onClick={() => handleActivate(sm)}>
+                            <span className="saved-model-label">
+                              <span className="saved-model-provider">{sm.provider}</span>
+                              <span className="saved-model-sep">/</span>
+                              <span className="saved-model-name">{sm.model}</span>
+                            </span>
+                            {isActive && <span className="saved-model-active-badge">Active</span>}
+                          </button>
+                          <button className="saved-model-delete" onClick={() => handleDelete(sm)} title="Remove model">&times;</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Section B: Add Model */}
+              <div className="settings-section">
+                <h3>Add Model</h3>
+                <div className="form-group">
+                  <label>Provider</label>
+                  <select value={localProvider} onChange={e => setLocalProvider(e.target.value)}>
+                    <option value="">Select provider...</option>
+                    {providers.map(p => (
+                      <option key={p.name} value={p.name}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Model</label>
+                  <select value={localModel} onChange={e => setLocalModel(e.target.value)} disabled={loadingModels}>
+                    {loadingModels && <option value="">Loading models...</option>}
+                    {!loadingModels && models.length === 0 && <option value="">Select a provider first</option>}
+                    {!loadingModels && models.map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+                {error && <p style={{ color: '#c33' }}>{error}</p>}
+                <button className="btn primary" onClick={handleAdd} disabled={!localProvider || !localModel}>
+                  Add Model
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

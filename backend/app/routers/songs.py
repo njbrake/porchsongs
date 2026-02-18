@@ -108,7 +108,7 @@ async def update_song_status(
         model = data.model or song.llm_model or "gpt-4o-mini"
         try:
             await llm_service.extract_patterns_with_key(
-                song, db, provider, model, data.api_key
+                song, db, provider, model, data.api_key, api_base=data.api_base,
             )
         except Exception:
             # Pattern extraction is best-effort; don't fail the status update

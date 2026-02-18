@@ -19,6 +19,7 @@ export default function App() {
   const [provider, setProvider] = useLocalStorage('porchsongs_provider', '');
   const [model, setModel] = useLocalStorage('porchsongs_model', '');
   const [apiKey, setApiKey] = useLocalStorage('porchsongs_api_key', '');
+  const [apiBase, setApiBase] = useLocalStorage('porchsongs_api_base', '');
 
   // Rewrite state (shared between RewriteTab, comparison, workshop, chat)
   const [rewriteResult, setRewriteResult] = useState(null);
@@ -26,7 +27,7 @@ export default function App() {
   const [currentSongId, setCurrentSongId] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
 
-  const llmSettings = { provider, model, api_key: apiKey };
+  const llmSettings = { provider, model, api_key: apiKey, api_base: apiBase || null };
 
   // Load profile on mount
   useEffect(() => {
@@ -115,7 +116,8 @@ export default function App() {
           provider={provider}
           model={model}
           apiKey={apiKey}
-          onSave={(p, m, k) => { setProvider(p); setModel(m); setApiKey(k); }}
+          apiBase={apiBase}
+          onSave={(p, m, k, b) => { setProvider(p); setModel(m); setApiKey(k); setApiBase(b); }}
           onClose={() => setShowSettings(false)}
         />
       )}

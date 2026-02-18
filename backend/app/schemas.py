@@ -68,6 +68,7 @@ class RewriteRequest(BaseModel):
     provider: str
     model: str
     api_key: str
+    api_base: str | None = None
 
 
 class RewriteResponse(BaseModel):
@@ -127,6 +128,7 @@ class SongStatusUpdate(BaseModel):
     provider: str | None = None
     model: str | None = None
     api_key: str | None = None
+    api_base: str | None = None
 
 
 # --- Workshop ---
@@ -137,6 +139,7 @@ class WorkshopLineRequest(BaseModel):
     provider: str
     model: str
     api_key: str
+    api_base: str | None = None
 
 
 class WorkshopAlternative(BaseModel):
@@ -194,6 +197,7 @@ class ChatRequest(BaseModel):
     provider: str
     model: str
     api_key: str
+    api_base: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -207,6 +211,7 @@ class ChatResponse(BaseModel):
 class VerifyConnectionRequest(BaseModel):
     provider: str
     api_key: str
+    api_base: str | None = None
 
 
 class VerifyConnectionResponse(BaseModel):

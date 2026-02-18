@@ -13,12 +13,20 @@ def fetch_tab(url: str) -> dict:
     if "ultimate-guitar.com" not in url:
         raise ValueError("URL must be from ultimate-guitar.com")
 
+    # Normalize URL: strip print/export URLs back to the regular tab page
+    url = _normalize_url(url)
+
     headers = {
         "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        )
+            "Chrome/131.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Referer": "https://www.ultimate-guitar.com/",
+        "DNT": "1",
     }
     resp = requests.get(url, headers=headers, timeout=15)
     resp.raise_for_status()
@@ -53,7 +61,6 @@ def fetch_tab(url: str) -> dict:
         raise ValueError("Could not extract lyrics/chords from this tab.")
 
     # Clean up UG's HTML-like chord annotations
-    # UG uses [ch]Am[/ch] for chords and [tab]...[/tab] for sections
     content = _clean_ug_content(content)
 
     chord_format = "above-line"
@@ -64,6 +71,17 @@ def fetch_tab(url: str) -> dict:
         "lyrics_with_chords": content,
         "chord_format": chord_format,
     }
+
+
+def _normalize_url(url: str) -> str:
+    """Convert print/export URLs back to regular tab page URLs."""
+    # Handle print URLs like /tab/print?...&id=5316195&...
+    if "/tab/print" in url:
+        match = re.search(r"[?&]id=(\d+)", url)
+        if match:
+            tab_id = match.group(1)
+            return f"https://tabs.ultimate-guitar.com/tab/{tab_id}"
+    return url
 
 
 def _clean_ug_content(content: str) -> str:

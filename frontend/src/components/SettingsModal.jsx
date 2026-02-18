@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import api from '../api';
 
-export default function SettingsModal({ provider, model, apiKey, onSave, onClose }) {
+export default function SettingsModal({ provider, model, apiKey, apiBase, onSave, onClose }) {
   const [providers, setProviders] = useState([]);
   const [localProvider, setLocalProvider] = useState(provider);
   const [localModel, setLocalModel] = useState(model);
   const [localKey, setLocalKey] = useState(apiKey);
+  const [localBase, setLocalBase] = useState(apiBase || '');
   const [models, setModels] = useState(model ? [model] : []);
   const [verifyStatus, setVerifyStatus] = useState({ text: '', type: '' });
 
@@ -26,7 +27,11 @@ export default function SettingsModal({ provider, model, apiKey, onSave, onClose
     setVerifyStatus({ text: 'Verifying...', type: '' });
 
     try {
-      const result = await api.verifyConnection({ provider: localProvider, api_key: localKey });
+      const result = await api.verifyConnection({
+        provider: localProvider,
+        api_key: localKey,
+        api_base: localBase || null,
+      });
       if (result.ok) {
         setVerifyStatus({ text: 'Connected!', type: 'success' });
         setModels(result.models);
@@ -42,7 +47,7 @@ export default function SettingsModal({ provider, model, apiKey, onSave, onClose
   };
 
   const handleSave = () => {
-    onSave(localProvider, localModel, localKey);
+    onSave(localProvider, localModel, localKey, localBase);
     onClose();
   };
 
@@ -71,6 +76,15 @@ export default function SettingsModal({ provider, model, apiKey, onSave, onClose
               value={localKey}
               onChange={e => setLocalKey(e.target.value)}
               placeholder="Your API key (stored locally only)"
+            />
+          </div>
+          <div className="form-group">
+            <label>Base URL <span style={{fontWeight: 'normal', color: '#888'}}>(optional)</span></label>
+            <input
+              type="url"
+              value={localBase}
+              onChange={e => setLocalBase(e.target.value)}
+              placeholder="e.g., http://localhost:8080/v1 for llamafile"
             />
           </div>
           <div className="form-group">

@@ -98,6 +98,7 @@ async def rewrite(req: RewriteRequest, db: Session = Depends(get_db)):
             patterns=pattern_list,
             example=example,
             instruction=req.instruction,
+            api_base=req.api_base,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {e}")
@@ -120,6 +121,7 @@ async def workshop_line(req: WorkshopLineRequest, db: Session = Depends(get_db))
             provider=req.provider,
             model=req.model,
             api_key=req.api_key,
+            api_base=req.api_base,
         )
     except IndexError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -158,6 +160,7 @@ async def chat(req: ChatRequest, db: Session = Depends(get_db)):
             provider=req.provider,
             model=req.model,
             api_key=req.api_key,
+            api_base=req.api_base,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {e}")
@@ -193,7 +196,7 @@ def list_providers():
 @router.post("/verify-connection", response_model=VerifyConnectionResponse)
 def verify_connection(req: VerifyConnectionRequest):
     try:
-        models = llm_service.get_models(req.provider, req.api_key)
+        models = llm_service.get_models(req.provider, req.api_key, api_base=req.api_base)
         return VerifyConnectionResponse(ok=True, models=models)
     except Exception as e:
         return VerifyConnectionResponse(ok=False, error=str(e))

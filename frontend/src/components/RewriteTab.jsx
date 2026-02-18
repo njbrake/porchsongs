@@ -139,6 +139,7 @@ export default function RewriteTab({
         provider: llmSettings.provider,
         model: llmSettings.model,
         api_key: llmSettings.api_key,
+        api_base: llmSettings.api_base,
       });
       setCompletedStatus('completed');
     } catch (err) {

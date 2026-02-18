@@ -49,9 +49,9 @@ def get_providers() -> list[str]:
     return [p.value for p in LLMProvider]
 
 
-def get_models(provider: str, api_key: str) -> list[str]:
+def get_models(provider: str, api_key: str, api_base: str | None = None) -> list[str]:
     """Fetch available models for a provider using the provided API key."""
-    return list_models(provider=provider, api_key=api_key)
+    return list_models(provider=provider, api_key=api_key, api_base=api_base or None)
 
 
 def build_user_prompt(
@@ -201,6 +201,7 @@ async def rewrite_lyrics(
     patterns: list[dict] | None = None,
     example: dict | None = None,
     instruction: str | None = None,
+    api_base: str | None = None,
 ) -> dict:
     """Rewrite lyrics using the configured LLM.
 
@@ -217,6 +218,7 @@ async def rewrite_lyrics(
         model=model,
         provider=provider,
         api_key=api_key,
+        api_base=api_base or None,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
@@ -252,6 +254,7 @@ async def workshop_line(
     provider: str,
     model: str,
     api_key: str,
+    api_base: str | None = None,
 ) -> dict:
     """Get 3 alternative versions of a specific lyric line."""
     # Work with lyrics-only (no chords) for the LLM
@@ -266,6 +269,7 @@ async def workshop_line(
         model=model,
         provider=provider,
         api_key=api_key,
+        api_base=api_base or None,
         messages=[
             {"role": "system", "content": WORKSHOP_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
@@ -332,6 +336,7 @@ async def chat_edit_lyrics(
     provider: str,
     model: str,
     api_key: str,
+    api_base: str | None = None,
 ) -> dict:
     """Process a chat-based lyric edit.
 
@@ -355,6 +360,7 @@ async def chat_edit_lyrics(
         model=model,
         provider=provider,
         api_key=api_key,
+        api_base=api_base or None,
         messages=llm_messages,
     )
 
@@ -417,7 +423,7 @@ Return ONLY the JSON array, no other text."""
 
 
 async def extract_patterns_with_key(
-    song, db, provider: str, model: str, api_key: str,
+    song, db, provider: str, model: str, api_key: str, api_base: str | None = None,
 ) -> list[dict]:
     """Extract substitution patterns using provided API credentials."""
     from ..models import SubstitutionPattern
@@ -447,6 +453,7 @@ Return ONLY the JSON array, no other text."""
         model=model,
         provider=provider,
         api_key=api_key,
+        api_base=api_base or None,
         messages=[
             {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},

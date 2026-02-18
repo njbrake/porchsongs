@@ -18,6 +18,10 @@
 
 ---
 
+<p align="center">
+  <img src="assets/porchsongs-demo.gif" alt="PorchSongs demo" width="720" />
+</p>
+
 porchsongs preserves meter, rhyme scheme, chord alignment, and emotional meaning — it only swaps out the imagery that doesn't fit.
 
 ## How It Works

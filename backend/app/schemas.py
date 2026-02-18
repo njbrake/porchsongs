@@ -113,6 +113,7 @@ class SongRevisionOut(BaseModel):
 class SongUpdate(BaseModel):
     title: str | None = None
     artist: str | None = None
+    rewritten_lyrics: str | None = None
 
 
 # --- Song Status ---

@@ -12,7 +12,7 @@ dependencies = [
     "python-dotenv==1.0.1",
     "requests==2.32.3",
     "beautifulsoup4==4.12.3",
-    "any-llm-sdk>=1.8.0",
+    "any-llm-sdk[all]>=1.8.0",
     "curl-cffi>=0.14.0",
     "fpdf2>=2.8.0",
 ]

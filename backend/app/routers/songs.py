@@ -92,6 +92,8 @@ def update_song(song_id: int, data: SongUpdate, db: Session = Depends(get_db)) -
         song.title = data.title
     if data.artist is not None:
         song.artist = data.artist
+    if data.rewritten_lyrics is not None:
+        song.rewritten_lyrics = data.rewritten_lyrics
     db.commit()
     db.refresh(song)
     return song

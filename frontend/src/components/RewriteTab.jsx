@@ -143,6 +143,16 @@ export default function RewriteTab({
     }
   }, [currentSongId, songTitle, songArtist]);
 
+  const handleRewrittenChange = useCallback((newText) => {
+    onLyricsUpdated(newText);
+  }, [onLyricsUpdated]);
+
+  const handleRewrittenBlur = useCallback(() => {
+    if (currentSongId && rewriteResult) {
+      api.updateSong(currentSongId, { rewritten_lyrics: rewriteResult.rewritten_lyrics }).catch(() => {});
+    }
+  }, [currentSongId, rewriteResult]);
+
   const handleChatUpdate = useCallback((newLyrics) => {
     onLyricsUpdated(newLyrics);
   }, [onLyricsUpdated]);
@@ -164,43 +174,54 @@ export default function RewriteTab({
         </div>
       )}
 
-      <ModelSelector
-        provider={llmSettings.provider}
-        model={llmSettings.model}
-        savedModels={savedModels}
-        onChangeProvider={onChangeProvider}
-        onChangeModel={onChangeModel}
-        onOpenSettings={onOpenSettings}
-      />
-
       {!rewriteResult && !loading && (
-        <div className="input-section">
-          <textarea
-            rows="14"
-            value={lyrics}
-            onChange={e => setLyrics(e.target.value)}
-            placeholder="Paste lyrics, chords, or a copy from a tab site — any format works"
+        <>
+          <ModelSelector
+            provider={llmSettings.provider}
+            model={llmSettings.model}
+            savedModels={savedModels}
+            onChangeProvider={onChangeProvider}
+            onChangeModel={onChangeModel}
+            onOpenSettings={onOpenSettings}
           />
 
-          <textarea
-            className="instruction-field"
-            rows="2"
-            value={instruction}
-            onChange={e => setInstruction(e.target.value)}
-            placeholder="Optional: e.g., 'change truck references to cycling, keep the fatherhood theme'"
-          />
+          <div className="input-section">
+            <textarea
+              rows="14"
+              value={lyrics}
+              onChange={e => setLyrics(e.target.value)}
+              placeholder="Paste lyrics, chords, or a copy from a tab site — any format works"
+            />
 
-          <button className="btn primary" style={{ marginTop: '0.75rem' }} onClick={handleRewrite} disabled={!canRewrite}>
-            Rewrite
-          </button>
-        </div>
+            <textarea
+              className="instruction-field"
+              rows="2"
+              value={instruction}
+              onChange={e => setInstruction(e.target.value)}
+              placeholder="Optional: e.g., 'change truck references to cycling, keep the fatherhood theme'"
+            />
+
+            <button className="btn primary" style={{ marginTop: '0.75rem' }} onClick={handleRewrite} disabled={!canRewrite}>
+              Rewrite
+            </button>
+          </div>
+        </>
       )}
 
       {(rewriteResult || loading) && (
         <div className="comparison-section">
           {rewriteResult && (
-            <>
-              <div className="comparison-header">
+            <div className="rewrite-workspace">
+              <div className="rewrite-workspace-left">
+                <ModelSelector
+                  provider={llmSettings.provider}
+                  model={llmSettings.model}
+                  savedModels={savedModels}
+                  onChangeProvider={onChangeProvider}
+                  onChangeModel={onChangeModel}
+                  onOpenSettings={onOpenSettings}
+                />
+
                 <div className="comparison-actions">
                   <button className="btn secondary" onClick={handleNewSong}>
                     New Song
@@ -214,29 +235,59 @@ export default function RewriteTab({
                      completedStatus === 'saving' ? 'Saving...' : 'Mark as Complete'}
                   </button>
                 </div>
+
+                <ChatPanel
+                  songId={currentSongId}
+                  messages={chatMessages}
+                  setMessages={setChatMessages}
+                  llmSettings={llmSettings}
+                  originalLyrics={rewriteResult?.original_lyrics || ''}
+                  onLyricsUpdated={handleChatUpdate}
+                  initialLoading={loading}
+                />
               </div>
 
-              <ComparisonView
-                original={rewriteResult.original_lyrics}
-                rewritten={rewriteResult.rewritten_lyrics}
-                title={songTitle}
-                artist={songArtist}
-                onTitleChange={handleTitleChange}
-                onArtistChange={handleArtistChange}
-                onBlur={handleMetaBlur}
-              />
-            </>
+              <div className="rewrite-workspace-right">
+                <div className="song-meta-header">
+                  <input
+                    className="song-title-input"
+                    type="text"
+                    value={songTitle || ''}
+                    onChange={e => handleTitleChange(e.target.value)}
+                    onBlur={handleMetaBlur}
+                    placeholder="Song title"
+                  />
+                  <input
+                    className="song-artist-input"
+                    type="text"
+                    value={songArtist || ''}
+                    onChange={e => handleArtistChange(e.target.value)}
+                    onBlur={handleMetaBlur}
+                    placeholder="Artist"
+                  />
+                </div>
+
+                <ComparisonView
+                  original={rewriteResult.original_lyrics}
+                  rewritten={rewriteResult.rewritten_lyrics}
+                  onRewrittenChange={handleRewrittenChange}
+                  onRewrittenBlur={handleRewrittenBlur}
+                />
+              </div>
+            </div>
           )}
 
-          <ChatPanel
-            songId={currentSongId}
-            messages={chatMessages}
-            setMessages={setChatMessages}
-            llmSettings={llmSettings}
-            originalLyrics={rewriteResult?.original_lyrics || ''}
-            onLyricsUpdated={handleChatUpdate}
-            initialLoading={loading}
-          />
+          {!rewriteResult && loading && (
+            <ChatPanel
+              songId={currentSongId}
+              messages={chatMessages}
+              setMessages={setChatMessages}
+              llmSettings={llmSettings}
+              originalLyrics={''}
+              onLyricsUpdated={handleChatUpdate}
+              initialLoading={loading}
+            />
+          )}
         </div>
       )}
     </div>

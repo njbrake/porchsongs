@@ -134,9 +134,14 @@ header h1 {
 
 /* === Main === */
 main {
-  max-width: 1100px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 1rem 0.5rem;
+}
+
+main:has(.rewrite-workspace) {
+  max-width: none;
+  padding: 0.5rem 0.5rem;
 }
 
 /* === Buttons === */
@@ -373,7 +378,7 @@ textarea {
 
 /* === Comparison === */
 .comparison-section {
-  margin-top: 2rem;
+  margin-top: 0.5rem;
 }
 
 .comparison-header {
@@ -1133,6 +1138,95 @@ textarea {
 .toggle-original { align-self: flex-start; margin-top: 0.5rem; }
 .original-collapsed { opacity: 0.8; margin-top: 0.5rem; }
 
+/* === Rewrite Workspace (side-by-side) === */
+.rewrite-workspace {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  align-items: stretch;
+  height: calc(100vh - 7rem);
+}
+
+.rewrite-workspace > * {
+  min-height: 0;
+}
+
+.rewrite-workspace-left {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.rewrite-workspace-left .comparison-actions {
+  margin-bottom: 0.5rem;
+}
+
+.rewrite-workspace-left .model-selector {
+  margin-bottom: 0.5rem;
+}
+
+.rewrite-workspace-right {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.rewrite-workspace-right .song-meta-header {
+  margin-bottom: 0.5rem;
+}
+
+.comparison-view-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.rewrite-workspace .chat-panel {
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.rewrite-workspace .chat-messages {
+  max-height: none;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.rewrite-workspace .panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.rewrite-workspace .lyrics-display {
+  max-height: none;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.lyrics-editable {
+  width: 100%;
+  border: none;
+  background: transparent;
+  resize: none;
+  min-height: 0;
+  max-height: none;
+  flex: 1;
+  overflow-y: auto;
+  cursor: text;
+}
+
+.lyrics-editable:focus {
+  outline: none;
+  background: #fdfcfa;
+}
+
 /* === Login Page === */
 .login-page {
   display: flex;
@@ -1249,6 +1343,10 @@ textarea {
   }
 
   .comparison-panels {
+    grid-template-columns: 1fr;
+  }
+
+  .rewrite-workspace {
     grid-template-columns: 1fr;
   }
 

@@ -511,6 +511,14 @@ def test_rewrite_unknown_title_artist(client):
         assert data["artist"] is None
 
 
+def test_health(client):
+    resp = client.get("/api/health")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert "version" in data
+
+
 def test_rewrite_fallback_title_from_request(client):
     """When LLM returns UNKNOWN but request has title/artist, use request values."""
     profile = client.post("/api/profiles", json={"name": "Test"}).json()

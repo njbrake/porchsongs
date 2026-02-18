@@ -1,5 +1,7 @@
 import logging
+from importlib.metadata import version as pkg_version
 from pathlib import Path
+from typing import ClassVar
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Response
@@ -47,13 +49,18 @@ def _run_migrations() -> None:
 
 _run_migrations()
 
-app = FastAPI(title="porchsongs", version="1.0.0")
+try:
+    __version__ = pkg_version("porchsongs")
+except Exception:
+    __version__ = "0.0.0-dev"
+
+app = FastAPI(title="porchsongs", version=__version__)
 
 
 class OptionalBearerAuth(BaseHTTPMiddleware):
     """Gate /api/ routes behind a bearer token when APP_SECRET is configured."""
 
-    _PUBLIC_PATHS = {"/api/auth-required", "/api/login"}
+    _PUBLIC_PATHS: ClassVar[set[str]] = {"/api/auth-required", "/api/login", "/api/health"}
 
     async def dispatch(self, request: Request, call_next: object) -> Response:
         # Only gate /api/ routes, exempting public auth endpoints
@@ -100,6 +107,12 @@ async def login(body: LoginRequest) -> JSONResponse:
     if not settings.app_secret or body.password != settings.app_secret:
         return JSONResponse(status_code=401, content={"detail": "Invalid password"})
     return JSONResponse(content={"ok": True, "token": settings.app_secret})
+
+
+@app.get("/api/health")
+async def health() -> dict[str, str]:
+    """Public health-check endpoint for container orchestration."""
+    return {"status": "ok", "version": __version__}
 
 
 # Serve the React build output (frontend/dist) if it exists, otherwise serve frontend/ directly.

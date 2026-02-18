@@ -26,7 +26,7 @@ porchsongs preserves meter, rhyme scheme, chord alignment, and emotional meaning
 
 ## How It Works
 
-1. **Find a chord chart** — paste an Ultimate Guitar link (or type lyrics manually)
+1. **Find a chord chart** — paste in a tab or lyrics
 2. **Chat to workshop the lyrics** — tell the AI what to change ("swap the truck for my bike," "make verse 2 about coding") and iterate in a live conversation
 3. **Play and enjoy** — chords are automatically realigned above your new lyrics
 

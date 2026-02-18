@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import api from '../api';
 
 /**
@@ -52,19 +52,61 @@ function splitLyricsForColumns(text) {
 
 function PerformanceLyrics({ text }) {
   const columns = useMemo(() => splitLyricsForColumns(text), [text]);
+  const containerRef = useRef(null);
+  const [autoOneCol, setAutoOneCol] = useState(false);
+  // null = auto, 1 = force one column, 2 = force two columns
+  const [userOverride, setUserOverride] = useState(null);
 
-  if (!columns) {
+  // Reset auto-detection and user override when text changes
+  useLayoutEffect(() => {
+    setAutoOneCol(false);
+    setUserOverride(null);
+  }, [text]);
+
+  // Measure two-col layout before paint; only fall back to one column when
+  // two columns would require heavy scrolling (> 1.5x the visible area),
+  // since a little overflow is fine — the problem is when you have to scroll
+  // a lot and then scroll back up to read the second column.
+  useLayoutEffect(() => {
+    if (columns && !autoOneCol && userOverride === null && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const available = window.innerHeight - rect.top - 40;
+      if (containerRef.current.scrollHeight > available * 1.5) {
+        setAutoOneCol(true);
+      }
+    }
+  });
+
+  const canSplit = columns !== null;
+  const showTwoCol = canSplit && (userOverride === 2 || (userOverride === null && !autoOneCol));
+
+  const toggle = canSplit ? (
+    <button
+      className="btn secondary column-toggle"
+      onClick={() => setUserOverride(showTwoCol ? 1 : 2)}
+    >
+      {showTwoCol ? '1 Column' : '2 Columns'}
+    </button>
+  ) : null;
+
+  if (!showTwoCol) {
     return (
-      <div className="performance-lyrics">
-        <pre className="performance-lyrics-text">{text}</pre>
+      <div className="performance-lyrics-wrapper">
+        {toggle}
+        <div className="performance-lyrics">
+          <pre className="performance-lyrics-text">{text}</pre>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="performance-lyrics performance-lyrics--two-col">
-      <pre className="performance-lyrics-text">{columns.left}</pre>
-      <pre className="performance-lyrics-text">{columns.right}</pre>
+    <div className="performance-lyrics-wrapper">
+      {toggle}
+      <div ref={containerRef} className="performance-lyrics performance-lyrics--two-col">
+        <pre className="performance-lyrics-text">{columns.left}</pre>
+        <pre className="performance-lyrics-text">{columns.right}</pre>
+      </div>
     </div>
   );
 }

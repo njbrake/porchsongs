@@ -115,6 +115,7 @@ if _static_dir is not None:
 
     @app.get("/rewrite")
     @app.get("/library")
+    @app.get("/library/{rest:path}")
     @app.get("/profile")
     async def _spa_fallback() -> HTMLResponse:
         """Serve index.html for SPA client-side routes."""

@@ -612,6 +612,25 @@ textarea {
   margin-top: 0.15rem;
 }
 
+.performance-lyrics-wrapper {
+  position: relative;
+}
+
+.column-toggle {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 1;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.column-toggle:hover {
+  opacity: 1;
+}
+
 .performance-lyrics {
   background: var(--bg-card);
   border: 1px solid var(--border);

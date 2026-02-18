@@ -1,11 +1,36 @@
+from __future__ import annotations
+
 import json
+import logging
 import re
 
-import requests
 from bs4 import BeautifulSoup
 
+logger = logging.getLogger(__name__)
 
-def fetch_tab(url: str) -> dict:
+_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.ultimate-guitar.com/",
+    "DNT": "1",
+}
+
+
+def _fetch_html(url: str) -> str:
+    """Fetch page HTML, using curl_cffi to bypass Cloudflare."""
+    from curl_cffi import requests as cffi_requests
+
+    resp = cffi_requests.get(
+        url,
+        headers=_HEADERS,
+        impersonate="chrome",
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.text
+
+
+def fetch_tab(url: str) -> dict[str, str]:
     """Fetch and parse an Ultimate Guitar tab page.
 
     Returns dict with keys: title, artist, lyrics_with_chords, chord_format.
@@ -16,22 +41,8 @@ def fetch_tab(url: str) -> dict:
     # Normalize URL: strip print/export URLs back to the regular tab page
     url = _normalize_url(url)
 
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/131.0.0.0 Safari/537.36"
-        ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Referer": "https://www.ultimate-guitar.com/",
-        "DNT": "1",
-    }
-    resp = requests.get(url, headers=headers, timeout=15)
-    resp.raise_for_status()
-
-    soup = BeautifulSoup(resp.text, "html.parser")
+    html = _fetch_html(url)
+    soup = BeautifulSoup(html, "html.parser")
 
     # UG stores tab data as JSON inside a <div class="js-store"> data-content attribute
     store_div = soup.find("div", class_="js-store")

@@ -187,6 +187,21 @@ main:has(.rewrite-workspace) {
   background: #ecc;
 }
 
+.btn.danger-outline {
+  background: transparent;
+  color: #c0392b;
+  border-color: #c0392b;
+}
+
+.btn.danger-outline:hover {
+  background: #f5e0e0;
+}
+
+.btn.danger-outline:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .link-btn {
   background: none;
   border: none;
@@ -527,7 +542,6 @@ textarea {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  overflow: hidden;
 }
 
 .library-card-header {
@@ -577,6 +591,218 @@ textarea {
 .library-card-actions {
   display: flex;
   gap: 0.5rem;
+}
+
+.song-menu {
+  position: relative;
+}
+
+.song-menu-trigger {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 0.4rem 0.7rem;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  min-width: 2.2rem;
+  min-height: 2.2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.song-menu-trigger:hover {
+  background: var(--bg-panel);
+  color: var(--text);
+}
+
+.song-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 0.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  min-width: 8rem;
+  z-index: 20;
+  overflow: hidden;
+}
+
+.song-menu-dropdown button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.song-menu-dropdown button:hover {
+  background: var(--bg-panel);
+}
+
+.song-menu-dropdown .song-menu-danger {
+  color: #c0392b;
+}
+
+.song-menu-dropdown .song-menu-danger:hover {
+  background: #f5e0e0;
+}
+
+/* === Library Toolbar (Search + Folders) === */
+.library-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.library-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.library-search {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  font-family: var(--font-ui);
+  background: var(--bg-card);
+  color: var(--text);
+  transition: border-color 0.2s;
+}
+
+.library-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.folder-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.folder-chip {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.folder-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.folder-chip.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.folder-chip.drag-over {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+
+.folder-chip-add {
+  font-weight: 600;
+  font-size: 0.82rem;
+  border-style: dashed;
+}
+
+.library-card[draggable] {
+  cursor: grab;
+}
+
+.library-card[draggable]:active {
+  cursor: grabbing;
+}
+
+.library-card.dragging {
+  opacity: 0.4;
+}
+
+/* === Multi-Select & Bulk Actions === */
+.bulk-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  background: var(--accent-light);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  flex-wrap: wrap;
+}
+
+.bulk-count {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-right: 0.25rem;
+}
+
+.bulk-folder-select {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.82rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text);
+  width: auto;
+}
+
+.library-card-checkbox {
+  display: flex;
+  align-items: center;
+  padding-right: 0.5rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.library-card-checkbox input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.library-card.selected {
+  border-color: var(--accent);
+  background: #fdf8f4;
+}
+
+/* === Song Menu Divider & Folder Label === */
+.song-menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0.25rem 0;
+}
+
+.song-menu-folder-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 0.25rem 0.75rem;
+  font-style: italic;
 }
 
 /* === Performance View === */

@@ -124,6 +124,7 @@ const api = {
     const query = profileId ? `?profile_id=${profileId}` : '';
     return _fetch(`/songs${query}`);
   },
+  listFolders: () => _fetch('/songs/folders'),
   getSong: (id) => _fetch(`/songs/${id}`),
   saveSong: (data) => _fetch('/songs', { method: 'POST', body: JSON.stringify(data) }),
   updateSong: (id, data) => _fetch(`/songs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

@@ -26,11 +26,30 @@ router = APIRouter()
 
 
 @router.get("/songs", response_model=list[SongOut])
-def list_songs(profile_id: int | None = None, db: Session = Depends(get_db)) -> list[Any]:
+def list_songs(
+    profile_id: int | None = None,
+    search: str | None = None,
+    folder: str | None = None,
+    db: Session = Depends(get_db),
+) -> list[Any]:
     query = db.query(Song)
     if profile_id is not None:
         query = query.filter(Song.profile_id == profile_id)
+    if search:
+        pattern = f"%{search}%"
+        query = query.filter((Song.title.ilike(pattern)) | (Song.artist.ilike(pattern)))
+    if folder is not None:
+        if folder == "__unfiled__":
+            query = query.filter(Song.folder.is_(None))
+        else:
+            query = query.filter(Song.folder == folder)
     return query.order_by(Song.created_at.desc()).all()
+
+
+@router.get("/songs/folders", response_model=list[str])
+def list_folders(db: Session = Depends(get_db)) -> list[str]:
+    rows = db.query(Song.folder).filter(Song.folder.isnot(None), Song.folder != "").distinct().all()
+    return sorted(row[0] for row in rows)
 
 
 @router.get("/songs/{song_id}", response_model=SongOut)
@@ -94,6 +113,8 @@ def update_song(song_id: int, data: SongUpdate, db: Session = Depends(get_db)) -
         song.artist = data.artist
     if data.rewritten_lyrics is not None:
         song.rewritten_lyrics = data.rewritten_lyrics
+    if data.folder is not None:
+        song.folder = data.folder if data.folder != "" else None
     db.commit()
     db.refresh(song)
     return song

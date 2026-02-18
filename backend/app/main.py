@@ -37,6 +37,9 @@ def _run_migrations() -> None:
             if "current_version" not in existing:
                 conn.execute(text("ALTER TABLE songs ADD COLUMN current_version INTEGER DEFAULT 1"))
                 logger.info("Migrated songs: added 'current_version' column")
+            if "folder" not in existing:
+                conn.execute(text("ALTER TABLE songs ADD COLUMN folder TEXT"))
+                logger.info("Migrated songs: added 'folder' column")
 
     # Migrate profiles table
     if "profiles" in inspector.get_table_names():

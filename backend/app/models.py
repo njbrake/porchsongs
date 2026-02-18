@@ -42,6 +42,7 @@ class Song(Base):
     changes_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     llm_provider: Mapped[str | None] = mapped_column(String, nullable=True)
     llm_model: Mapped[str | None] = mapped_column(String, nullable=True)
+    folder: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, default="draft")
     current_version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))

@@ -161,12 +161,94 @@ function EditableTitle({ song, onSaved }) {
   );
 }
 
+function SongMenu({ song, onDelete, onRename, onEdit, onReopen, folders, onMoveToFolder }) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const handleMove = (folderName) => {
+    setOpen(false);
+    onMoveToFolder(song, folderName);
+  };
+
+  const handleNewFolder = () => {
+    setOpen(false);
+    const name = prompt('Move to new folder:');
+    if (name && name.trim()) {
+      onMoveToFolder(song, name.trim());
+    }
+  };
+
+  const otherFolders = folders.filter(f => f !== song.folder);
+
+  return (
+    <div className="song-menu" ref={menuRef}>
+      <button
+        className="song-menu-trigger"
+        onClick={(e) => { e.stopPropagation(); setOpen(prev => !prev); }}
+        aria-label="Song actions"
+      >
+        &hellip;
+      </button>
+      {open && (
+        <div className="song-menu-dropdown">
+          <button onClick={(e) => { e.stopPropagation(); setOpen(false); song.status === 'completed' ? onReopen(song) : onEdit(song); }}>
+            {song.status === 'completed' ? 'Reopen' : 'Edit'}
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); setOpen(false); onRename(song); }}>
+            Rename
+          </button>
+          <div className="song-menu-divider" />
+          {song.folder && (
+            <div className="song-menu-folder-label">In: {song.folder}</div>
+          )}
+          {otherFolders.map(f => (
+            <button key={f} onClick={(e) => { e.stopPropagation(); handleMove(f); }}>
+              Move to {f}
+            </button>
+          ))}
+          <button onClick={(e) => { e.stopPropagation(); handleNewFolder(); }}>
+            Move to new folder&hellip;
+          </button>
+          {song.folder && (
+            <button onClick={(e) => { e.stopPropagation(); handleMove(''); }}>
+              Remove from folder
+            </button>
+          )}
+          <div className="song-menu-divider" />
+          <button className="song-menu-danger" onClick={(e) => { e.stopPropagation(); setOpen(false); onDelete(song.id); }}>
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongConsumed }) {
   const [songs, setSongs] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [viewingSong, setViewingSong] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [revisions, setRevisions] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFolder, setActiveFolder] = useState(null); // null = "All"
+  const [dragOverFolder, setDragOverFolder] = useState(null);
+  const [draggingSongId, setDraggingSongId] = useState(null);
+  const [localFolders, setLocalFolders] = useState([]); // user-created empty folders
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const selectMode = selectedIds.size > 0;
 
   useEffect(() => {
     api.listSongs().then(data => {
@@ -174,6 +256,33 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
       setLoaded(true);
     }).catch(() => setLoaded(true));
   }, []);
+
+  // Derive folder list from loaded songs + locally created names
+  const folders = useMemo(() => {
+    const names = new Set(localFolders);
+    for (const s of songs) {
+      if (s.folder) names.add(s.folder);
+    }
+    return [...names].sort();
+  }, [songs, localFolders]);
+
+  // Filter songs client-side by search + folder
+  const filteredSongs = useMemo(() => {
+    let result = songs;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(s =>
+        (s.title || '').toLowerCase().includes(q) ||
+        (s.artist || '').toLowerCase().includes(q)
+      );
+    }
+    if (activeFolder === '__unfiled__') {
+      result = result.filter(s => !s.folder);
+    } else if (activeFolder) {
+      result = result.filter(s => s.folder === activeFolder);
+    }
+    return result;
+  }, [songs, searchQuery, activeFolder]);
 
   // Open song from URL on initial load or popstate
   useEffect(() => {
@@ -247,6 +356,129 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
   const handleSongUpdated = (updated) => {
     setSongs(prev => prev.map(s => s.id === updated.id ? updated : s));
     if (viewingSong?.id === updated.id) setViewingSong(updated);
+  };
+
+  const handleRename = async (song) => {
+    const newTitle = prompt('Song title:', song.title || '');
+    if (newTitle === null) return;
+    const newArtist = prompt('Artist:', song.artist || '');
+    if (newArtist === null) return;
+    try {
+      const updates = {};
+      if (newTitle.trim() !== (song.title || '')) updates.title = newTitle.trim() || null;
+      if (newArtist.trim() !== (song.artist || '')) updates.artist = newArtist.trim() || null;
+      if (Object.keys(updates).length === 0) return;
+      const updated = await api.updateSong(song.id, updates);
+      handleSongUpdated(updated);
+    } catch (err) {
+      alert('Failed to rename: ' + err.message);
+    }
+  };
+
+  const handleMoveToFolder = async (song, folderName) => {
+    try {
+      const updated = await api.updateSong(song.id, { folder: folderName });
+      handleSongUpdated(updated);
+    } catch (err) {
+      alert('Failed to move song: ' + err.message);
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (e, songId) => {
+    e.dataTransfer.setData('text/plain', String(songId));
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggingSongId(songId);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingSongId(null);
+    setDragOverFolder(null);
+  };
+
+  const handleFolderDragOver = (e, folderKey) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverFolder(folderKey);
+  };
+
+  const handleFolderDragLeave = () => {
+    setDragOverFolder(null);
+  };
+
+  const handleFolderDrop = async (e, folderName) => {
+    e.preventDefault();
+    setDragOverFolder(null);
+    const songId = parseInt(e.dataTransfer.getData('text/plain'), 10);
+    if (!songId) return;
+    const song = songs.find(s => s.id === songId);
+    if (!song) return;
+    // folderName '' means "unfiled" (remove from folder)
+    await handleMoveToFolder(song, folderName);
+  };
+
+  const handleCreateFolder = () => {
+    const name = prompt('New folder name:');
+    if (!name || !name.trim()) return;
+    const trimmed = name.trim();
+    // If a song is being dragged, move it to the new folder
+    if (draggingSongId) {
+      const song = songs.find(s => s.id === draggingSongId);
+      if (song) handleMoveToFolder(song, trimmed);
+    } else {
+      // Persist locally so the chip shows up even with no songs in it yet
+      setLocalFolders(prev => prev.includes(trimmed) ? prev : [...prev, trimmed]);
+    }
+    setActiveFolder(trimmed);
+  };
+
+  // Selection helpers
+  const toggleSelect = (songId) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(songId)) next.delete(songId);
+      else next.add(songId);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedIds(new Set(filteredSongs.map(s => s.id)));
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkDelete = async () => {
+    const count = selectedIds.size;
+    if (!confirm(`Delete ${count} selected song${count > 1 ? 's' : ''}?`)) return;
+    try {
+      await Promise.all([...selectedIds].map(id => api.deleteSong(id)));
+      setSongs(prev => prev.filter(s => !selectedIds.has(s.id)));
+      if (viewingSong && selectedIds.has(viewingSong.id)) {
+        setViewingSong(null);
+        pushSongUrl(null);
+      }
+      setSelectedIds(new Set());
+    } catch (err) {
+      alert('Failed to delete some songs: ' + err.message);
+    }
+  };
+
+  const handleBulkMoveToFolder = async (folderName) => {
+    try {
+      const results = await Promise.all(
+        [...selectedIds].map(id => api.updateSong(id, { folder: folderName }))
+      );
+      setSongs(prev => prev.map(s => {
+        const updated = results.find(r => r.id === s.id);
+        return updated || s;
+      }));
+      setSelectedIds(new Set());
+    } catch (err) {
+      alert('Failed to move some songs: ' + err.message);
+    }
   };
 
   // --- Performance View (single song) ---
@@ -323,44 +555,160 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
     );
   }
 
-  return (
-    <div className="library-list">
-      {songs.map(song => {
-        const date = new Date(song.created_at).toLocaleDateString();
-        const artist = song.artist ? ` by ${song.artist}` : '';
+  const hasUnfiled = songs.some(s => !s.folder);
+  const hasFolders = folders.length > 0;
 
-        return (
-          <div key={song.id} className="library-card" onClick={() => handleView(song)}>
-            <div className="library-card-header">
-              <div className="library-card-info">
-                <h3>
-                  <EditableTitle song={song} onSaved={handleSongUpdated} />
-                  {artist}
-                  <span className={`status-badge ${song.status}`}>
-                    {song.status === 'completed' ? 'Completed' : 'Draft'}
+  return (
+    <div className="library-container">
+      <div className="library-toolbar">
+        <input
+          type="text"
+          className="library-search"
+          placeholder="Search songs by title or artist..."
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+        />
+        <div className="folder-bar">
+          {hasFolders && (
+            <button
+              className={`folder-chip${activeFolder === null ? ' active' : ''}`}
+              onClick={() => setActiveFolder(null)}
+            >
+              All
+            </button>
+          )}
+          {folders.map(f => (
+            <button
+              key={f}
+              className={`folder-chip${activeFolder === f ? ' active' : ''}${dragOverFolder === f ? ' drag-over' : ''}`}
+              onClick={() => setActiveFolder(f)}
+              onDragOver={(e) => handleFolderDragOver(e, f)}
+              onDragLeave={handleFolderDragLeave}
+              onDrop={(e) => handleFolderDrop(e, f)}
+            >
+              {f}
+            </button>
+          ))}
+          {hasFolders && hasUnfiled && (
+            <button
+              className={`folder-chip${activeFolder === '__unfiled__' ? ' active' : ''}${dragOverFolder === '__unfiled__' ? ' drag-over' : ''}`}
+              onClick={() => setActiveFolder('__unfiled__')}
+              onDragOver={(e) => handleFolderDragOver(e, '__unfiled__')}
+              onDragLeave={handleFolderDragLeave}
+              onDrop={(e) => handleFolderDrop(e, '')}
+            >
+              Unfiled
+            </button>
+          )}
+          <button
+            className="folder-chip folder-chip-add"
+            onClick={handleCreateFolder}
+            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const songId = parseInt(e.dataTransfer.getData('text/plain'), 10);
+              if (!songId) return;
+              const name = prompt('New folder name:');
+              if (!name || !name.trim()) return;
+              const song = songs.find(s => s.id === songId);
+              if (song) handleMoveToFolder(song, name.trim());
+            }}
+            title="Create new folder"
+          >
+            + New Folder
+          </button>
+        </div>
+      </div>
+
+      {selectMode && (
+        <div className="bulk-action-bar">
+          <span className="bulk-count">{selectedIds.size} selected</span>
+          <button className="btn secondary" onClick={selectAll}>Select All</button>
+          <button className="btn secondary" onClick={clearSelection}>Clear</button>
+          {folders.length > 0 && (
+            <select
+              className="bulk-folder-select"
+              value=""
+              onChange={(e) => {
+                if (e.target.value === '__remove__') handleBulkMoveToFolder('');
+                else if (e.target.value) handleBulkMoveToFolder(e.target.value);
+              }}
+            >
+              <option value="">Move to folder&hellip;</option>
+              {folders.map(f => <option key={f} value={f}>{f}</option>)}
+              <option value="__remove__">Remove from folder</option>
+            </select>
+          )}
+          <button className="btn danger" onClick={handleBulkDelete}>Delete Selected</button>
+        </div>
+      )}
+
+      <div className="library-list">
+        {filteredSongs.map(song => {
+          const date = new Date(song.created_at).toLocaleDateString();
+          const artist = song.artist ? ` by ${song.artist}` : '';
+          const isSelected = selectedIds.has(song.id);
+
+          return (
+            <div
+              key={song.id}
+              className={`library-card${draggingSongId === song.id ? ' dragging' : ''}${isSelected ? ' selected' : ''}`}
+              onClick={() => selectMode ? toggleSelect(song.id) : handleView(song)}
+              draggable={!selectMode ? 'true' : undefined}
+              onDragStart={!selectMode ? (e) => handleDragStart(e, song.id) : undefined}
+              onDragEnd={!selectMode ? handleDragEnd : undefined}
+            >
+              <div className="library-card-header">
+                <label
+                  className="library-card-checkbox"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleSelect(song.id)}
+                  />
+                </label>
+                <div className="library-card-info">
+                  <h3>
+                    <EditableTitle song={song} onSaved={handleSongUpdated} />
+                    {artist}
+                    <span className={`status-badge ${song.status}`}>
+                      {song.status === 'completed' ? 'Completed' : 'Draft'}
+                    </span>
+                  </h3>
+                  <span className="meta">
+                    {date}
+                    {song.llm_model ? ` \u00B7 ${song.llm_model}` : ''}
+                    {song.current_version > 1 ? ` \u00B7 v${song.current_version}` : ''}
+                    {song.folder ? ` \u00B7 ${song.folder}` : ''}
                   </span>
-                </h3>
-                <span className="meta">
-                  {date}
-                  {song.llm_model ? ` \u00B7 ${song.llm_model}` : ''}
-                  {song.current_version > 1 ? ` \u00B7 v${song.current_version}` : ''}
-                </span>
-              </div>
-              <div className="library-card-actions" onClick={e => e.stopPropagation()}>
-                {song.status === 'completed' ? (
-                  <button className="btn secondary" onClick={() => handleReopen(song)}>
-                    Reopen
-                  </button>
-                ) : (
-                  <button className="btn secondary" onClick={() => onLoadSong(song)}>
-                    Edit
-                  </button>
-                )}
+                </div>
+                <div className="library-card-actions" onClick={e => e.stopPropagation()}>
+                  <SongMenu
+                    song={song}
+                    onDelete={handleDelete}
+                    onRename={handleRename}
+                    onEdit={onLoadSong}
+                    onReopen={handleReopen}
+                    folders={folders}
+                    onMoveToFolder={handleMoveToFolder}
+                  />
+                </div>
               </div>
             </div>
+          );
+        })}
+        {filteredSongs.length === 0 && loaded && songs.length > 0 && (
+          <div className="empty-state">
+            {activeFolder && !searchQuery ? (
+              <p>No songs in this folder yet. Use the &hellip; menu on a song to move it here, or drag songs onto the folder tab.</p>
+            ) : (
+              <p>No songs match your search.</p>
+            )}
           </div>
-        );
-      })}
+        )}
+      </div>
     </div>
   );
 }

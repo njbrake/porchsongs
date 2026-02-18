@@ -20,8 +20,22 @@ export default function RewriteTab({
   savedModels,
   onOpenSettings,
 }) {
-  const [lyrics, setLyrics] = useState('');
-  const [instruction, setInstruction] = useState('');
+  const [lyrics, setLyricsRaw] = useState(
+    () => sessionStorage.getItem('porchsongs_draft_lyrics') || ''
+  );
+  const [instruction, setInstructionRaw] = useState(
+    () => sessionStorage.getItem('porchsongs_draft_instruction') || ''
+  );
+
+  // Persist draft input to sessionStorage so it survives tab switches
+  const setLyrics = useCallback((val) => {
+    setLyricsRaw(val);
+    sessionStorage.setItem('porchsongs_draft_lyrics', val);
+  }, []);
+  const setInstruction = useCallback((val) => {
+    setInstructionRaw(val);
+    sessionStorage.setItem('porchsongs_draft_instruction', val);
+  }, []);
   const [loading, setLoading] = useState(false);
   const [streamingText, setStreamingText] = useState('');
   const [error, setError] = useState(null);
@@ -129,6 +143,16 @@ export default function RewriteTab({
     setError(null);
     setSongTitle('');
     setSongArtist('');
+  };
+
+  const handleScrap = async () => {
+    if (!currentSongId) return;
+    try {
+      await api.deleteSong(currentSongId);
+    } catch {
+      // Song may already be gone — proceed with reset regardless
+    }
+    handleNewSong();
   };
 
   const handleMarkComplete = async () => {
@@ -247,6 +271,13 @@ export default function RewriteTab({
                   >
                     {completedStatus === 'completed' ? 'Completed!' :
                      completedStatus === 'saving' ? 'Saving...' : 'Mark as Complete'}
+                  </button>
+                  <button
+                    className="btn danger-outline"
+                    onClick={handleScrap}
+                    disabled={!currentSongId}
+                  >
+                    Scrap This
                   </button>
                 </div>
 

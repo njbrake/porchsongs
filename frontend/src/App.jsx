@@ -98,8 +98,25 @@ export default function App() {
   // Rewrite state (shared between RewriteTab, comparison, workshop, chat)
   const [rewriteResult, setRewriteResult] = useState(null);
   const [rewriteMeta, setRewriteMeta] = useState(null);
-  const [currentSongId, setCurrentSongId] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
+
+  // Persist currentSongId to localStorage so it survives page refresh
+  const [currentSongId, setCurrentSongIdRaw] = useState(() => {
+    const stored = localStorage.getItem('porchsongs_current_song_id');
+    if (stored) {
+      const id = parseInt(stored, 10);
+      return Number.isFinite(id) ? id : null;
+    }
+    return null;
+  });
+  const setCurrentSongId = useCallback((id) => {
+    setCurrentSongIdRaw(id);
+    if (id != null) {
+      localStorage.setItem('porchsongs_current_song_id', String(id));
+    } else {
+      localStorage.removeItem('porchsongs_current_song_id');
+    }
+  }, []);
 
   const llmSettings = { provider, model };
 
@@ -110,6 +127,39 @@ export default function App() {
       const def = profiles.find(p => p.is_default) || profiles[0];
       if (def) setProfile(def);
     }).catch(() => {});
+  }, [authState]);
+
+  // Auto-restore active song on mount (page refresh recovery)
+  useEffect(() => {
+    if (authState !== 'ready' || rewriteResult || !currentSongId) return;
+    api.getSong(currentSongId).then(async (song) => {
+      setRewriteResult({
+        original_lyrics: song.original_lyrics,
+        rewritten_lyrics: song.rewritten_lyrics,
+        changes_summary: song.changes_summary || '',
+      });
+      setRewriteMeta({
+        title: song.title,
+        artist: song.artist,
+        source_url: song.source_url,
+        profile_id: song.profile_id,
+        llm_provider: song.llm_provider,
+        llm_model: song.llm_model,
+      });
+      try {
+        const history = await api.getChatHistory(song.id);
+        setChatMessages(history.map(row => ({
+          role: row.role,
+          content: row.content,
+          isNote: row.is_note,
+        })));
+      } catch {
+        setChatMessages([]);
+      }
+    }).catch(() => {
+      setCurrentSongId(null);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authState]);
 
   const handleSaveProfile = useCallback(async (data) => {

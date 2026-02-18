@@ -577,6 +577,10 @@ textarea {
 /* === Performance View === */
 .library-performance {
   margin: 0 auto;
+  max-width: none;
+  width: calc(100vw - 4rem);
+  margin-left: calc(-50vw + 50%);
+  padding: 0 2rem;
 }
 
 .performance-nav {
@@ -624,12 +628,12 @@ textarea {
   font-family: var(--font-mono);
   font-size: 0.95rem;
   line-height: 1.8;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+  white-space: pre;
+  overflow-x: auto;
   color: var(--text);
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1200px) {
   .performance-lyrics--two-col {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -638,7 +642,6 @@ textarea {
   }
 
   .performance-lyrics--two-col .performance-lyrics-text {
-    /* Columns get a subtle divider */
     min-width: 0;
   }
 
@@ -1244,7 +1247,19 @@ textarea {
     justify-content: flex-end;
   }
 
+  .library-performance {
+    width: auto;
+    margin-left: 0;
+    padding: 0;
+  }
+
   .performance-lyrics {
     padding: 1rem;
+  }
+
+  .performance-lyrics-text {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 0.8rem;
   }
 }

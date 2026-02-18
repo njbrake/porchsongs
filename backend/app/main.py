@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 Base.metadata.create_all(bind=engine)
 
 
-def _run_migrations():
+def _run_migrations() -> None:
     """Add new columns to existing tables if they don't exist yet."""
     inspector = inspect(engine)
 

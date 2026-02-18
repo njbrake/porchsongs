@@ -12,6 +12,9 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from any_llm.types.completion import ChatCompletion, ChatCompletionChunk
+    from sqlalchemy.orm import Session
+
+    from ..models import Song
 
 logger = logging.getLogger(__name__)
 
@@ -74,12 +77,12 @@ def get_models(provider: str, api_key: str, api_base: str | None = None) -> list
 
 
 def build_user_prompt(
-    profile: dict,
+    profile: dict[str, str | None],
     title: str | None,
     artist: str | None,
     lyrics: str,
-    patterns: list[dict] | None = None,
-    example: dict | None = None,
+    patterns: list[dict[str, str | None]] | None = None,
+    example: dict[str, str] | None = None,
     instruction: str | None = None,
 ) -> str:
     """Build the user prompt for the LLM, including learned patterns and example."""
@@ -212,18 +215,18 @@ def build_workshop_prompt(
 
 
 async def rewrite_lyrics(
-    profile: dict,
+    profile: dict[str, str | None],
     title: str | None,
     artist: str | None,
     lyrics_with_chords: str,
     provider: str,
     model: str,
     api_key: str,
-    patterns: list[dict] | None = None,
-    example: dict | None = None,
+    patterns: list[dict[str, str | None]] | None = None,
+    example: dict[str, str] | None = None,
     instruction: str | None = None,
     api_base: str | None = None,
-) -> dict:
+) -> dict[str, str]:
     """Rewrite lyrics using the configured LLM.
 
     Returns dict with: original_lyrics, rewritten_lyrics, changes_summary
@@ -278,7 +281,7 @@ async def workshop_line(
     model: str,
     api_key: str,
     api_base: str | None = None,
-) -> dict:
+) -> dict[str, object]:
     """Get 3 alternative versions of a specific lyric line."""
     # Work with lyrics-only (no chords) for the LLM
     orig_lyrics_only = extract_lyrics_only(original_lyrics)
@@ -342,7 +345,7 @@ async def workshop_line(
     }
 
 
-def _parse_chat_response(raw: str) -> dict:
+def _parse_chat_response(raw: str) -> dict[str, str]:
     """Parse chat LLM response, extracting lyrics between markers and explanation."""
     if "---LYRICS---" in raw and "---END---" in raw:
         before_end = raw.split("---END---", 1)
@@ -357,14 +360,14 @@ def _parse_chat_response(raw: str) -> dict:
 
 
 async def chat_edit_lyrics(
-    song,
-    profile: dict,
-    messages: list[dict],
+    song: Song,
+    profile: dict[str, str | None],
+    messages: list[dict[str, str]],
     provider: str,
     model: str,
     api_key: str,
     api_base: str | None = None,
-) -> dict:
+) -> dict[str, str]:
     """Process a chat-based lyric edit.
 
     Builds a multi-turn conversation with system context, sends to LLM,
@@ -403,7 +406,7 @@ async def chat_edit_lyrics(
     }
 
 
-async def extract_and_save_patterns(song, db) -> list[dict]:
+async def extract_and_save_patterns(song: Song, db: Session) -> list[dict[str, str]]:
     """Extract substitution patterns from a completed song and save them.
 
     Called when a song is marked as 'completed'.
@@ -419,13 +422,13 @@ async def extract_and_save_patterns(song, db) -> list[dict]:
 
 
 async def extract_patterns_with_key(
-    song,
-    db,
+    song: Song,
+    db: Session,
     provider: str,
     model: str,
     api_key: str,
     api_base: str | None = None,
-) -> list[dict]:
+) -> list[dict[str, str]]:
     """Extract substitution patterns using provided API credentials."""
     from ..models import SubstitutionPattern
 

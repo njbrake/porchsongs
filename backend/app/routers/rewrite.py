@@ -22,7 +22,7 @@ router = APIRouter()
 
 
 @router.post("/fetch-tab", response_model=FetchTabResponse)
-def fetch_tab(req: FetchTabRequest):
+def fetch_tab(req: FetchTabRequest) -> dict[str, str]:
     try:
         result = tab_fetcher.fetch_tab(req.url)
     except ValueError as e:
@@ -33,7 +33,7 @@ def fetch_tab(req: FetchTabRequest):
 
 
 @router.post("/rewrite", response_model=RewriteResponse)
-async def rewrite(req: RewriteRequest, db: Session = Depends(get_db)):
+async def rewrite(req: RewriteRequest, db: Session = Depends(get_db)) -> dict[str, str]:
     # Load profile
     profile = db.query(Profile).filter(Profile.id == req.profile_id).first()
     if not profile:
@@ -105,7 +105,9 @@ async def rewrite(req: RewriteRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/workshop-line", response_model=WorkshopLineResponse)
-async def workshop_line(req: WorkshopLineRequest, db: Session = Depends(get_db)):
+async def workshop_line(
+    req: WorkshopLineRequest, db: Session = Depends(get_db)
+) -> dict[str, object]:
     song = db.query(Song).filter(Song.id == req.song_id).first()
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
@@ -130,7 +132,7 @@ async def workshop_line(req: WorkshopLineRequest, db: Session = Depends(get_db))
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest, db: Session = Depends(get_db)):
+async def chat(req: ChatRequest, db: Session = Depends(get_db)) -> ChatResponse:
     from ..models import SongRevision
 
     song = db.query(Song).filter(Song.id == req.song_id).first()
@@ -191,12 +193,12 @@ async def chat(req: ChatRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/providers")
-def list_providers():
+def list_providers() -> list[str]:
     return llm_service.get_providers()
 
 
 @router.post("/verify-connection", response_model=VerifyConnectionResponse)
-def verify_connection(req: VerifyConnectionRequest):
+def verify_connection(req: VerifyConnectionRequest) -> VerifyConnectionResponse:
     try:
         models = llm_service.get_models(req.provider, req.api_key, api_base=req.api_base)
         return VerifyConnectionResponse(ok=True, models=models)

@@ -1,5 +1,6 @@
 import contextlib
 import json
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -21,7 +22,7 @@ router = APIRouter()
 
 
 @router.get("/songs", response_model=list[SongOut])
-def list_songs(profile_id: int | None = None, db: Session = Depends(get_db)):
+def list_songs(profile_id: int | None = None, db: Session = Depends(get_db)) -> list[Any]:
     query = db.query(Song)
     if profile_id is not None:
         query = query.filter(Song.profile_id == profile_id)
@@ -29,7 +30,7 @@ def list_songs(profile_id: int | None = None, db: Session = Depends(get_db)):
 
 
 @router.get("/songs/{song_id}", response_model=SongOut)
-def get_song(song_id: int, db: Session = Depends(get_db)):
+def get_song(song_id: int, db: Session = Depends(get_db)) -> Song:
     song = db.query(Song).filter(Song.id == song_id).first()
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
@@ -37,7 +38,7 @@ def get_song(song_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/songs", response_model=SongOut, status_code=201)
-def create_song(data: SongCreate, db: Session = Depends(get_db)):
+def create_song(data: SongCreate, db: Session = Depends(get_db)) -> Song:
     song = Song(**data.model_dump(), status="draft", current_version=1)
     db.add(song)
     db.commit()
@@ -58,7 +59,7 @@ def create_song(data: SongCreate, db: Session = Depends(get_db)):
 
 
 @router.delete("/songs/{song_id}")
-def delete_song(song_id: int, db: Session = Depends(get_db)):
+def delete_song(song_id: int, db: Session = Depends(get_db)) -> dict[str, bool]:
     song = db.query(Song).filter(Song.id == song_id).first()
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
@@ -71,7 +72,7 @@ def delete_song(song_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/songs/{song_id}/revisions", response_model=list[SongRevisionOut])
-def list_revisions(song_id: int, db: Session = Depends(get_db)):
+def list_revisions(song_id: int, db: Session = Depends(get_db)) -> list[Any]:
     song = db.query(Song).filter(Song.id == song_id).first()
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
@@ -89,7 +90,7 @@ async def update_song_status(
     song_id: int,
     data: SongStatusUpdate,
     db: Session = Depends(get_db),
-):
+) -> Song:
     song = db.query(Song).filter(Song.id == song_id).first()
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
@@ -121,7 +122,7 @@ async def update_song_status(
 
 
 @router.post("/apply-edit", response_model=ApplyEditResponse)
-def apply_edit(data: ApplyEditRequest, db: Session = Depends(get_db)):
+def apply_edit(data: ApplyEditRequest, db: Session = Depends(get_db)) -> dict[str, str | int]:
     song = db.query(Song).filter(Song.id == data.song_id).first()
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
@@ -161,7 +162,7 @@ def apply_edit(data: ApplyEditRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/patterns", response_model=list[SubstitutionPatternOut])
-def list_patterns(profile_id: int | None = None, db: Session = Depends(get_db)):
+def list_patterns(profile_id: int | None = None, db: Session = Depends(get_db)) -> list[Any]:
     query = db.query(SubstitutionPattern)
     if profile_id is not None:
         query = query.filter(SubstitutionPattern.profile_id == profile_id)

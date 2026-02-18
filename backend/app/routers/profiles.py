@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -11,12 +12,12 @@ router = APIRouter()
 
 
 @router.get("/profiles", response_model=list[ProfileOut])
-def list_profiles(db: Session = Depends(get_db)):
+def list_profiles(db: Session = Depends(get_db)) -> list[Any]:
     return db.query(Profile).order_by(Profile.created_at.desc()).all()
 
 
 @router.post("/profiles", response_model=ProfileOut, status_code=201)
-def create_profile(data: ProfileCreate, db: Session = Depends(get_db)):
+def create_profile(data: ProfileCreate, db: Session = Depends(get_db)) -> Profile:
     # If this profile is set as default, unset other defaults
     if data.is_default:
         db.query(Profile).filter(Profile.is_default.is_(True)).update({"is_default": False})
@@ -33,7 +34,7 @@ def create_profile(data: ProfileCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/profiles/{profile_id}", response_model=ProfileOut)
-def get_profile(profile_id: int, db: Session = Depends(get_db)):
+def get_profile(profile_id: int, db: Session = Depends(get_db)) -> Profile:
     profile = db.query(Profile).filter(Profile.id == profile_id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -41,7 +42,7 @@ def get_profile(profile_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/profiles/{profile_id}", response_model=ProfileOut)
-def update_profile(profile_id: int, data: ProfileUpdate, db: Session = Depends(get_db)):
+def update_profile(profile_id: int, data: ProfileUpdate, db: Session = Depends(get_db)) -> Profile:
     profile = db.query(Profile).filter(Profile.id == profile_id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -64,7 +65,7 @@ def update_profile(profile_id: int, data: ProfileUpdate, db: Session = Depends(g
 
 
 @router.delete("/profiles/{profile_id}")
-def delete_profile(profile_id: int, db: Session = Depends(get_db)):
+def delete_profile(profile_id: int, db: Session = Depends(get_db)) -> dict[str, bool]:
     profile = db.query(Profile).filter(Profile.id == profile_id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")

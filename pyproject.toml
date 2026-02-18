@@ -34,7 +34,7 @@ line-length = 100
 src = ["backend"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+select = ["E", "F", "I", "UP", "B", "SIM", "ANN", "RUF"]
 ignore = [
     "E501",   # line too long — handled by formatter
     "B008",   # Depends() in function defaults — standard FastAPI pattern

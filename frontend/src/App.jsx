@@ -17,8 +17,18 @@ function tabFromPath(pathname) {
   return TAB_KEYS.includes(seg) ? seg : 'rewrite';
 }
 
+function songIdFromPath(pathname) {
+  const parts = pathname.replace(/^\//, '').split('/');
+  if (parts[0]?.toLowerCase() === 'library' && parts[1]) {
+    const id = parseInt(parts[1], 10);
+    return Number.isFinite(id) ? id : null;
+  }
+  return null;
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState(() => tabFromPath(window.location.pathname));
+  const [initialSongId, setInitialSongId] = useState(() => songIdFromPath(window.location.pathname));
   const [showSettings, setShowSettings] = useState(false);
 
   // Auth state: "loading" | "login" | "ready"
@@ -58,7 +68,10 @@ export default function App() {
 
   // Sync tab from URL on back/forward navigation
   useEffect(() => {
-    const onPopState = () => setActiveTab(tabFromPath(window.location.pathname));
+    const onPopState = () => {
+      setActiveTab(tabFromPath(window.location.pathname));
+      setInitialSongId(songIdFromPath(window.location.pathname));
+    };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
@@ -198,7 +211,7 @@ export default function App() {
           />
         )}
         {activeTab === 'library' && (
-          <LibraryTab onLoadSong={handleLoadSong} />
+          <LibraryTab onLoadSong={handleLoadSong} initialSongId={initialSongId} onInitialSongConsumed={() => setInitialSongId(null)} />
         )}
         {activeTab === 'profile' && (
           <ProfileTab profile={profile} onSave={handleSaveProfile} />

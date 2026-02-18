@@ -3,6 +3,7 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -38,6 +39,27 @@ def get_song(song_id: int, db: Session = Depends(get_db)) -> Song:
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
     return song
+
+
+@router.get("/songs/{song_id}/pdf")
+def download_song_pdf(song_id: int, db: Session = Depends(get_db)) -> Response:
+    song = db.query(Song).filter(Song.id == song_id).first()
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+
+    from ..services.pdf_service import generate_song_pdf
+
+    pdf_bytes = generate_song_pdf(song.title or "Untitled", song.artist, song.rewritten_lyrics)
+
+    title = song.title or "Untitled"
+    artist = song.artist or "Unknown"
+    filename = f"{title} - {artist}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/songs", response_model=SongOut, status_code=201)

@@ -587,7 +587,7 @@ textarea {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.75rem;
 }
 
 .performance-nav-actions {
@@ -597,19 +597,19 @@ textarea {
 
 .performance-header {
   text-align: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.75rem;
 }
 
 .performance-title {
-  font-size: 1.6rem;
+  font-size: 1.3rem;
   font-weight: 700;
   color: var(--text);
 }
 
 .performance-artist {
-  font-size: 1rem;
+  font-size: 0.9rem;
   color: var(--text-muted);
-  margin-top: 0.25rem;
+  margin-top: 0.15rem;
 }
 
 .performance-lyrics {
@@ -617,7 +617,7 @@ textarea {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 1.5rem 2rem;
+  padding: 1rem 1.5rem;
 }
 
 .performance-lyrics--two-col {
@@ -626,8 +626,8 @@ textarea {
 
 .performance-lyrics-text {
   font-family: var(--font-mono);
-  font-size: 0.95rem;
-  line-height: 1.8;
+  font-size: 0.82rem;
+  line-height: 1.45;
   white-space: pre;
   overflow-x: auto;
   color: var(--text);
@@ -637,8 +637,8 @@ textarea {
   .performance-lyrics--two-col {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 2rem;
-    padding: 1.5rem 2rem;
+    gap: 1.5rem;
+    padding: 1rem 1.5rem;
   }
 
   .performance-lyrics--two-col .performance-lyrics-text {
@@ -1260,6 +1260,6 @@ textarea {
   .performance-lyrics-text {
     white-space: pre-wrap;
     word-wrap: break-word;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
   }
 }

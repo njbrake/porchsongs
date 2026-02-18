@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import api from '../api';
 
 /**
@@ -119,7 +119,7 @@ function EditableTitle({ song, onSaved }) {
   );
 }
 
-export default function LibraryTab({ onLoadSong }) {
+export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongConsumed }) {
   const [songs, setSongs] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [viewingSong, setViewingSong] = useState(null);
@@ -133,14 +133,36 @@ export default function LibraryTab({ onLoadSong }) {
     }).catch(() => setLoaded(true));
   }, []);
 
+  // Open song from URL on initial load or popstate
+  useEffect(() => {
+    if (initialSongId != null && loaded) {
+      const song = songs.find(s => s.id === initialSongId);
+      if (song) {
+        setViewingSong(song);
+        setShowDetails(false);
+        setRevisions([]);
+      }
+      onInitialSongConsumed?.();
+    }
+  }, [initialSongId, loaded, songs, onInitialSongConsumed]);
+
+  const pushSongUrl = useCallback((songId) => {
+    const target = songId ? `/library/${songId}` : '/library';
+    if (window.location.pathname !== target) {
+      window.history.pushState(null, '', target);
+    }
+  }, []);
+
   const handleView = (song) => {
     setViewingSong(song);
     setShowDetails(false);
     setRevisions([]);
+    pushSongUrl(song.id);
   };
 
   const handleBack = () => {
     setViewingSong(null);
+    pushSongUrl(null);
   };
 
   const handleShowDetails = async () => {
@@ -171,7 +193,10 @@ export default function LibraryTab({ onLoadSong }) {
     try {
       await api.deleteSong(id);
       setSongs(prev => prev.filter(s => s.id !== id));
-      if (viewingSong?.id === id) setViewingSong(null);
+      if (viewingSong?.id === id) {
+        setViewingSong(null);
+        pushSongUrl(null);
+      }
     } catch (err) {
       alert('Failed to delete: ' + err.message);
     }
@@ -190,6 +215,7 @@ export default function LibraryTab({ onLoadSong }) {
         <div className="performance-nav">
           <button className="btn secondary" onClick={handleBack}>&larr; All Songs</button>
           <div className="performance-nav-actions">
+            <button className="btn secondary" onClick={() => api.downloadSongPdf(song.id, song.title, song.artist)}>Download PDF</button>
             {song.status === 'completed' ? (
               <button className="btn secondary" onClick={() => handleReopen(song)}>Reopen for Editing</button>
             ) : (

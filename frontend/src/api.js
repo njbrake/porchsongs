@@ -88,6 +88,25 @@ const api = {
   addProfileModel: (profileId, data) => _fetch(`/profiles/${profileId}/models`, { method: 'POST', body: JSON.stringify(data) }),
   deleteProfileModel: (profileId, modelId) => _fetch(`/profiles/${profileId}/models/${modelId}`, { method: 'DELETE' }),
 
+  // PDF
+  downloadSongPdf: async (id, title, artist) => {
+    const res = await fetch(`${BASE}/songs/${id}/pdf`, { headers: _getAuthHeaders() });
+    if (res.status === 401) {
+      window.dispatchEvent(new CustomEvent('porchsongs-logout'));
+      throw new Error('Authentication required. Please log in.');
+    }
+    if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${title || 'Untitled'} - ${artist || 'Unknown'}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
+
   // Providers
   listProviders: () => _fetch('/providers'),
   listProviderModels: (provider) => _fetch(`/providers/${provider}/models`),

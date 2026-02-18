@@ -43,6 +43,68 @@ async function login(password) {
   return res.json();
 }
 
+/**
+ * Stream a rewrite via SSE. Calls onToken(text) for each chunk,
+ * returns the final parsed result object.
+ */
+async function rewriteStream(data, { onToken } = {}) {
+  const url = `${BASE}/rewrite?stream=true`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 401) {
+    window.dispatchEvent(new CustomEvent('porchsongs-logout'));
+    throw new Error('Authentication required. Please log in.');
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || `Request failed: ${res.status}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let finalResult = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    // Process complete SSE lines
+    const lines = buffer.split('\n');
+    // Keep the last (possibly incomplete) line in the buffer
+    buffer = lines.pop();
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const payload = JSON.parse(line.slice(6));
+      if (payload.done) {
+        finalResult = payload.result;
+      } else if (payload.token && onToken) {
+        onToken(payload.token);
+      }
+    }
+  }
+
+  // Process any remaining data in buffer
+  if (buffer.startsWith('data: ')) {
+    const payload = JSON.parse(buffer.slice(6));
+    if (payload.done) {
+      finalResult = payload.result;
+    } else if (payload.token && onToken) {
+      onToken(payload.token);
+    }
+  }
+
+  if (!finalResult) {
+    throw new Error('Stream ended without a final result');
+  }
+  return finalResult;
+}
+
 const api = {
   checkAuthRequired,
   login,
@@ -55,6 +117,7 @@ const api = {
 
   // Rewrite
   rewrite: (data) => _fetch('/rewrite', { method: 'POST', body: JSON.stringify(data) }),
+  rewriteStream,
 
   // Songs
   listSongs: (profileId) => {

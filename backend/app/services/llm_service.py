@@ -10,7 +10,7 @@ from any_llm import AnyLLM, LLMProvider, acompletion, alist_models
 from .chord_parser import extract_lyrics_only
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import AsyncIterator, Iterator
 
     from any_llm.types.completion import ChatCompletion, ChatCompletionChunk
     from sqlalchemy.orm import Session
@@ -306,6 +306,50 @@ async def rewrite_lyrics(
 
     # Parse the 3-section response format
     return _parse_rewrite_response(raw_response, lyrics_with_chords)
+
+
+async def rewrite_lyrics_stream(
+    profile_description: str,
+    title: str | None,
+    artist: str | None,
+    lyrics_with_chords: str,
+    provider: str,
+    model: str,
+    patterns: list[dict[str, str | None]] | None = None,
+    example: dict[str, str] | None = None,
+    instruction: str | None = None,
+    api_base: str | None = None,
+) -> AsyncIterator[str]:
+    """Stream a rewrite as SSE events: token chunks then a final done payload."""
+    user_prompt = build_user_prompt(
+        profile_description, title, artist, lyrics_with_chords, patterns, example, instruction
+    )
+
+    kwargs: dict[str, object] = {
+        "model": model,
+        "provider": provider,
+        "stream": True,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+    }
+    if api_base:
+        kwargs["api_base"] = api_base
+
+    response = await acompletion(**kwargs)
+
+    accumulated = ""
+    async for chunk in response:  # type: ignore[union-attr]
+        delta = chunk.choices[0].delta  # type: ignore[union-attr]
+        token = delta.content if delta and delta.content else ""
+        if token:
+            accumulated += token
+            yield f"data: {json.dumps({'token': token})}\n\n"
+
+    # Parse accumulated text into structured result
+    result = _parse_rewrite_response(accumulated, lyrics_with_chords)
+    yield f"data: {json.dumps({'done': True, 'result': result})}\n\n"
 
 
 def _extract_xml_section(raw: str, tag: str) -> str | None:

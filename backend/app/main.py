@@ -4,13 +4,13 @@ from pathlib import Path
 from typing import ClassVar
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import inspect, text
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from .config import settings
 from .database import Base, engine
@@ -57,23 +57,34 @@ except Exception:
 app = FastAPI(title="porchsongs", version=__version__)
 
 
-class OptionalBearerAuth(BaseHTTPMiddleware):
-    """Gate /api/ routes behind a bearer token when APP_SECRET is configured."""
+class OptionalBearerAuth:
+    """Pure ASGI middleware gating /api/ routes behind a bearer token.
+
+    Uses raw ASGI instead of BaseHTTPMiddleware so StreamingResponse / SSE
+    is not buffered.
+    """
 
     _PUBLIC_PATHS: ClassVar[set[str]] = {"/api/auth-required", "/api/login", "/api/health"}
 
-    async def dispatch(self, request: Request, call_next: object) -> Response:
-        # Only gate /api/ routes, exempting public auth endpoints
-        if (
-            settings.app_secret
-            and request.url.path.startswith("/api/")
-            and request.url.path not in self._PUBLIC_PATHS
-        ):
-            auth = request.headers.get("authorization", "")
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] not in ("http", "websocket"):
+            await self._app(scope, receive, send)
+            return
+
+        path: str = scope.get("path", "")
+        if settings.app_secret and path.startswith("/api/") and path not in self._PUBLIC_PATHS:
+            headers = dict(scope.get("headers", []))
+            auth = headers.get(b"authorization", b"").decode()
             expected = f"Bearer {settings.app_secret}"
             if auth != expected:
-                return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
-        return await call_next(request)  # type: ignore[call-arg]
+                response = JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+                await response(scope, receive, send)
+                return
+
+        await self._app(scope, receive, send)
 
 
 app.add_middleware(OptionalBearerAuth)

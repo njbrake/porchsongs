@@ -23,6 +23,7 @@ export default function RewriteTab({
   const [lyrics, setLyrics] = useState('');
   const [instruction, setInstruction] = useState('');
   const [loading, setLoading] = useState(false);
+  const [streamingText, setStreamingText] = useState('');
   const [error, setError] = useState(null);
   const [completedStatus, setCompletedStatus] = useState(null);
   const [songTitle, setSongTitle] = useState('');
@@ -50,6 +51,7 @@ export default function RewriteTab({
 
     setLoading(true);
     setError(null);
+    setStreamingText('');
     onNewRewrite(null, null);
 
     // Seed chat immediately so it shows during loading
@@ -63,14 +65,24 @@ export default function RewriteTab({
     setChatMessages(seedMessages);
 
     try {
-      const result = await api.rewrite({
+      const reqData = {
         profile_id: profile.id,
         lyrics: trimmedLyrics,
         instruction: instruction.trim() || null,
         ...llmSettings,
+      };
+
+      let accumulated = '';
+      const result = await api.rewriteStream(reqData, {
+        onToken: (token) => {
+          accumulated += token;
+          setStreamingText(accumulated);
+        },
       });
+
       setSongTitle(result.title || '');
       setSongArtist(result.artist || '');
+      setStreamingText('');
       onNewRewrite(result, { profile_id: profile.id, title: result.title, artist: result.artist });
 
       // Auto-save as draft
@@ -102,6 +114,7 @@ export default function RewriteTab({
       }))).catch(() => {});
     } catch (err) {
       setError(err.message);
+      setStreamingText('');
     } finally {
       setLoading(false);
     }
@@ -111,6 +124,7 @@ export default function RewriteTab({
     onNewRewrite(null, null);
     setLyrics('');
     setInstruction('');
+    setStreamingText('');
     setCompletedStatus(null);
     setError(null);
     setSongTitle('');
@@ -278,15 +292,34 @@ export default function RewriteTab({
           )}
 
           {!rewriteResult && loading && (
-            <ChatPanel
-              songId={currentSongId}
-              messages={chatMessages}
-              setMessages={setChatMessages}
-              llmSettings={llmSettings}
-              originalLyrics={''}
-              onLyricsUpdated={handleChatUpdate}
-              initialLoading={loading}
-            />
+            <div className="rewrite-workspace">
+              <div className="rewrite-workspace-left">
+                <ChatPanel
+                  songId={currentSongId}
+                  messages={chatMessages}
+                  setMessages={setChatMessages}
+                  llmSettings={llmSettings}
+                  originalLyrics={''}
+                  onLyricsUpdated={handleChatUpdate}
+                  initialLoading={loading}
+                />
+              </div>
+
+              <div className="rewrite-workspace-right">
+                {streamingText && (
+                  <div className="comparison-view-wrapper">
+                    <div className="panel">
+                      <h3>Your Version</h3>
+                      <pre className="lyrics-display">{(() => {
+                        // Show only the <rewritten> section if available
+                        const match = streamingText.match(/<rewritten>\s*([\s\S]*?)(?:<\/rewritten>|$)/);
+                        return match ? match[1].trimStart() : streamingText;
+                      })()}</pre>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
       )}

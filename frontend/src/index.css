@@ -1081,6 +1081,33 @@ textarea {
   flex: 1;
 }
 
+.chat-toggle-raw {
+  display: block;
+  margin-top: 0.4rem;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.75rem;
+  color: var(--primary);
+  cursor: pointer;
+  text-decoration: underline;
+  opacity: 0.8;
+}
+
+.chat-toggle-raw:hover {
+  opacity: 1;
+}
+
+.chat-raw-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.8rem;
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
 /* === Status Badges === */
 .status-badge {
   display: inline-block;

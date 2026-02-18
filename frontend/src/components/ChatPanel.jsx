@@ -3,6 +3,29 @@ import api from '../api';
 
 const MAX_MESSAGES = 20;
 
+function ChatMessage({ msg }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasRaw = msg.role === 'assistant' && !msg.isNote && msg.rawContent && msg.rawContent !== msg.content;
+
+  return (
+    <div className={`chat-msg ${msg.isNote ? 'chat-msg-note' : `chat-msg-${msg.role}`}`}>
+      {expanded ? (
+        <pre className="chat-raw-content">{msg.rawContent}</pre>
+      ) : (
+        msg.content
+      )}
+      {hasRaw && (
+        <button
+          className="chat-toggle-raw"
+          onClick={() => setExpanded(prev => !prev)}
+        >
+          {expanded ? 'Show summary' : 'Show full response'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function ChatPanel({ songId, messages, setMessages, llmSettings, originalLyrics, onLyricsUpdated, initialLoading }) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -34,7 +57,11 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
         ...llmSettings,
       });
 
-      const assistantMsg = { role: 'assistant', content: result.changes_summary };
+      const assistantMsg = {
+        role: 'assistant',
+        content: result.changes_summary,
+        rawContent: result.assistant_message,
+      };
       setMessages(prev => [...prev, assistantMsg].slice(-MAX_MESSAGES));
       onLyricsUpdated(result.rewritten_lyrics);
 
@@ -55,12 +82,7 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
       </div>
       <div className="chat-messages">
         {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`chat-msg ${msg.isNote ? 'chat-msg-note' : `chat-msg-${msg.role}`}`}
-          >
-            {msg.content}
-          </div>
+          <ChatMessage key={i} msg={msg} />
         ))}
         {initialLoading && (
           <div className="chat-typing">

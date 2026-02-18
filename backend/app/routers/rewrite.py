@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -35,25 +36,23 @@ def _lookup_api_base(
     return pm.api_base if pm else None
 
 
-@router.post("/rewrite", response_model=RewriteResponse)
-async def rewrite(req: RewriteRequest, db: Session = Depends(get_db)) -> dict[str, str | None]:
-    # Load profile
+def _load_rewrite_context(
+    req: RewriteRequest, db: Session
+) -> tuple[str, str, list[dict[str, str | None]], dict[str, str] | None, str | None]:
+    """Shared helper: load profile, patterns, example, and api_base for a rewrite."""
     profile = db.query(Profile).filter(Profile.id == req.profile_id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
 
     profile_description = profile.description or ""
-
-    # Pass raw lyrics directly — the LLM handles cleanup and chord formatting
     lyrics = req.lyrics
 
-    # Load substitution patterns for this profile
     from ..models import SubstitutionPattern
 
     patterns = (
         db.query(SubstitutionPattern).filter(SubstitutionPattern.profile_id == req.profile_id).all()
     )
-    pattern_list = [
+    pattern_list: list[dict[str, str | None]] = [
         {
             "original": p.original_term,
             "replacement": p.replacement_term,
@@ -63,7 +62,6 @@ async def rewrite(req: RewriteRequest, db: Session = Depends(get_db)) -> dict[st
         for p in patterns
     ]
 
-    # Load one recent completed song as example
     recent_completed = (
         db.query(Song)
         .filter(Song.profile_id == req.profile_id, Song.status == "completed")
@@ -78,6 +76,38 @@ async def rewrite(req: RewriteRequest, db: Session = Depends(get_db)) -> dict[st
         }
 
     api_base = _lookup_api_base(db, req.profile_id, req.provider, req.model)
+    return profile_description, lyrics, pattern_list, example, api_base
+
+
+@router.post("/rewrite", response_model=RewriteResponse)
+async def rewrite(
+    req: RewriteRequest,
+    db: Session = Depends(get_db),
+    stream: bool = Query(default=False),
+) -> dict[str, str | None] | StreamingResponse:
+    profile_description, lyrics, pattern_list, example, api_base = _load_rewrite_context(req, db)
+
+    if stream:
+        generator = llm_service.rewrite_lyrics_stream(
+            profile_description=profile_description,
+            title=req.title,
+            artist=req.artist,
+            lyrics_with_chords=lyrics,
+            provider=req.provider,
+            model=req.model,
+            patterns=pattern_list,
+            example=example,
+            instruction=req.instruction,
+            api_base=api_base,
+        )
+        return StreamingResponse(
+            generator,
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     try:
         result = await llm_service.rewrite_lyrics(

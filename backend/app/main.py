@@ -121,7 +121,9 @@ async def health() -> dict[str, str]:
 # add explicit fallback routes for the known SPA paths before mounting static files.
 frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"
-_static_dir = frontend_dist if frontend_dist.exists() else (frontend_dir if frontend_dir.exists() else None)
+_static_dir = (
+    frontend_dist if frontend_dist.exists() else (frontend_dir if frontend_dir.exists() else None)
+)
 
 if _static_dir is not None:
     _index_html = _static_dir / "index.html"

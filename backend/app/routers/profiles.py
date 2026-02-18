@@ -76,9 +76,7 @@ def delete_profile(profile_id: int, db: Session = Depends(get_db)) -> dict[str, 
 
 
 @router.get("/profiles/{profile_id}/models", response_model=list[ProfileModelOut])
-def list_profile_models(
-    profile_id: int, db: Session = Depends(get_db)
-) -> list[Any]:
+def list_profile_models(profile_id: int, db: Session = Depends(get_db)) -> list[Any]:
     profile = db.query(Profile).filter(Profile.id == profile_id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")

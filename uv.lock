@@ -726,7 +726,7 @@ wheels = [
 
 [[package]]
 name = "porchsongs"
-version = "1.0.0"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "any-llm-sdk" },

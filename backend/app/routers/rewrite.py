@@ -149,12 +149,16 @@ async def chat(req: ChatRequest, db: Session = Depends(get_db)) -> ChatResponse:
     # Persist the user and assistant chat messages
     last_user_msg = req.messages[-1] if req.messages else None
     if last_user_msg and last_user_msg.role == "user":
-        db.add(ChatMessageModel(
-            song_id=song.id, role="user", content=last_user_msg.content, is_note=False
-        ))
-    db.add(ChatMessageModel(
-        song_id=song.id, role="assistant", content=result["changes_summary"], is_note=False
-    ))
+        db.add(
+            ChatMessageModel(
+                song_id=song.id, role="user", content=last_user_msg.content, is_note=False
+            )
+        )
+    db.add(
+        ChatMessageModel(
+            song_id=song.id, role="assistant", content=result["changes_summary"], is_note=False
+        )
+    )
 
     db.commit()
 

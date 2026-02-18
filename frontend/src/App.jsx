@@ -8,6 +8,7 @@ import RewriteTab from './components/RewriteTab';
 import LibraryTab from './components/LibraryTab';
 import ProfileTab from './components/ProfileTab';
 import SettingsModal from './components/SettingsModal';
+import LoginPage from './components/LoginPage';
 
 const TAB_KEYS = ['rewrite', 'library', 'profile'];
 
@@ -19,21 +20,47 @@ function tabFromPath(pathname) {
 export default function App() {
   const [activeTab, setActiveTab] = useState(() => tabFromPath(window.location.pathname));
   const [showSettings, setShowSettings] = useState(false);
-  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
-  const [authSecret, setAuthSecret] = useState('');
+
+  // Auth state: "loading" | "login" | "ready"
+  const [authState, setAuthState] = useState('loading');
+  const [authActive, setAuthActive] = useState(false);
+
+  // Check auth requirement on mount
+  useEffect(() => {
+    api.checkAuthRequired()
+      .then(({ required }) => {
+        setAuthActive(required);
+        if (!required) {
+          setAuthState('ready');
+        } else {
+          // Check if we already have a stored token
+          const token = localStorage.getItem('porchsongs_app_secret');
+          setAuthState(token ? 'ready' : 'login');
+        }
+      })
+      .catch(() => {
+        // If we can't reach the server, proceed without auth
+        setAuthState('ready');
+      });
+  }, []);
+
+  // Listen for logout events (e.g. 401 from expired/changed token)
+  useEffect(() => {
+    const handler = () => {
+      if (authActive) {
+        localStorage.removeItem('porchsongs_app_secret');
+        setAuthState('login');
+      }
+    };
+    window.addEventListener('porchsongs-logout', handler);
+    return () => window.removeEventListener('porchsongs-logout', handler);
+  }, [authActive]);
 
   // Sync tab from URL on back/forward navigation
   useEffect(() => {
     const onPopState = () => setActiveTab(tabFromPath(window.location.pathname));
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, []);
-
-  // Listen for auth-required events from api.js
-  useEffect(() => {
-    const handler = () => setShowAuthPrompt(true);
-    window.addEventListener('porchsongs-auth-required', handler);
-    return () => window.removeEventListener('porchsongs-auth-required', handler);
   }, []);
 
   // Wrapper that updates both state and URL
@@ -63,13 +90,14 @@ export default function App() {
 
   const llmSettings = { provider, model };
 
-  // Load profile on mount
+  // Load profile on mount (only when ready)
   useEffect(() => {
+    if (authState !== 'ready') return;
     api.listProfiles().then(profiles => {
       const def = profiles.find(p => p.is_default) || profiles[0];
       if (def) setProfile(def);
     }).catch(() => {});
-  }, []);
+  }, [authState]);
 
   const handleSaveProfile = useCallback(async (data) => {
     let saved;
@@ -127,13 +155,18 @@ export default function App() {
     }
   }, [setTab]);
 
-  const handleAuthSubmit = useCallback(() => {
-    if (authSecret.trim()) {
-      localStorage.setItem('porchsongs_app_secret', authSecret.trim());
-      setShowAuthPrompt(false);
-      setAuthSecret('');
-    }
-  }, [authSecret]);
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('porchsongs_app_secret');
+    setAuthState('login');
+  }, []);
+
+  if (authState === 'loading') {
+    return null;
+  }
+
+  if (authState === 'login') {
+    return <LoginPage onLogin={() => setAuthState('ready')} />;
+  }
 
   return (
     <>
@@ -141,6 +174,8 @@ export default function App() {
         profileName={profile?.name}
         onSettingsClick={() => setShowSettings(true)}
         onHomeClick={() => setTab('rewrite')}
+        authActive={authActive}
+        onLogout={handleLogout}
       />
       <Tabs active={activeTab} onChange={setTab} />
       <main>
@@ -179,32 +214,6 @@ export default function App() {
           onRemoveModel={removeModel}
           onClose={() => setShowSettings(false)}
         />
-      )}
-      {showAuthPrompt && (
-        <div className="modal">
-          <div className="modal-backdrop" onClick={() => setShowAuthPrompt(false)} />
-          <div className="modal-content">
-            <div className="modal-header">
-              <h2>App Secret Required</h2>
-              <button className="modal-close" onClick={() => setShowAuthPrompt(false)}>&times;</button>
-            </div>
-            <div className="modal-body">
-              <p>This server requires an app secret to access the API.</p>
-              <div className="form-group">
-                <label>App Secret</label>
-                <input
-                  type="password"
-                  value={authSecret}
-                  onChange={e => setAuthSecret(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAuthSubmit()}
-                  placeholder="Enter the app secret"
-                  autoFocus
-                />
-              </div>
-              <button className="btn primary" onClick={handleAuthSubmit}>Save</button>
-            </div>
-          </div>
-        </div>
       )}
     </>
   );

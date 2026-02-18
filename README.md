@@ -51,6 +51,17 @@ cp .env.example .env
 docker compose up --build
 ```
 
+## Password Protection
+
+You can restrict access to your porchsongs instance with a master password:
+
+```bash
+# In your .env file
+APP_SECRET=your-secret-password
+```
+
+When `APP_SECRET` is set, users see a login page before they can access the app. All API routes are protected behind the same password. Without it, the app is open to anyone who can reach it.
+
 ## LLM Providers
 
 Built on [any-llm](https://github.com/abhaymathur21/any-llm) — 38+ providers including OpenAI, Anthropic, Google, Mistral, Groq, and Ollama. Bring your own API key.

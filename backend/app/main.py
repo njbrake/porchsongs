@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from sqlalchemy import inspect, text
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -52,9 +53,15 @@ app = FastAPI(title="porchsongs", version="1.0.0")
 class OptionalBearerAuth(BaseHTTPMiddleware):
     """Gate /api/ routes behind a bearer token when APP_SECRET is configured."""
 
+    _PUBLIC_PATHS = {"/api/auth-required", "/api/login"}
+
     async def dispatch(self, request: Request, call_next: object) -> Response:
-        # Only gate /api/ routes
-        if settings.app_secret and request.url.path.startswith("/api/"):
+        # Only gate /api/ routes, exempting public auth endpoints
+        if (
+            settings.app_secret
+            and request.url.path.startswith("/api/")
+            and request.url.path not in self._PUBLIC_PATHS
+        ):
             auth = request.headers.get("authorization", "")
             expected = f"Bearer {settings.app_secret}"
             if auth != expected:
@@ -75,6 +82,25 @@ app.add_middleware(
 app.include_router(profiles.router, prefix="/api")
 app.include_router(songs.router, prefix="/api")
 app.include_router(rewrite.router, prefix="/api")
+
+
+class LoginRequest(BaseModel):
+    password: str
+
+
+@app.get("/api/auth-required")
+async def auth_required() -> dict[str, bool]:
+    """Check whether the server requires authentication."""
+    return {"required": settings.app_secret is not None}
+
+
+@app.post("/api/login")
+async def login(body: LoginRequest) -> JSONResponse:
+    """Validate a password against APP_SECRET and return the token."""
+    if not settings.app_secret or body.password != settings.app_secret:
+        return JSONResponse(status_code=401, content={"detail": "Invalid password"})
+    return JSONResponse(content={"ok": True, "token": settings.app_secret})
+
 
 # Serve the React build output (frontend/dist) if it exists, otherwise serve frontend/ directly.
 # Client-side routes (/library, /profile, /rewrite) need to return index.html so the SPA

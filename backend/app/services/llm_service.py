@@ -117,9 +117,8 @@ def get_configured_providers() -> list[dict[str, str | None]]:
         env_base = getattr(cls, "ENV_API_BASE_NAME", None)
 
         if provider.value in _KEYLESS_PROVIDERS:
-            # Keyless provider — only include if base URL is configured
-            if env_base and os.getenv(env_base):
-                configured.append({"name": provider.value, "env_key": env_base})
+            # Keyless/local providers are always listed
+            configured.append({"name": provider.value, "env_key": env_base})
         elif env_key and os.getenv(env_key):
             configured.append({"name": provider.value, "env_key": env_key})
 

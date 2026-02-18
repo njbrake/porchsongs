@@ -15,8 +15,8 @@ async function _fetch(path, options = {}) {
     ...options,
   });
   if (res.status === 401) {
-    window.dispatchEvent(new CustomEvent('porchsongs-auth-required'));
-    throw new Error('Authentication required. Please enter the app secret.');
+    window.dispatchEvent(new CustomEvent('porchsongs-logout'));
+    throw new Error('Authentication required. Please log in.');
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -25,7 +25,27 @@ async function _fetch(path, options = {}) {
   return res.json();
 }
 
+async function checkAuthRequired() {
+  const res = await fetch(`${BASE}/auth-required`);
+  return res.json();
+}
+
+async function login(password) {
+  const res = await fetch(`${BASE}/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || 'Login failed');
+  }
+  return res.json();
+}
+
 const api = {
+  checkAuthRequired,
+  login,
   // Profiles
   listProfiles: () => _fetch('/profiles'),
   createProfile: (data) => _fetch('/profiles', { method: 'POST', body: JSON.stringify(data) }),

@@ -1,4 +1,4 @@
-export default function Header({ profileName, onSettingsClick, onHomeClick }) {
+export default function Header({ profileName, onSettingsClick, onHomeClick, authActive, onLogout }) {
   return (
     <header>
       <div className="header-left">
@@ -15,6 +15,9 @@ export default function Header({ profileName, onSettingsClick, onHomeClick }) {
         <button className="icon-btn" title="LLM Settings" onClick={onSettingsClick}>
           &#9881;
         </button>
+        {authActive && (
+          <button className="logout-btn" onClick={onLogout}>Log out</button>
+        )}
       </div>
     </header>
   );

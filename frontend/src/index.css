@@ -1111,6 +1111,94 @@ textarea {
 .toggle-original { align-self: flex-start; margin-top: 0.5rem; }
 .original-collapsed { opacity: 0.8; margin-top: 0.5rem; }
 
+/* === Login Page === */
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.login-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 24px rgba(58, 46, 31, 0.12);
+  padding: 2.5rem 2rem;
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.login-logo {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 0.25rem;
+}
+
+.login-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.login-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem;
+}
+
+.login-input {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  font-family: var(--font-ui);
+  background: var(--bg);
+  color: var(--text);
+  text-align: center;
+}
+
+.login-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.login-error {
+  color: #c0392b;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.login-btn {
+  width: 100%;
+  padding: 0.7rem;
+  font-size: 0.95rem;
+  margin-top: 0.25rem;
+}
+
+.logout-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #f5f0e8;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.logout-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
 /* === Responsive === */
 @media (max-width: 768px) {
   header {

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -19,9 +19,7 @@ def list_profiles(db: Session = Depends(get_db)):
 def create_profile(data: ProfileCreate, db: Session = Depends(get_db)):
     # If this profile is set as default, unset other defaults
     if data.is_default:
-        db.query(Profile).filter(Profile.is_default.is_(True)).update(
-            {"is_default": False}
-        )
+        db.query(Profile).filter(Profile.is_default.is_(True)).update({"is_default": False})
 
     # If no profiles exist, make this one the default
     if db.query(Profile).count() == 0:
@@ -43,9 +41,7 @@ def get_profile(profile_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/profiles/{profile_id}", response_model=ProfileOut)
-def update_profile(
-    profile_id: int, data: ProfileUpdate, db: Session = Depends(get_db)
-):
+def update_profile(profile_id: int, data: ProfileUpdate, db: Session = Depends(get_db)):
     profile = db.query(Profile).filter(Profile.id == profile_id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -54,14 +50,14 @@ def update_profile(
 
     # If setting as default, unset others
     if update_data.get("is_default"):
-        db.query(Profile).filter(
-            Profile.is_default.is_(True), Profile.id != profile_id
-        ).update({"is_default": False})
+        db.query(Profile).filter(Profile.is_default.is_(True), Profile.id != profile_id).update(
+            {"is_default": False}
+        )
 
     for key, value in update_data.items():
         setattr(profile, key, value)
 
-    profile.updated_at = datetime.now(timezone.utc)
+    profile.updated_at = datetime.now(UTC)
     db.commit()
     db.refresh(profile)
     return profile

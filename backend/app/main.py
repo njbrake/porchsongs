@@ -36,7 +36,7 @@ _run_migrations()
 app = FastAPI(title="porchsongs", version="1.0.0")
 
 app.add_middleware(
-    CORSMiddleware,
+    CORSMiddleware,  # type: ignore[arg-type]
     allow_origins=settings.cors_origins.split(","),
     allow_credentials=True,
     allow_methods=["*"],

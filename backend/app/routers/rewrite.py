@@ -26,9 +26,9 @@ def fetch_tab(req: FetchTabRequest):
     try:
         result = tab_fetcher.fetch_tab(req.url)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from None
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Failed to fetch tab: {e}")
+        raise HTTPException(status_code=502, detail=f"Failed to fetch tab: {e}") from None
     return result
 
 
@@ -58,9 +58,7 @@ async def rewrite(req: RewriteRequest, db: Session = Depends(get_db)):
     from ..models import SubstitutionPattern
 
     patterns = (
-        db.query(SubstitutionPattern)
-        .filter(SubstitutionPattern.profile_id == req.profile_id)
-        .all()
+        db.query(SubstitutionPattern).filter(SubstitutionPattern.profile_id == req.profile_id).all()
     )
     pattern_list = [
         {
@@ -101,7 +99,7 @@ async def rewrite(req: RewriteRequest, db: Session = Depends(get_db)):
             api_base=req.api_base,
         )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"LLM error: {e}")
+        raise HTTPException(status_code=502, detail=f"LLM error: {e}") from None
 
     return result
 
@@ -124,9 +122,9 @@ async def workshop_line(req: WorkshopLineRequest, db: Session = Depends(get_db))
             api_base=req.api_base,
         )
     except IndexError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from None
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"LLM error: {e}")
+        raise HTTPException(status_code=502, detail=f"LLM error: {e}") from None
 
     return result
 
@@ -140,15 +138,19 @@ async def chat(req: ChatRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Song not found")
 
     profile = db.query(Profile).filter(Profile.id == song.profile_id).first()
-    profile_dict = {
-        "location_type": profile.location_type,
-        "location_description": profile.location_description,
-        "occupation": profile.occupation,
-        "hobbies": profile.hobbies,
-        "family_situation": profile.family_situation,
-        "daily_routine": profile.daily_routine,
-        "custom_references": profile.custom_references,
-    } if profile else {}
+    profile_dict = (
+        {
+            "location_type": profile.location_type,
+            "location_description": profile.location_description,
+            "occupation": profile.occupation,
+            "hobbies": profile.hobbies,
+            "family_situation": profile.family_situation,
+            "daily_routine": profile.daily_routine,
+            "custom_references": profile.custom_references,
+        }
+        if profile
+        else {}
+    )
 
     messages = [{"role": m.role, "content": m.content} for m in req.messages]
 
@@ -163,7 +165,7 @@ async def chat(req: ChatRequest, db: Session = Depends(get_db)):
             api_base=req.api_base,
         )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"LLM error: {e}")
+        raise HTTPException(status_code=502, detail=f"LLM error: {e}") from None
 
     # Persist the updated lyrics
     song.rewritten_lyrics = result["rewritten_lyrics"]

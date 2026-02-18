@@ -1,3 +1,4 @@
+import contextlib
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -106,13 +107,15 @@ async def update_song_status(
 
         provider = data.provider or song.llm_provider or "openai"
         model = data.model or song.llm_model or "gpt-4o-mini"
-        try:
+        with contextlib.suppress(Exception):
             await llm_service.extract_patterns_with_key(
-                song, db, provider, model, data.api_key, api_base=data.api_base,
+                song,
+                db,
+                provider,
+                model,
+                data.api_key,
+                api_base=data.api_base,
             )
-        except Exception:
-            # Pattern extraction is best-effort; don't fail the status update
-            pass
 
     return song
 
@@ -129,7 +132,7 @@ def apply_edit(data: ApplyEditRequest, db: Session = Depends(get_db)):
             song.rewritten_lyrics, data.line_index, data.new_line_text
         )
     except (IndexError, ValueError) as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from None
 
     # Bump version
     new_version = song.current_version + 1
@@ -143,10 +146,12 @@ def apply_edit(data: ApplyEditRequest, db: Session = Depends(get_db)):
         rewritten_lyrics=new_full_text,
         changes_summary=f"Line {data.line_index + 1} edited",
         edit_type="line",
-        edit_context=json.dumps({
-            "line_index": data.line_index,
-            "new_line_text": data.new_line_text,
-        }),
+        edit_context=json.dumps(
+            {
+                "line_index": data.line_index,
+                "new_line_text": data.new_line_text,
+            }
+        ),
     )
     db.add(revision)
     db.commit()

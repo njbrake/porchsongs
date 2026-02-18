@@ -91,7 +91,7 @@ def inline_to_above_line(text: str) -> str:
             chord = match.group(1)
 
             # Add any text before this chord
-            between = line[pos : start]
+            between = line[pos:start]
             between_clean = chord_re.sub("", between)
             lyric_line.append(between_clean)
 
@@ -211,7 +211,9 @@ def _place_chords(
     for pos, chord in new_positions:
         pos = max(0, min(pos, len(chord_line) - len(chord)))
         # Check for overlap with existing chords
-        while any(chord_line[pos + k] != " " for k in range(len(chord)) if pos + k < len(chord_line)):
+        while any(
+            chord_line[pos + k] != " " for k in range(len(chord)) if pos + k < len(chord_line)
+        ):
             pos += 1
             if pos >= len(chord_line) - len(chord):
                 break
@@ -264,7 +266,7 @@ def replace_line_with_chords(full_text: str, lyrics_line_index: int, new_line_te
     # Find the Nth lyrics entry (entries that have actual lyric content or are non-chord)
     lyrics_count = 0
     target_entry_index = None
-    for idx, entry in enumerate(parsed):
+    for idx, _entry in enumerate(parsed):
         # Count every entry as a lyrics line (mirrors extract_lyrics_only)
         if lyrics_count == lyrics_line_index:
             target_entry_index = idx
@@ -272,7 +274,9 @@ def replace_line_with_chords(full_text: str, lyrics_line_index: int, new_line_te
         lyrics_count += 1
 
     if target_entry_index is None:
-        raise IndexError(f"Lyrics line index {lyrics_line_index} out of range (max {lyrics_count - 1})")
+        raise IndexError(
+            f"Lyrics line index {lyrics_line_index} out of range (max {lyrics_count - 1})"
+        )
 
     entry = parsed[target_entry_index]
 

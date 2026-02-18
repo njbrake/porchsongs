@@ -15,9 +15,37 @@ dependencies = [
     "any-llm-sdk>=1.8.0",
 ]
 
+[dependency-groups]
+dev = [
+    "ruff>=0.11",
+    "ty>=0.0.17",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["backend/app"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["backend"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+    "E501",   # line too long — handled by formatter
+    "B008",   # Depends() in function defaults — standard FastAPI pattern
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ty]
+
+[tool.ty.environment]
+python-version = "3.11"
+python = ".venv"
+root = ["backend"]

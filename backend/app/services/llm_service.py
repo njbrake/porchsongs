@@ -1,11 +1,28 @@
+from __future__ import annotations
+
 import json
 import logging
+from typing import TYPE_CHECKING
 
 from any_llm import LLMProvider, completion, list_models
 
 from .chord_parser import extract_lyrics_only, realign_chords
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from any_llm.types.completion import ChatCompletion, ChatCompletionChunk
+
 logger = logging.getLogger(__name__)
+
+
+def _get_content(response: ChatCompletion | Iterator[ChatCompletionChunk]) -> str:
+    """Extract text content from a completion response, raising on empty."""
+    content = response.choices[0].message.content  # type: ignore[union-attr]
+    if content is None:
+        raise ValueError("LLM returned empty response")
+    return content
+
 
 SYSTEM_PROMPT = """You are a songwriter's assistant. You adapt song lyrics so they feel personally
 relevant to the singer while preserving the song's musical structure perfectly.
@@ -44,6 +61,7 @@ Return your response in this exact format:
 
 (A friendly explanation of what you changed and why)"""
 
+
 def get_providers() -> list[str]:
     """Return list of all available provider names from the LLMProvider enum."""
     return [p.value for p in LLMProvider]
@@ -51,7 +69,8 @@ def get_providers() -> list[str]:
 
 def get_models(provider: str, api_key: str, api_base: str | None = None) -> list[str]:
     """Fetch available models for a provider using the provided API key."""
-    return list_models(provider=provider, api_key=api_key, api_base=api_base or None)
+    raw = list_models(provider=provider, api_key=api_key, api_base=api_base or None)
+    return [m.id if hasattr(m, "id") else str(m) for m in raw]
 
 
 def build_user_prompt(
@@ -134,7 +153,7 @@ def build_user_prompt(
     prompt_parts.append(lyrics)
     prompt_parts.append("")
     prompt_parts.append(
-        'Return ONLY the rewritten lyrics (one line per original line, same line count).\n'
+        "Return ONLY the rewritten lyrics (one line per original line, same line count).\n"
         'Then add "---CHANGES---" followed by a brief list of what you changed and why.'
     )
 
@@ -178,14 +197,16 @@ def build_workshop_prompt(
     if instruction:
         prompt_parts.append(f"USER INSTRUCTION: {instruction}")
 
-    prompt_parts.extend([
-        "",
-        "Provide exactly 3 alternatives. Each must match the syllable count of the ORIGINAL line.",
-        "Format your response as:",
-        "1. [alternative text] | [brief reasoning]",
-        "2. [alternative text] | [brief reasoning]",
-        "3. [alternative text] | [brief reasoning]",
-    ])
+    prompt_parts.extend(
+        [
+            "",
+            "Provide exactly 3 alternatives. Each must match the syllable count of the ORIGINAL line.",
+            "Format your response as:",
+            "1. [alternative text] | [brief reasoning]",
+            "2. [alternative text] | [brief reasoning]",
+            "3. [alternative text] | [brief reasoning]",
+        ]
+    )
 
     return "\n".join(prompt_parts)
 
@@ -211,7 +232,9 @@ async def rewrite_lyrics(
     lyrics_only = extract_lyrics_only(lyrics_with_chords)
 
     # Build prompt with patterns, example, and instruction
-    user_prompt = build_user_prompt(profile, title, artist, lyrics_only, patterns, example, instruction)
+    user_prompt = build_user_prompt(
+        profile, title, artist, lyrics_only, patterns, example, instruction
+    )
 
     # Call the LLM via any-llm-sdk
     response = completion(
@@ -225,7 +248,7 @@ async def rewrite_lyrics(
         ],
     )
 
-    raw_response = response.choices[0].message.content
+    raw_response = _get_content(response)
 
     # Parse the response: split on ---CHANGES---
     if "---CHANGES---" in raw_response:
@@ -276,7 +299,7 @@ async def workshop_line(
         ],
     )
 
-    raw_response = response.choices[0].message.content
+    raw_response = _get_content(response)
 
     # Parse the numbered alternatives
     alternatives = []
@@ -287,18 +310,22 @@ async def workshop_line(
         # Match lines starting with 1., 2., 3.
         for prefix in ("1.", "2.", "3."):
             if line.startswith(prefix):
-                content = line[len(prefix):].strip()
+                content = line[len(prefix) :].strip()
                 if "|" in content:
                     text, reasoning = content.split("|", 1)
-                    alternatives.append({
-                        "text": text.strip(),
-                        "reasoning": reasoning.strip(),
-                    })
+                    alternatives.append(
+                        {
+                            "text": text.strip(),
+                            "reasoning": reasoning.strip(),
+                        }
+                    )
                 else:
-                    alternatives.append({
-                        "text": content,
-                        "reasoning": "",
-                    })
+                    alternatives.append(
+                        {
+                            "text": content,
+                            "reasoning": "",
+                        }
+                    )
                 break
 
     # Ensure we return at least something
@@ -346,11 +373,7 @@ async def chat_edit_lyrics(
     current_lyrics_only = extract_lyrics_only(song.rewritten_lyrics)
 
     # Build the messages array for the LLM
-    system_content = (
-        CHAT_SYSTEM_PROMPT
-        + "\n\nCURRENT LYRICS:\n"
-        + current_lyrics_only
-    )
+    system_content = CHAT_SYSTEM_PROMPT + "\n\nCURRENT LYRICS:\n" + current_lyrics_only
 
     llm_messages = [{"role": "system", "content": system_content}]
     for msg in messages:
@@ -364,7 +387,7 @@ async def chat_edit_lyrics(
         messages=llm_messages,
     )
 
-    raw_response = response.choices[0].message.content
+    raw_response = _get_content(response)
     parsed = _parse_chat_response(raw_response)
 
     # Realign chords from current version onto new lyrics
@@ -388,42 +411,20 @@ async def extract_and_save_patterns(song, db) -> list[dict]:
     Uses the same LLM settings — we need api_key, so we use a lightweight approach:
     try to find a key from localStorage sent in recent requests, or skip.
     """
-    from ..models import SubstitutionPattern
 
-    orig_lyrics = extract_lyrics_only(song.original_lyrics)
-    rewrite_lyrics = extract_lyrics_only(song.rewritten_lyrics)
-
-    user_prompt = f"""Compare these original and rewritten lyrics. Extract substitution patterns.
-
-ORIGINAL:
-{orig_lyrics}
-
-REWRITTEN:
-{rewrite_lyrics}
-
-Return a JSON array of objects with these fields:
-- "original_term": the original word/phrase
-- "replacement_term": what it was changed to
-- "category": one of "vehicle", "location", "activity", "person", "food", "drink", "place", "animal", "clothing", "other"
-- "reasoning": brief explanation of why this substitution makes sense
-
-Example: [{{"original_term": "F-150", "replacement_term": "Subaru", "category": "vehicle", "reasoning": "user drives a Subaru Outback"}}]
-
-Return ONLY the JSON array, no other text."""
-
-    # Try using the last-used provider settings — stored on the song
-    provider = song.llm_provider or "openai"
-    model = song.llm_model or "gpt-4o-mini"
-
-    # We need an API key. Since extraction happens server-side when status changes,
-    # the key must be passed in the request. We'll handle this via the endpoint.
-    # For now, this function is a no-op placeholder that gets called with key from frontend.
+    # This is a no-op placeholder — extraction requires an API key which must be
+    # passed from the frontend. Use extract_patterns_with_key() instead.
     logger.info("Pattern extraction skipped (no API key available server-side)")
     return []
 
 
 async def extract_patterns_with_key(
-    song, db, provider: str, model: str, api_key: str, api_base: str | None = None,
+    song,
+    db,
+    provider: str,
+    model: str,
+    api_key: str,
+    api_base: str | None = None,
 ) -> list[dict]:
     """Extract substitution patterns using provided API credentials."""
     from ..models import SubstitutionPattern
@@ -460,7 +461,7 @@ Return ONLY the JSON array, no other text."""
         ],
     )
 
-    raw = response.choices[0].message.content.strip()
+    raw = _get_content(response).strip()
 
     # Parse JSON — handle potential markdown code blocks
     if raw.startswith("```"):

@@ -18,7 +18,7 @@ cd backend && uv run uvicorn app.main:app --reload
 cd frontend && npm run dev
 
 # Tests (from project root)
-uv run pytest           # all 66 tests
+uv run pytest           # all 96 tests
 uv run pytest -v        # verbose
 uv run pytest tests/test_api.py::test_create_profile  # single test
 
@@ -40,7 +40,7 @@ docker compose up --build
 All LLM calls go through `any-llm-sdk` which supports 38+ providers. API keys are read from server-side environment variables (e.g. `OPENAI_API_KEY`) — the SDK resolves them automatically. The frontend never handles or stores API keys. `GET /api/providers` returns only providers whose env var is set. Optional auth via `APP_SECRET` env var gates all `/api/` routes behind a bearer token. All LLM-calling functions are `async` and must use `acompletion`/`alist_models` (not the sync versions), because FastAPI async endpoints run on the event loop.
 
 Three LLM interaction modes:
-- **Full rewrite** (`POST /api/rewrite`) — rewrites entire song at once
+- **Full rewrite** (`POST /api/rewrite`) — rewrites entire song at once; supports `?stream=true` for SSE streaming
 - **Line workshop** (`POST /api/workshop-line`) — generates 3 alternatives for a single line
 - **Chat** (`POST /api/chat`) — multi-turn conversation for iterative edits, persists each edit as a `SongRevision`
 
@@ -54,7 +54,15 @@ Profiles have a freeform `description` field (not structured fields). The descri
 
 ### Song Lifecycle
 
-Paste lyrics → rewrite → auto-saved as "draft" → iterate via chat/workshop → mark "completed" → patterns extracted by LLM and saved to `substitution_patterns` table → future rewrites for that profile include learned patterns.
+Paste lyrics → rewrite → auto-saved as "draft" → iterate via chat/workshop → mark "completed" → patterns extracted by LLM and saved to `substitution_patterns` table → future rewrites for that profile include learned patterns. Songs can be organized into folders.
+
+### Tab Fetching & PDF Export
+
+`tab_fetcher.py` fetches tabs from Ultimate Guitar using `curl_cffi` (to bypass Cloudflare). `pdf_service.py` generates monospace PDFs with chord alignment using `fpdf2`. Both are exposed via API endpoints.
+
+### Profile Models
+
+Each profile can have per-provider LLM configuration (custom `api_base`) stored in the `ProfileModel` table, managed via dedicated CRUD endpoints.
 
 ## Testing
 

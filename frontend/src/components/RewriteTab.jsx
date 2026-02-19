@@ -3,6 +3,10 @@ import api from '../api';
 import ComparisonView from './ComparisonView';
 import ChatPanel from './ChatPanel';
 import ModelSelector from './ModelSelector';
+import { Button } from './ui/button';
+import { Textarea } from './ui/textarea';
+import { Card, CardContent, CardHeader } from './ui/card';
+import { Alert } from './ui/alert';
 
 export default function RewriteTab({
   profile,
@@ -27,7 +31,6 @@ export default function RewriteTab({
     () => sessionStorage.getItem('porchsongs_draft_instruction') || ''
   );
 
-  // Persist draft input to sessionStorage so it survives tab switches
   const setLyrics = useCallback((val) => {
     setLyricsRaw(val);
     sessionStorage.setItem('porchsongs_draft_lyrics', val);
@@ -37,13 +40,13 @@ export default function RewriteTab({
     sessionStorage.setItem('porchsongs_draft_instruction', val);
   }, []);
   const [loading, setLoading] = useState(false);
+  const [mobilePane, setMobilePane] = useState('chat');
   const [streamingText, setStreamingText] = useState('');
   const [error, setError] = useState(null);
   const [completedStatus, setCompletedStatus] = useState(null);
   const [songTitle, setSongTitle] = useState('');
   const [songArtist, setSongArtist] = useState('');
 
-  // Sync title/artist from rewriteMeta (song-load case)
   useEffect(() => {
     if (rewriteMeta) {
       setSongTitle(rewriteMeta.title || '');
@@ -51,7 +54,6 @@ export default function RewriteTab({
     }
   }, [rewriteMeta]);
 
-  // Reset completed status when switching songs (e.g. reopening from Library)
   useEffect(() => {
     setCompletedStatus(null);
   }, [currentSongId]);
@@ -68,7 +70,6 @@ export default function RewriteTab({
     setStreamingText('');
     onNewRewrite(null, null);
 
-    // Seed chat immediately so it shows during loading
     const preview = trimmedLyrics.length > 300
       ? trimmedLyrics.slice(0, 300) + '\n...'
       : trimmedLyrics;
@@ -99,7 +100,6 @@ export default function RewriteTab({
       setStreamingText('');
       onNewRewrite(result, { profile_id: profile.id, title: result.title, artist: result.artist });
 
-      // Auto-save as draft
       const song = await api.saveSong({
         profile_id: profile.id,
         title: result.title || null,
@@ -113,14 +113,12 @@ export default function RewriteTab({
       onSongSaved(song.id);
       setCompletedStatus(null);
 
-      // Add the LLM's changes summary as the first assistant response
       const allSeedMessages = [
         ...seedMessages,
         { role: 'assistant', content: result.changes_summary, isNote: true },
       ];
       setChatMessages(allSeedMessages);
 
-      // Persist seed messages to DB
       api.saveChatMessages(song.id, allSeedMessages.map(m => ({
         role: m.role,
         content: m.content,
@@ -150,7 +148,7 @@ export default function RewriteTab({
     try {
       await api.deleteSong(currentSongId);
     } catch {
-      // Song may already be gone — proceed with reset regardless
+      // Song may already be gone
     }
     handleNewSong();
   };
@@ -197,19 +195,22 @@ export default function RewriteTab({
 
   return (
     <div>
-      {/* Setup warning */}
       {needsProfile && (
-        <div className="setup-banner">
+        <Alert variant="warning" className="mb-4">
           <span>Create a profile in the <strong>Profile</strong> tab to get started.</span>
-        </div>
+        </Alert>
       )}
 
-      {/* Error display */}
       {error && (
-        <div className="error-banner">
+        <Alert variant="error" className="mt-4 mb-4">
           <span>{error}</span>
-          <button className="error-dismiss" onClick={() => setError(null)}>&times;</button>
-        </div>
+          <button
+            className="bg-transparent border-0 text-xl cursor-pointer text-error-text p-0 leading-none opacity-70 hover:opacity-100"
+            onClick={() => setError(null)}
+          >
+            &times;
+          </button>
+        </Alert>
       )}
 
       {!rewriteResult && !loading && (
@@ -223,134 +224,169 @@ export default function RewriteTab({
             onOpenSettings={onOpenSettings}
           />
 
-          <div className="input-section">
-            <textarea
-              rows="14"
-              value={lyrics}
-              onChange={e => setLyrics(e.target.value)}
-              placeholder="Paste lyrics, chords, or a copy from a tab site — any format works"
-            />
+          <Card>
+            <CardContent className="pt-6">
+              <Textarea
+                rows="10"
+                value={lyrics}
+                onChange={e => setLyrics(e.target.value)}
+                placeholder="Paste lyrics, chords, or a copy from a tab site — any format works"
+              />
 
-            <textarea
-              className="instruction-field"
-              rows="2"
-              value={instruction}
-              onChange={e => setInstruction(e.target.value)}
-              placeholder="Optional: e.g., 'change truck references to cycling, keep the fatherhood theme'"
-            />
+              <Textarea
+                className="mt-3 font-[family-name:var(--font-ui)]"
+                rows="2"
+                value={instruction}
+                onChange={e => setInstruction(e.target.value)}
+                placeholder="Optional: e.g., 'change truck references to cycling, keep the fatherhood theme'"
+              />
 
-            <button className="btn primary" style={{ marginTop: '0.75rem' }} onClick={handleRewrite} disabled={!canRewrite}>
-              Rewrite
-            </button>
-          </div>
+              <Button className="mt-3" onClick={handleRewrite} disabled={!canRewrite}>
+                Rewrite
+              </Button>
+            </CardContent>
+          </Card>
         </>
       )}
 
       {(rewriteResult || loading) && (
-        <div className="comparison-section">
+        <div className="mt-2">
           {rewriteResult && (
-            <div className="rewrite-workspace">
-              <div className="rewrite-workspace-left">
-                <ModelSelector
-                  provider={llmSettings.provider}
-                  model={llmSettings.model}
-                  savedModels={savedModels}
-                  onChangeProvider={onChangeProvider}
-                  onChangeModel={onChangeModel}
-                  onOpenSettings={onOpenSettings}
-                />
-
-                <div className="comparison-actions">
-                  <button className="btn secondary" onClick={handleNewSong}>
-                    New Song
-                  </button>
-                  <button
-                    className="btn secondary"
-                    onClick={handleMarkComplete}
-                    disabled={completedStatus === 'completed' || completedStatus === 'saving' || !currentSongId}
-                  >
-                    {completedStatus === 'completed' ? 'Completed!' :
-                     completedStatus === 'saving' ? 'Saving...' : 'Mark as Complete'}
-                  </button>
-                  <button
-                    className="btn danger-outline"
-                    onClick={handleScrap}
-                    disabled={!currentSongId}
-                  >
-                    Scrap This
-                  </button>
-                </div>
-
-                <ChatPanel
-                  songId={currentSongId}
-                  messages={chatMessages}
-                  setMessages={setChatMessages}
-                  llmSettings={llmSettings}
-                  originalLyrics={rewriteResult?.original_lyrics || ''}
-                  onLyricsUpdated={handleChatUpdate}
-                  initialLoading={loading}
-                />
+            <>
+              {/* Mobile pane toggle — hidden on md+ */}
+              <div className="flex md:hidden rounded-md border border-border overflow-hidden mb-3">
+                <button
+                  className={`flex-1 py-2 text-sm font-semibold text-center transition-colors ${mobilePane === 'chat' ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}
+                  onClick={() => setMobilePane('chat')}
+                >
+                  Chat Workshop
+                </button>
+                <button
+                  className={`flex-1 py-2 text-sm font-semibold text-center transition-colors ${mobilePane === 'lyrics' ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}
+                  onClick={() => setMobilePane('lyrics')}
+                >
+                  Your Version
+                </button>
               </div>
 
-              <div className="rewrite-workspace-right">
-                <div className="song-meta-header">
-                  <input
-                    className="song-title-input"
-                    type="text"
-                    value={songTitle || ''}
-                    onChange={e => handleTitleChange(e.target.value)}
-                    onBlur={handleMetaBlur}
-                    placeholder="Song title"
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-2 items-stretch h-[calc(100vh-11rem)] md:h-[calc(100vh-7rem)]">
+                <div className={`flex-col min-h-0 ${mobilePane === 'chat' ? 'flex' : 'hidden'} md:flex`}>
+                  <ModelSelector
+                    provider={llmSettings.provider}
+                    model={llmSettings.model}
+                    savedModels={savedModels}
+                    onChangeProvider={onChangeProvider}
+                    onChangeModel={onChangeModel}
+                    onOpenSettings={onOpenSettings}
                   />
-                  <input
-                    className="song-artist-input"
-                    type="text"
-                    value={songArtist || ''}
-                    onChange={e => handleArtistChange(e.target.value)}
-                    onBlur={handleMetaBlur}
-                    placeholder="Artist"
+
+                  <div className="flex gap-2 mb-2 flex-wrap">
+                    <Button variant="secondary" onClick={handleNewSong}>
+                      New Song
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={handleMarkComplete}
+                      disabled={completedStatus === 'completed' || completedStatus === 'saving' || !currentSongId}
+                    >
+                      {completedStatus === 'completed' ? 'Completed!' :
+                       completedStatus === 'saving' ? 'Saving...' : 'Mark as Complete'}
+                    </Button>
+                    <Button
+                      variant="danger-outline"
+                      onClick={handleScrap}
+                      disabled={!currentSongId}
+                    >
+                      Scrap This
+                    </Button>
+                  </div>
+
+                  <ChatPanel
+                    songId={currentSongId}
+                    messages={chatMessages}
+                    setMessages={setChatMessages}
+                    llmSettings={llmSettings}
+                    originalLyrics={rewriteResult?.original_lyrics || ''}
+                    onLyricsUpdated={handleChatUpdate}
+                    initialLoading={loading}
                   />
                 </div>
 
-                <ComparisonView
-                  original={rewriteResult.original_lyrics}
-                  rewritten={rewriteResult.rewritten_lyrics}
-                  onRewrittenChange={handleRewrittenChange}
-                  onRewrittenBlur={handleRewrittenBlur}
-                />
+                <div className={`flex-col min-h-0 overflow-hidden ${mobilePane === 'lyrics' ? 'flex' : 'hidden'} md:flex`}>
+                  <div className="flex flex-col gap-1 mb-2">
+                    <input
+                      className="text-xl font-bold border-0 border-b border-dashed border-border bg-transparent py-1 text-foreground w-full focus:outline-none focus:border-primary placeholder:text-muted-foreground placeholder:font-normal"
+                      type="text"
+                      value={songTitle || ''}
+                      onChange={e => handleTitleChange(e.target.value)}
+                      onBlur={handleMetaBlur}
+                      placeholder="Song title"
+                    />
+                    <input
+                      className="text-base border-0 border-b border-dashed border-border bg-transparent py-0.5 text-muted-foreground w-full focus:outline-none focus:border-primary placeholder:text-muted-foreground"
+                      type="text"
+                      value={songArtist || ''}
+                      onChange={e => handleArtistChange(e.target.value)}
+                      onBlur={handleMetaBlur}
+                      placeholder="Artist"
+                    />
+                  </div>
+
+                  <ComparisonView
+                    original={rewriteResult.original_lyrics}
+                    rewritten={rewriteResult.rewritten_lyrics}
+                    onRewrittenChange={handleRewrittenChange}
+                    onRewrittenBlur={handleRewrittenBlur}
+                  />
+                </div>
               </div>
-            </div>
+            </>
           )}
 
           {!rewriteResult && loading && (
-            <div className="rewrite-workspace">
-              <div className="rewrite-workspace-left">
-                <ChatPanel
-                  songId={currentSongId}
-                  messages={chatMessages}
-                  setMessages={setChatMessages}
-                  llmSettings={llmSettings}
-                  originalLyrics={''}
-                  onLyricsUpdated={handleChatUpdate}
-                  initialLoading={loading}
-                />
+            <>
+              {/* Mobile pane toggle — hidden on md+ */}
+              <div className="flex md:hidden rounded-md border border-border overflow-hidden mb-3">
+                <button
+                  className={`flex-1 py-2 text-sm font-semibold text-center transition-colors ${mobilePane === 'chat' ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}
+                  onClick={() => setMobilePane('chat')}
+                >
+                  Chat Workshop
+                </button>
+                <button
+                  className={`flex-1 py-2 text-sm font-semibold text-center transition-colors ${mobilePane === 'lyrics' ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}
+                  onClick={() => setMobilePane('lyrics')}
+                >
+                  Your Version
+                </button>
               </div>
 
-              <div className="rewrite-workspace-right">
-                {streamingText && (
-                  <div className="comparison-view-wrapper">
-                    <div className="panel">
-                      <h3>Your Version</h3>
-                      <pre className="lyrics-display">{(() => {
-                        // Show only the <rewritten> section if available
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-2 items-stretch h-[calc(100vh-11rem)] md:h-[calc(100vh-7rem)]">
+                <div className={`flex-col min-h-0 ${mobilePane === 'chat' ? 'flex' : 'hidden'} md:flex`}>
+                  <ChatPanel
+                    songId={currentSongId}
+                    messages={chatMessages}
+                    setMessages={setChatMessages}
+                    llmSettings={llmSettings}
+                    originalLyrics={''}
+                    onLyricsUpdated={handleChatUpdate}
+                    initialLoading={loading}
+                  />
+                </div>
+
+                <div className={`flex-col min-h-0 overflow-hidden ${mobilePane === 'lyrics' ? 'flex' : 'hidden'} md:flex`}>
+                  {streamingText && (
+                    <Card className="flex flex-col flex-1 overflow-hidden">
+                      <CardHeader>Your Version</CardHeader>
+                      <pre className="p-3 sm:p-4 font-[family-name:var(--font-mono)] text-xs sm:text-[0.82rem] leading-relaxed whitespace-pre-wrap break-words flex-1 overflow-y-auto">{(() => {
                         const match = streamingText.match(/<rewritten>\s*([\s\S]*?)(?:<\/rewritten>|$)/);
                         return match ? match[1].trimStart() : streamingText;
                       })()}</pre>
-                    </div>
-                  </div>
-                )}
+                    </Card>
+                  )}
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
       )}

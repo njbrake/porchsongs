@@ -6,11 +6,10 @@ import Header from './components/Header';
 import Tabs from './components/Tabs';
 import RewriteTab from './components/RewriteTab';
 import LibraryTab from './components/LibraryTab';
-import ProfileTab from './components/ProfileTab';
-import SettingsModal from './components/SettingsModal';
+import SettingsPage from './components/SettingsPage';
 import LoginPage from './components/LoginPage';
 
-const TAB_KEYS = ['rewrite', 'library', 'profile'];
+const TAB_KEYS = ['rewrite', 'library', 'settings'];
 
 function tabFromPath(pathname) {
   const seg = pathname.replace(/^\//, '').split('/')[0].toLowerCase();
@@ -29,8 +28,6 @@ function songIdFromPath(pathname) {
 export default function App() {
   const [activeTab, setActiveTab] = useState(() => tabFromPath(window.location.pathname));
   const [initialSongId, setInitialSongId] = useState(() => songIdFromPath(window.location.pathname));
-  const [showSettings, setShowSettings] = useState(false);
-
   // Auth state: "loading" | "login" | "ready"
   const [authState, setAuthState] = useState('loading');
   const [authActive, setAuthActive] = useState(false);
@@ -234,14 +231,12 @@ export default function App() {
   return (
     <>
       <Header
-        profileName={profile?.name}
-        onSettingsClick={() => setShowSettings(true)}
         onHomeClick={() => setTab('rewrite')}
         authActive={authActive}
         onLogout={handleLogout}
       />
       <Tabs active={activeTab} onChange={setTab} />
-      <main>
+      <main className="max-w-[1800px] mx-auto px-2 sm:px-4 py-4">
         {activeTab === 'rewrite' && (
           <RewriteTab
             profile={profile}
@@ -257,27 +252,25 @@ export default function App() {
             onChangeProvider={setProvider}
             onChangeModel={setModel}
             savedModels={savedModels}
-            onOpenSettings={() => setShowSettings(true)}
+            onOpenSettings={() => setTab('settings')}
           />
         )}
         {activeTab === 'library' && (
           <LibraryTab onLoadSong={handleLoadSong} initialSongId={initialSongId} onInitialSongConsumed={() => setInitialSongId(null)} />
         )}
-        {activeTab === 'profile' && (
-          <ProfileTab profile={profile} onSave={handleSaveProfile} />
+        {activeTab === 'settings' && (
+          <SettingsPage
+            provider={provider}
+            model={model}
+            savedModels={savedModels}
+            onSave={(p, m) => { setProvider(p); setModel(m); }}
+            onAddModel={addModel}
+            onRemoveModel={removeModel}
+            profile={profile}
+            onSaveProfile={handleSaveProfile}
+          />
         )}
       </main>
-      {showSettings && (
-        <SettingsModal
-          provider={provider}
-          model={model}
-          savedModels={savedModels}
-          onSave={(p, m) => { setProvider(p); setModel(m); }}
-          onAddModel={addModel}
-          onRemoveModel={removeModel}
-          onClose={() => setShowSettings(false)}
-        />
-      )}
     </>
   );
 }

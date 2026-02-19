@@ -1,5 +1,9 @@
 import { useState } from 'react';
 import api from '../api';
+import { Card, CardContent } from './ui/card';
+import { Input } from './ui/input';
+import { Button } from './ui/button';
+import { cn } from '../lib/utils';
 
 export default function WorkshopPanel({ songId, lineIndex, originalLyrics, rewrittenLyrics, llmSettings, onApply, onClose }) {
   const [instruction, setInstruction] = useState('');
@@ -45,64 +49,71 @@ export default function WorkshopPanel({ songId, lineIndex, originalLyrics, rewri
     }
   };
 
-  // Extract current/original lines for display
   const origLines = originalLyrics.split('\n');
   const rewriteLines = rewrittenLyrics.split('\n');
   const originalLine = origLines[lineIndex] || '';
   const currentLine = rewriteLines[lineIndex] || '';
 
   return (
-    <div className="workshop-panel">
-      <div className="workshop-header">
-        <h3>Line Workshop</h3>
-        <button className="modal-close" onClick={onClose}>&times;</button>
+    <Card className="mt-4 border-2 border-primary overflow-hidden">
+      <div className="flex justify-between items-center px-4 py-2.5 bg-primary-light border-b border-border">
+        <h3 className="text-sm text-primary uppercase tracking-wide font-semibold m-0">Line Workshop</h3>
+        <button
+          className="bg-transparent border-0 text-xl cursor-pointer text-muted-foreground leading-none hover:text-foreground"
+          onClick={onClose}
+        >
+          &times;
+        </button>
       </div>
-      <div className="workshop-body">
-        <div className="workshop-lines">
-          <div className="workshop-line-label">Original line:</div>
-          <div className="workshop-line-text">{result?.original_line || originalLine}</div>
-          <div className="workshop-line-label">Current line:</div>
-          <div className="workshop-line-text">{result?.current_line || currentLine}</div>
+      <CardContent>
+        <div className="mb-4">
+          <div className="text-xs text-muted-foreground font-semibold mb-0.5">Original line:</div>
+          <div className="font-[family-name:var(--font-mono)] text-sm p-2 bg-panel rounded">{result?.original_line || originalLine}</div>
+          <div className="text-xs text-muted-foreground font-semibold mb-0.5 mt-2">Current line:</div>
+          <div className="font-[family-name:var(--font-mono)] text-sm p-2 bg-panel rounded">{result?.current_line || currentLine}</div>
         </div>
-        <div className="workshop-instruction-row">
-          <input
-            type="text"
+        <div className="flex gap-3 mb-4">
+          <Input
             value={instruction}
             onChange={e => setInstruction(e.target.value)}
             placeholder='Optional: "make it reference snowboarding"'
             onKeyDown={e => e.key === 'Enter' && handleGetAlternatives()}
+            className="flex-1"
           />
-          <button className="btn primary" onClick={handleGetAlternatives} disabled={loading}>
+          <Button onClick={handleGetAlternatives} disabled={loading}>
             {loading ? 'Loading...' : 'Get Alternatives'}
-          </button>
+          </Button>
         </div>
 
         {loading && (
-          <div className="loading">
-            <div className="spinner" />
+          <div className="flex items-center gap-4 justify-center py-6 text-muted-foreground">
+            <div className="size-6 border-3 border-border border-t-primary rounded-full animate-spin" />
             <span>Getting alternatives...</span>
           </div>
         )}
 
         {alternatives && (
-          <div className="workshop-alternatives">
+          <div className="mb-4">
             {alternatives.map((alt, i) => (
               <div
                 key={i}
-                className={`workshop-alt-item ${selected === i ? 'selected' : ''}`}
+                className={cn(
+                  'p-3 border border-border rounded-md mb-2 cursor-pointer transition-colors hover:border-primary hover:bg-selected-bg',
+                  selected === i && 'border-primary bg-primary-light'
+                )}
                 onClick={() => setSelected(i)}
               >
-                <div className="workshop-alt-text">{i + 1}. {alt.text}</div>
-                {alt.reasoning && <div className="workshop-alt-reason">{alt.reasoning}</div>}
+                <div className="font-[family-name:var(--font-mono)] text-sm">{i + 1}. {alt.text}</div>
+                {alt.reasoning && <div className="text-xs text-muted-foreground mt-1 italic">{alt.reasoning}</div>}
               </div>
             ))}
           </div>
         )}
 
         {alternatives && selected !== null && (
-          <button className="btn secondary" onClick={handleApply}>Apply Selected</button>
+          <Button variant="secondary" onClick={handleApply}>Apply Selected</Button>
         )}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

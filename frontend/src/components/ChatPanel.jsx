@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import api from '../api';
+import { Card, CardHeader } from './ui/card';
+import { Input } from './ui/input';
+import { Button } from './ui/button';
 
 const MAX_MESSAGES = 20;
 
@@ -7,16 +10,22 @@ function ChatMessage({ msg }) {
   const [expanded, setExpanded] = useState(false);
   const hasRaw = msg.role === 'assistant' && !msg.isNote && msg.rawContent && msg.rawContent !== msg.content;
 
+  const bubbleClass = msg.isNote
+    ? 'bg-warning-bg text-warning-text self-center text-xs italic'
+    : msg.role === 'user'
+      ? 'bg-primary text-white self-end rounded-br-sm'
+      : 'bg-panel text-foreground self-start rounded-bl-sm';
+
   return (
-    <div className={`chat-msg ${msg.isNote ? 'chat-msg-note' : `chat-msg-${msg.role}`}`}>
+    <div className={`px-3 py-2 rounded-md text-sm leading-normal max-w-[95%] sm:max-w-[85%] break-words ${bubbleClass}`}>
       {expanded ? (
-        <pre className="chat-raw-content">{msg.rawContent}</pre>
+        <pre className="whitespace-pre-wrap break-words text-xs m-0 font-[family-name:var(--font-mono)] max-h-80 overflow-y-auto">{msg.rawContent}</pre>
       ) : (
         msg.content
       )}
       {hasRaw && (
         <button
-          className="chat-toggle-raw"
+          className="block mt-1.5 bg-transparent border-0 p-0 text-xs text-primary cursor-pointer underline opacity-80 hover:opacity-100"
           onClick={() => setExpanded(prev => !prev)}
         >
           {expanded ? 'Show summary' : 'Show full response'}
@@ -46,7 +55,6 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
 
     setSending(true);
     try {
-      // Send only role/content pairs (strip isNote)
       const apiMessages = updated
         .filter(m => !m.isNote)
         .map(m => ({ role: m.role, content: m.content }));
@@ -64,9 +72,6 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
       };
       setMessages(prev => [...prev, assistantMsg].slice(-MAX_MESSAGES));
       onLyricsUpdated(result.rewritten_lyrics);
-
-      // Persist the new messages (backend also saves, but this covers the frontend view)
-      // The backend chat handler already persists these, so no extra call needed here
     } catch (err) {
       const errorMsg = { role: 'assistant', content: 'Error: ' + err.message };
       setMessages(prev => [...prev, errorMsg]);
@@ -76,31 +81,28 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
   };
 
   return (
-    <div className="chat-panel">
-      <div className="chat-header">
-        <h3>Chat Workshop</h3>
-      </div>
-      <div className="chat-messages">
+    <Card className="mt-0 flex flex-col flex-1 overflow-hidden">
+      <CardHeader>Chat Workshop</CardHeader>
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
         {messages.map((msg, i) => (
           <ChatMessage key={i} msg={msg} />
         ))}
         {initialLoading && (
-          <div className="chat-typing">
-            <div className="spinner" />
+          <div className="flex items-center gap-2 py-2 text-muted-foreground text-sm">
+            <div className="size-6 border-3 border-border border-t-primary rounded-full animate-spin" />
             <span>Rewriting your lyrics...</span>
           </div>
         )}
         {sending && (
-          <div className="chat-typing">
-            <div className="spinner" />
+          <div className="flex items-center gap-2 py-2 text-muted-foreground text-sm">
+            <div className="size-6 border-3 border-border border-t-primary rounded-full animate-spin" />
             <span>Thinking...</span>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
-      <div className="chat-input-row">
-        <input
-          type="text"
+      <div className="flex gap-3 px-4 py-3 border-t border-border">
+        <Input
           value={input}
           onChange={e => setInput(e.target.value)}
           placeholder="Tell the AI how to change the lyrics..."
@@ -111,11 +113,12 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
             }
           }}
           disabled={sending || initialLoading}
+          className="flex-1"
         />
-        <button className="btn primary" onClick={handleSend} disabled={sending || initialLoading || !input.trim()}>
+        <Button onClick={handleSend} disabled={sending || initialLoading || !input.trim()}>
           Send
-        </button>
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }

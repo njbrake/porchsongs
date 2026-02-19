@@ -1,10 +1,23 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import api from '../api';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Card, CardHeader } from './ui/card';
+import { Badge } from './ui/badge';
+import { Checkbox } from './ui/checkbox';
+import { Select } from './ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from './ui/dropdown-menu';
+import { cn } from '../lib/utils';
 
 /**
  * Split lyrics into two balanced columns at the best section boundary.
- * Returns null (don't split) if fewer than MIN_LINES lines.
- * A "section boundary" is a blank line or a line matching [Verse], [Chorus], etc.
  */
 const MIN_LINES_FOR_SPLIT = 20;
 
@@ -12,7 +25,6 @@ function splitLyricsForColumns(text) {
   const lines = text.split('\n');
   if (lines.length < MIN_LINES_FOR_SPLIT) return null;
 
-  // Find all section boundary indices — blank lines or [Section] headers
   const boundaries = [];
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
@@ -23,7 +35,6 @@ function splitLyricsForColumns(text) {
 
   if (boundaries.length === 0) return null;
 
-  // Find the boundary closest to the midpoint (by line count)
   const mid = lines.length / 2;
   let bestIdx = boundaries[0];
   let bestDist = Math.abs(bestIdx - mid);
@@ -35,12 +46,9 @@ function splitLyricsForColumns(text) {
     }
   }
 
-  // Don't split if the best point is too close to either edge (< 25% of lines)
   const minEdge = lines.length * 0.25;
   if (bestIdx < minEdge || bestIdx > lines.length - minEdge) return null;
 
-  // Split: if the boundary is a blank line, it becomes the end of col 1.
-  // If it's a section header, it starts col 2.
   const isSectionHeader = /^\[.+\]$/.test(lines[bestIdx].trim());
   const splitAt = isSectionHeader ? bestIdx : bestIdx + 1;
 
@@ -54,19 +62,13 @@ function PerformanceLyrics({ text }) {
   const columns = useMemo(() => splitLyricsForColumns(text), [text]);
   const containerRef = useRef(null);
   const [autoOneCol, setAutoOneCol] = useState(false);
-  // null = auto, 1 = force one column, 2 = force two columns
   const [userOverride, setUserOverride] = useState(null);
 
-  // Reset auto-detection and user override when text changes
   useLayoutEffect(() => {
     setAutoOneCol(false);
     setUserOverride(null);
   }, [text]);
 
-  // Measure two-col layout before paint; only fall back to one column when
-  // two columns would require heavy scrolling (> 1.5x the visible area),
-  // since a little overflow is fine — the problem is when you have to scroll
-  // a lot and then scroll back up to read the second column.
   useLayoutEffect(() => {
     if (columns && !autoOneCol && userOverride === null && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
@@ -81,32 +83,34 @@ function PerformanceLyrics({ text }) {
   const showTwoCol = canSplit && (userOverride === 2 || (userOverride === null && !autoOneCol));
 
   const toggle = canSplit ? (
-    <button
-      className="btn secondary column-toggle"
+    <Button
+      variant="secondary"
+      size="sm"
+      className="absolute top-2 right-2 z-10 opacity-60 hover:opacity-100"
       onClick={() => setUserOverride(showTwoCol ? 1 : 2)}
     >
       {showTwoCol ? '1 Column' : '2 Columns'}
-    </button>
+    </Button>
   ) : null;
 
   if (!showTwoCol) {
     return (
-      <div className="performance-lyrics-wrapper">
+      <div className="relative">
         {toggle}
-        <div className="performance-lyrics">
-          <pre className="performance-lyrics-text">{text}</pre>
-        </div>
+        <Card className="p-4 sm:p-6">
+          <pre className="font-[family-name:var(--font-mono)] text-[0.75rem] sm:text-[0.82rem] leading-snug whitespace-pre-wrap break-words sm:whitespace-pre sm:break-normal sm:overflow-x-auto text-foreground">{text}</pre>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="performance-lyrics-wrapper">
+    <div className="relative">
       {toggle}
-      <div ref={containerRef} className="performance-lyrics performance-lyrics--two-col">
-        <pre className="performance-lyrics-text">{columns.left}</pre>
-        <pre className="performance-lyrics-text">{columns.right}</pre>
-      </div>
+      <Card ref={containerRef} className="p-4 sm:p-6 xl:grid xl:grid-cols-2 xl:gap-6">
+        <pre className="font-[family-name:var(--font-mono)] text-[0.75rem] sm:text-[0.82rem] leading-snug whitespace-pre-wrap break-words sm:whitespace-pre sm:break-normal sm:overflow-x-auto text-foreground min-w-0 xl:border-r xl:border-border xl:pr-8">{columns.left}</pre>
+        <pre className="font-[family-name:var(--font-mono)] text-[0.75rem] sm:text-[0.82rem] leading-snug whitespace-pre-wrap break-words sm:whitespace-pre sm:break-normal sm:overflow-x-auto text-foreground min-w-0">{columns.right}</pre>
+      </Card>
     </div>
   );
 }
@@ -136,7 +140,7 @@ function EditableTitle({ song, onSaved }) {
     return (
       <input
         ref={inputRef}
-        className="inline-edit-title"
+        className="text-inherit font-inherit border border-primary rounded-sm px-1 bg-background text-foreground outline-none"
         value={value}
         onChange={e => setValue(e.target.value)}
         onBlur={save}
@@ -152,7 +156,7 @@ function EditableTitle({ song, onSaved }) {
 
   return (
     <span
-      className="editable-title"
+      className="cursor-pointer border-b border-dashed border-muted-foreground hover:border-foreground"
       onClick={e => { e.stopPropagation(); setEditing(true); setValue(song.title || ''); }}
       title="Click to rename"
     >
@@ -162,28 +166,7 @@ function EditableTitle({ song, onSaved }) {
 }
 
 function SongMenu({ song, onDelete, onRename, onEdit, onReopen, folders, onMoveToFolder }) {
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef(null);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  const handleMove = (folderName) => {
-    setOpen(false);
-    onMoveToFolder(song, folderName);
-  };
-
   const handleNewFolder = () => {
-    setOpen(false);
     const name = prompt('Move to new folder:');
     if (name && name.trim()) {
       onMoveToFolder(song, name.trim());
@@ -193,46 +176,46 @@ function SongMenu({ song, onDelete, onRename, onEdit, onReopen, folders, onMoveT
   const otherFolders = folders.filter(f => f !== song.folder);
 
   return (
-    <div className="song-menu" ref={menuRef}>
-      <button
-        className="song-menu-trigger"
-        onClick={(e) => { e.stopPropagation(); setOpen(prev => !prev); }}
-        aria-label="Song actions"
-      >
-        &hellip;
-      </button>
-      {open && (
-        <div className="song-menu-dropdown">
-          <button onClick={(e) => { e.stopPropagation(); setOpen(false); song.status === 'completed' ? onReopen(song) : onEdit(song); }}>
-            {song.status === 'completed' ? 'Reopen' : 'Edit'}
-          </button>
-          <button onClick={(e) => { e.stopPropagation(); setOpen(false); onRename(song); }}>
-            Rename
-          </button>
-          <div className="song-menu-divider" />
-          {song.folder && (
-            <div className="song-menu-folder-label">In: {song.folder}</div>
-          )}
-          {otherFolders.map(f => (
-            <button key={f} onClick={(e) => { e.stopPropagation(); handleMove(f); }}>
-              Move to {f}
-            </button>
-          ))}
-          <button onClick={(e) => { e.stopPropagation(); handleNewFolder(); }}>
-            Move to new folder&hellip;
-          </button>
-          {song.folder && (
-            <button onClick={(e) => { e.stopPropagation(); handleMove(''); }}>
-              Remove from folder
-            </button>
-          )}
-          <div className="song-menu-divider" />
-          <button className="song-menu-danger" onClick={(e) => { e.stopPropagation(); setOpen(false); onDelete(song.id); }}>
-            Delete
-          </button>
-        </div>
-      )}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="bg-transparent border border-border rounded-md cursor-pointer text-xl leading-none px-2.5 py-2 text-muted-foreground tracking-wider min-w-[2.75rem] min-h-[2.75rem] inline-flex items-center justify-center hover:bg-panel hover:text-foreground"
+          onClick={e => e.stopPropagation()}
+          aria-label="Song actions"
+        >
+          &hellip;
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => song.status === 'completed' ? onReopen(song) : onEdit(song)}>
+          {song.status === 'completed' ? 'Reopen' : 'Edit'}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onRename(song)}>
+          Rename
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {song.folder && (
+          <DropdownMenuLabel>In: {song.folder}</DropdownMenuLabel>
+        )}
+        {otherFolders.map(f => (
+          <DropdownMenuItem key={f} onClick={() => onMoveToFolder(song, f)}>
+            Move to {f}
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuItem onClick={handleNewFolder}>
+          Move to new folder&hellip;
+        </DropdownMenuItem>
+        {song.folder && (
+          <DropdownMenuItem onClick={() => onMoveToFolder(song, '')}>
+            Remove from folder
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem className="text-danger hover:!bg-danger-light" onClick={() => onDelete(song.id)}>
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -243,10 +226,10 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
   const [showDetails, setShowDetails] = useState(false);
   const [revisions, setRevisions] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFolder, setActiveFolder] = useState(null); // null = "All"
+  const [activeFolder, setActiveFolder] = useState(null);
   const [dragOverFolder, setDragOverFolder] = useState(null);
   const [draggingSongId, setDraggingSongId] = useState(null);
-  const [localFolders, setLocalFolders] = useState([]); // user-created empty folders
+  const [localFolders, setLocalFolders] = useState([]);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const selectMode = selectedIds.size > 0;
 
@@ -257,7 +240,6 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
     }).catch(() => setLoaded(true));
   }, []);
 
-  // Derive folder list from loaded songs + locally created names
   const folders = useMemo(() => {
     const names = new Set(localFolders);
     for (const s of songs) {
@@ -266,7 +248,6 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
     return [...names].sort();
   }, [songs, localFolders]);
 
-  // Filter songs client-side by search + folder
   const filteredSongs = useMemo(() => {
     let result = songs;
     if (searchQuery) {
@@ -284,7 +265,6 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
     return result;
   }, [songs, searchQuery, activeFolder]);
 
-  // Open song from URL on initial load or popstate
   useEffect(() => {
     if (initialSongId != null && loaded) {
       const song = songs.find(s => s.id === initialSongId);
@@ -384,7 +364,6 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
     }
   };
 
-  // Drag and drop handlers
   const handleDragStart = (e, songId) => {
     e.dataTransfer.setData('text/plain', String(songId));
     e.dataTransfer.effectAllowed = 'move';
@@ -413,7 +392,6 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
     if (!songId) return;
     const song = songs.find(s => s.id === songId);
     if (!song) return;
-    // folderName '' means "unfiled" (remove from folder)
     await handleMoveToFolder(song, folderName);
   };
 
@@ -421,18 +399,15 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
     const name = prompt('New folder name:');
     if (!name || !name.trim()) return;
     const trimmed = name.trim();
-    // If a song is being dragged, move it to the new folder
     if (draggingSongId) {
       const song = songs.find(s => s.id === draggingSongId);
       if (song) handleMoveToFolder(song, trimmed);
     } else {
-      // Persist locally so the chip shows up even with no songs in it yet
       setLocalFolders(prev => prev.includes(trimmed) ? prev : [...prev, trimmed]);
     }
     setActiveFolder(trimmed);
   };
 
-  // Selection helpers
   const toggleSelect = (songId) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -485,57 +460,57 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
   if (viewingSong) {
     const song = viewingSong;
     return (
-      <div className="library-performance">
-        <div className="performance-nav">
-          <button className="btn secondary" onClick={handleBack}>&larr; All Songs</button>
-          <div className="performance-nav-actions">
-            <button className="btn secondary" onClick={() => api.downloadSongPdf(song.id, song.title, song.artist)}>Download PDF</button>
+      <div className="mx-auto max-w-none w-full sm:w-[calc(100vw-4rem)] sm:ml-[calc(-50vw+50%)] px-0 sm:px-8">
+        <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center mb-3 gap-3">
+          <Button variant="secondary" onClick={handleBack}>&larr; All Songs</Button>
+          <div className="flex gap-2 justify-end flex-wrap">
+            <Button variant="secondary" onClick={() => api.downloadSongPdf(song.id, song.title, song.artist)}>Download PDF</Button>
             {song.status === 'completed' ? (
-              <button className="btn secondary" onClick={() => handleReopen(song)}>Reopen for Editing</button>
+              <Button variant="secondary" onClick={() => handleReopen(song)}>Reopen for Editing</Button>
             ) : (
-              <button className="btn secondary" onClick={() => onLoadSong(song)}>Edit in Rewrite</button>
+              <Button variant="secondary" onClick={() => onLoadSong(song)}>Edit in Rewrite</Button>
             )}
-            <button className="btn danger" onClick={() => handleDelete(song.id)}>Delete</button>
+            <Button variant="danger" onClick={() => handleDelete(song.id)}>Delete</Button>
           </div>
         </div>
 
-        <div className="performance-header">
-          <h2 className="performance-title">{song.title || 'Untitled'}</h2>
-          {song.artist && <div className="performance-artist">{song.artist}</div>}
+        <div className="text-center mb-3">
+          <h2 className="text-xl font-bold text-foreground">{song.title || 'Untitled'}</h2>
+          {song.artist && <div className="text-sm text-muted-foreground mt-0.5">{song.artist}</div>}
         </div>
 
         <PerformanceLyrics text={song.rewritten_lyrics} />
 
-        <button className="btn secondary performance-details-toggle" onClick={handleShowDetails}>
+        <Button variant="secondary" className="mt-6" onClick={handleShowDetails}>
           {showDetails ? 'Hide Details' : 'Show Original & History'}
-        </button>
+        </Button>
 
         {showDetails && (
-          <div className="performance-details">
-            <div className="panel">
-              <h3>Original</h3>
-              <pre className="lyrics-display">{song.original_lyrics}</pre>
-            </div>
+          <div className="mt-4 flex flex-col gap-4">
+            <Card>
+              <CardHeader>Original</CardHeader>
+              <pre className="p-3 sm:p-4 font-[family-name:var(--font-mono)] text-[0.75rem] sm:text-[0.82rem] leading-relaxed whitespace-pre-wrap break-words overflow-x-auto max-h-[600px] overflow-y-auto">{song.original_lyrics}</pre>
+            </Card>
 
             {song.changes_summary && (
-              <div className="changes-summary">
-                <h3>Changes</h3>
-                <div className="changes-display">{song.changes_summary}</div>
-              </div>
+              <Card>
+                <CardHeader className="text-sm font-semibold normal-case tracking-normal bg-card">Changes</CardHeader>
+                <div className="p-4 text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{song.changes_summary}</div>
+              </Card>
             )}
 
             {revisions.length > 1 && (
-              <div className="revision-list">
-                <h4>Revision History ({revisions.length} versions)</h4>
+              <div className="mt-4 border-t border-border pt-3">
+                <h4 className="text-sm text-muted-foreground mb-2">Revision History ({revisions.length} versions)</h4>
                 {revisions.map(rev => (
-                  <div key={rev.id} className="revision-item">
+                  <div key={rev.id} className="text-xs py-1 text-muted-foreground border-b border-[#f0ebe3] last:border-b-0">
                     v{rev.version} &mdash; {rev.edit_type === 'line' ? 'Line edit' : rev.edit_type === 'chat' ? 'Chat edit' : 'Full rewrite'} &mdash; {rev.changes_summary || 'No summary'} &mdash; {new Date(rev.created_at).toLocaleString()}
                   </div>
                 ))}
               </div>
             )}
 
-            <div className="performance-meta">
+            <div className="flex gap-4 text-xs text-muted-foreground pt-2">
               {song.llm_model && <span>Model: {song.llm_model}</span>}
               {song.current_version > 1 && <span>Version {song.current_version}</span>}
               <span>{new Date(song.created_at).toLocaleDateString()}</span>
@@ -549,7 +524,7 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
   // --- Song List ---
   if (loaded && songs.length === 0) {
     return (
-      <div className="empty-state">
+      <div className="text-center py-16 px-8 text-muted-foreground">
         <p>No saved songs yet. Rewrite a song and save it!</p>
       </div>
     );
@@ -559,19 +534,21 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
   const hasFolders = folders.length > 0;
 
   return (
-    <div className="library-container">
-      <div className="library-toolbar">
-        <input
-          type="text"
-          className="library-search"
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <Input
           placeholder="Search songs by title or artist..."
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
+          className="bg-card"
         />
-        <div className="folder-bar">
+        <div className="flex flex-wrap gap-1.5 items-center overflow-x-auto">
           {hasFolders && (
             <button
-              className={`folder-chip${activeFolder === null ? ' active' : ''}`}
+              className={cn(
+                'bg-card border border-border rounded-full px-3 py-1.5 text-xs cursor-pointer transition-all text-muted-foreground font-medium hover:border-primary hover:text-foreground whitespace-nowrap',
+                activeFolder === null && 'bg-primary text-white border-primary'
+              )}
               onClick={() => setActiveFolder(null)}
             >
               All
@@ -580,7 +557,11 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
           {folders.map(f => (
             <button
               key={f}
-              className={`folder-chip${activeFolder === f ? ' active' : ''}${dragOverFolder === f ? ' drag-over' : ''}`}
+              className={cn(
+                'bg-card border border-border rounded-full px-3 py-1.5 text-xs cursor-pointer transition-all text-muted-foreground font-medium hover:border-primary hover:text-foreground whitespace-nowrap',
+                activeFolder === f && 'bg-primary text-white border-primary',
+                dragOverFolder === f && 'bg-primary-light border-primary text-primary shadow-[0_0_0_2px_var(--color-primary-light)]'
+              )}
               onClick={() => setActiveFolder(f)}
               onDragOver={(e) => handleFolderDragOver(e, f)}
               onDragLeave={handleFolderDragLeave}
@@ -591,7 +572,11 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
           ))}
           {hasFolders && hasUnfiled && (
             <button
-              className={`folder-chip${activeFolder === '__unfiled__' ? ' active' : ''}${dragOverFolder === '__unfiled__' ? ' drag-over' : ''}`}
+              className={cn(
+                'bg-card border border-border rounded-full px-3 py-1.5 text-xs cursor-pointer transition-all text-muted-foreground font-medium hover:border-primary hover:text-foreground whitespace-nowrap',
+                activeFolder === '__unfiled__' && 'bg-primary text-white border-primary',
+                dragOverFolder === '__unfiled__' && 'bg-primary-light border-primary text-primary shadow-[0_0_0_2px_var(--color-primary-light)]'
+              )}
               onClick={() => setActiveFolder('__unfiled__')}
               onDragOver={(e) => handleFolderDragOver(e, '__unfiled__')}
               onDragLeave={handleFolderDragLeave}
@@ -601,7 +586,7 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
             </button>
           )}
           <button
-            className="folder-chip folder-chip-add"
+            className="bg-card border border-dashed border-border rounded-full px-3 py-1.5 text-xs cursor-pointer font-semibold text-muted-foreground hover:border-primary hover:text-foreground whitespace-nowrap"
             onClick={handleCreateFolder}
             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
             onDrop={(e) => {
@@ -621,13 +606,13 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
       </div>
 
       {selectMode && (
-        <div className="bulk-action-bar">
-          <span className="bulk-count">{selectedIds.size} selected</span>
-          <button className="btn secondary" onClick={selectAll}>Select All</button>
-          <button className="btn secondary" onClick={clearSelection}>Clear</button>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-4 py-2.5 bg-primary-light border border-primary rounded-md flex-wrap">
+          <span className="text-sm font-semibold text-primary mr-1">{selectedIds.size} selected</span>
+          <Button variant="secondary" size="sm" onClick={selectAll}>Select All</Button>
+          <Button variant="secondary" size="sm" onClick={clearSelection}>Clear</Button>
           {folders.length > 0 && (
-            <select
-              className="bulk-folder-select"
+            <Select
+              className="w-auto py-1.5 px-2 text-xs"
               value=""
               onChange={(e) => {
                 if (e.target.value === '__remove__') handleBulkMoveToFolder('');
@@ -637,54 +622,60 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
               <option value="">Move to folder&hellip;</option>
               {folders.map(f => <option key={f} value={f}>{f}</option>)}
               <option value="__remove__">Remove from folder</option>
-            </select>
+            </Select>
           )}
-          <button className="btn danger" onClick={handleBulkDelete}>Delete Selected</button>
+          <Button variant="danger" size="sm" onClick={handleBulkDelete}>Delete Selected</Button>
         </div>
       )}
 
-      <div className="library-list">
+      <div className="flex flex-col gap-3">
         {filteredSongs.map(song => {
           const date = new Date(song.created_at).toLocaleDateString();
           const artist = song.artist ? ` by ${song.artist}` : '';
           const isSelected = selectedIds.has(song.id);
 
           return (
-            <div
+            <Card
               key={song.id}
-              className={`library-card${draggingSongId === song.id ? ' dragging' : ''}${isSelected ? ' selected' : ''}`}
+              className={cn(
+                'cursor-pointer transition-colors',
+                draggingSongId === song.id && 'opacity-40',
+                isSelected && 'border-primary bg-selected-bg'
+              )}
               onClick={() => selectMode ? toggleSelect(song.id) : handleView(song)}
               draggable={!selectMode ? 'true' : undefined}
               onDragStart={!selectMode ? (e) => handleDragStart(e, song.id) : undefined}
               onDragEnd={!selectMode ? handleDragEnd : undefined}
             >
-              <div className="library-card-header">
+              <div className="flex justify-between items-center p-4 hover:bg-panel transition-colors">
                 <label
-                  className="library-card-checkbox"
+                  className="flex items-center pr-2 cursor-pointer shrink-0"
                   onClick={e => e.stopPropagation()}
                 >
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={isSelected}
                     onChange={() => toggleSelect(song.id)}
                   />
                 </label>
-                <div className="library-card-info">
-                  <h3>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm sm:text-base mb-0.5 leading-snug">
                     <EditableTitle song={song} onSaved={handleSongUpdated} />
                     {artist}
-                    <span className={`status-badge ${song.status}`}>
+                    <Badge
+                      variant={song.status === 'completed' ? 'completed' : 'draft'}
+                      className="ml-2"
+                    >
                       {song.status === 'completed' ? 'Completed' : 'Draft'}
-                    </span>
+                    </Badge>
                   </h3>
-                  <span className="meta">
+                  <span className="text-xs text-muted-foreground">
                     {date}
                     {song.llm_model ? ` \u00B7 ${song.llm_model}` : ''}
                     {song.current_version > 1 ? ` \u00B7 v${song.current_version}` : ''}
                     {song.folder ? ` \u00B7 ${song.folder}` : ''}
                   </span>
                 </div>
-                <div className="library-card-actions" onClick={e => e.stopPropagation()}>
+                <div className="flex gap-2" onClick={e => e.stopPropagation()}>
                   <SongMenu
                     song={song}
                     onDelete={handleDelete}
@@ -696,11 +687,11 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
                   />
                 </div>
               </div>
-            </div>
+            </Card>
           );
         })}
         {filteredSongs.length === 0 && loaded && songs.length > 0 && (
-          <div className="empty-state">
+          <div className="text-center py-16 px-8 text-muted-foreground">
             {activeFolder && !searchQuery ? (
               <p>No songs in this folder yet. Use the &hellip; menu on a song to move it here, or drag songs onto the folder tab.</p>
             ) : (

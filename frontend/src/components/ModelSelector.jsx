@@ -1,3 +1,6 @@
+import { Select } from './ui/select';
+import { Button } from './ui/button';
+
 export default function ModelSelector({ provider, model, savedModels, onChangeProvider, onChangeModel, onOpenSettings }) {
   const handleChange = (e) => {
     const val = e.target.value;
@@ -13,27 +16,26 @@ export default function ModelSelector({ provider, model, savedModels, onChangePr
     }
   };
 
-  // Find current selection in saved models
   const activeId = savedModels.find(m => m.provider === provider && m.model === model)?.id;
   const hasUnsaved = provider && model && !activeId;
 
   if (!savedModels.length && !provider) {
     return (
-      <div className="model-selector">
-        <span className="model-selector-empty">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-sm text-muted-foreground">
           No models configured.{' '}
-          <button className="link-btn inline" onClick={onOpenSettings}>Open Settings</button> to add one.
+          <Button variant="link-inline" onClick={onOpenSettings}>Open Settings</Button> to add one.
         </span>
       </div>
     );
   }
 
   return (
-    <div className="model-selector">
-      <select
+    <div className="flex items-center gap-2 mb-3">
+      <Select
         value={activeId ? String(activeId) : (hasUnsaved ? '__unsaved__' : '')}
         onChange={handleChange}
-        className="model-selector-select"
+        className="w-full sm:w-auto sm:min-w-[220px] py-1.5 px-2.5 text-sm"
       >
         {hasUnsaved && (
           <option value="__unsaved__">{provider} / {model} (unsaved)</option>
@@ -47,7 +49,7 @@ export default function ModelSelector({ provider, model, savedModels, onChangePr
           </option>
         ))}
         <option value="__manage__">Manage models...</option>
-      </select>
+      </Select>
     </div>
   );
 }

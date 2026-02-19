@@ -47,11 +47,17 @@ def test_rewrite_endpoint(mock_acompletion, client):
         "description": "Dad in Austin, drives a Subaru",
     }).json()
 
-    mock_acompletion.return_value = _fake_completion_response(
-        "---ORIGINAL---\nG  Am\nHello world\nDm  G\nGoodbye moon\n"
-        "---REWRITTEN---\nG  Am\nHi there world\nDm  G\nSee ya moon\n"
-        "---CHANGES---\nChanged hello->hi, goodbye->see ya"
-    )
+    # Call 1: cleanup response, Call 2: rewrite response
+    mock_acompletion.side_effect = [
+        _fake_completion_response(
+            "<meta>\nTitle: Test Song\nArtist: Test Artist\n</meta>\n"
+            "<original>\nG  Am\nHello world\nDm  G\nGoodbye moon\n</original>"
+        ),
+        _fake_completion_response(
+            "<lyrics>\nHi there world\nSee ya moon\n</lyrics>\n"
+            "<changes>\nChanged hello->hi, goodbye->see ya\n</changes>"
+        ),
+    ]
 
     resp = client.post("/api/rewrite", json={
         "profile_id": profile["id"],
@@ -65,22 +71,33 @@ def test_rewrite_endpoint(mock_acompletion, client):
     assert "Hello world" in data["original_lyrics"]
     assert "changes_summary" in data
 
-    # Verify the LLM was called with the right structure
-    mock_acompletion.assert_called_once()
-    call_kwargs = mock_acompletion.call_args
-    messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
-    assert any("Dad in Austin" in m["content"] for m in messages)
-    assert any("Make it casual" in m["content"] for m in messages)
+    # Verify 2 LLM calls were made
+    assert mock_acompletion.call_count == 2
+    # Call 1 should NOT contain the profile description (cleanup only)
+    call1_kwargs = mock_acompletion.call_args_list[0]
+    messages1 = call1_kwargs.kwargs.get("messages") or call1_kwargs[1].get("messages")
+    assert not any("Dad in Austin" in m["content"] for m in messages1)
+    # Call 2 SHOULD contain the profile description and instruction
+    call2_kwargs = mock_acompletion.call_args_list[1]
+    messages2 = call2_kwargs.kwargs.get("messages") or call2_kwargs[1].get("messages")
+    assert any("Dad in Austin" in m["content"] for m in messages2)
+    assert any("Make it casual" in m["content"] for m in messages2)
 
 
 @patch("app.services.llm_service.acompletion")
 def test_rewrite_no_changes_separator(mock_acompletion, client):
-    """LLM response without full delimiters should still work."""
+    """Call 1 returns clean XML, Call 2 returns no tags — should still work."""
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
 
-    mock_acompletion.return_value = _fake_completion_response(
-        "Rewritten line one\nRewritten line two"
-    )
+    mock_acompletion.side_effect = [
+        _fake_completion_response(
+            "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
+            "<original>\nOriginal line one\nOriginal line two\n</original>"
+        ),
+        _fake_completion_response(
+            "Rewritten line one\nRewritten line two"
+        ),
+    ]
 
     resp = client.post("/api/rewrite", json={
         "profile_id": profile["id"],
@@ -90,7 +107,6 @@ def test_rewrite_no_changes_separator(mock_acompletion, client):
     assert resp.status_code == 200
     data = resp.json()
     assert "Rewritten line" in data["rewritten_lyrics"]
-    # Falls back to raw input as original when no delimiters present
     assert "Original line one" in data["original_lyrics"]
     assert data["changes_summary"] == "No change summary provided by the model."
 
@@ -106,7 +122,7 @@ def test_rewrite_profile_not_found(client):
 
 @patch("app.services.llm_service.acompletion")
 def test_rewrite_llm_error(mock_acompletion, client):
-    """LLM throwing an exception should return 502."""
+    """LLM throwing an exception on Call 1 should return 502."""
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
     mock_acompletion.side_effect = RuntimeError("API rate limit exceeded")
 
@@ -299,7 +315,7 @@ def test_list_provider_models_failure(mock_list_models, client):
 
 @patch("app.services.llm_service.acompletion")
 def test_rewrite_passes_api_base(mock_acompletion, client):
-    """When a ProfileModel has api_base set, rewrite should pass it to acompletion."""
+    """When a ProfileModel has api_base set, both calls should pass it to acompletion."""
     profile = client.post("/api/profiles", json={
         "name": "Local LLM User",
         "description": "Testing local LLM",
@@ -312,11 +328,16 @@ def test_rewrite_passes_api_base(mock_acompletion, client):
         "api_base": "http://localhost:11434",
     })
 
-    mock_acompletion.return_value = _fake_completion_response(
-        "---ORIGINAL---\nHello world\n"
-        "---REWRITTEN---\nHi there world\n"
-        "---CHANGES---\nChanged hello"
-    )
+    mock_acompletion.side_effect = [
+        _fake_completion_response(
+            "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
+            "<original>\nHello world\n</original>"
+        ),
+        _fake_completion_response(
+            "<lyrics>\nHi there world\n</lyrics>\n"
+            "<changes>\nChanged hello\n</changes>"
+        ),
+    ]
 
     resp = client.post("/api/rewrite", json={
         "profile_id": profile["id"],
@@ -326,24 +347,29 @@ def test_rewrite_passes_api_base(mock_acompletion, client):
     })
     assert resp.status_code == 200
 
-    mock_acompletion.assert_called_once()
-    call_kwargs = mock_acompletion.call_args.kwargs
-    assert call_kwargs.get("api_base") == "http://localhost:11434"
+    assert mock_acompletion.call_count == 2
+    for call in mock_acompletion.call_args_list:
+        assert call.kwargs.get("api_base") == "http://localhost:11434"
 
 
 @patch("app.services.llm_service.acompletion")
 def test_rewrite_no_api_base_when_no_profile_model(mock_acompletion, client):
-    """When no ProfileModel exists, api_base should not be passed to acompletion."""
+    """When no ProfileModel exists, api_base should not be passed to either call."""
     profile = client.post("/api/profiles", json={
         "name": "Cloud User",
         "description": "Uses cloud API",
     }).json()
 
-    mock_acompletion.return_value = _fake_completion_response(
-        "---ORIGINAL---\nHello world\n"
-        "---REWRITTEN---\nHi there world\n"
-        "---CHANGES---\nChanged hello"
-    )
+    mock_acompletion.side_effect = [
+        _fake_completion_response(
+            "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
+            "<original>\nHello world\n</original>"
+        ),
+        _fake_completion_response(
+            "<lyrics>\nHi there world\n</lyrics>\n"
+            "<changes>\nChanged hello\n</changes>"
+        ),
+    ]
 
     resp = client.post("/api/rewrite", json={
         "profile_id": profile["id"],
@@ -352,9 +378,9 @@ def test_rewrite_no_api_base_when_no_profile_model(mock_acompletion, client):
     })
     assert resp.status_code == 200
 
-    mock_acompletion.assert_called_once()
-    call_kwargs = mock_acompletion.call_args.kwargs
-    assert "api_base" not in call_kwargs
+    assert mock_acompletion.call_count == 2
+    for call in mock_acompletion.call_args_list:
+        assert "api_base" not in call.kwargs
 
 
 @patch("app.services.llm_service.alist_models")
@@ -371,3 +397,37 @@ def test_list_models_with_api_base(mock_list_models, client):
     mock_list_models.assert_called_once()
     call_kwargs = mock_list_models.call_args.kwargs
     assert call_kwargs.get("api_base") == "http://localhost:11434"
+
+
+@patch("app.services.llm_service.acompletion")
+def test_rewrite_realigns_chords(mock_acompletion, client):
+    """Chords from the original should be realigned above the rewritten lyrics."""
+    profile = client.post("/api/profiles", json={
+        "name": "Test",
+        "description": "Test singer",
+    }).json()
+
+    mock_acompletion.side_effect = [
+        _fake_completion_response(
+            "<meta>\nTitle: Test\nArtist: Test\n</meta>\n"
+            "<original>\nG   Am\nHello world\nDm  G\nGoodbye moon\n</original>"
+        ),
+        _fake_completion_response(
+            "<lyrics>\nHi there world\nSee ya moon\n</lyrics>\n"
+            "<changes>\nChanged greetings\n</changes>"
+        ),
+    ]
+
+    resp = client.post("/api/rewrite", json={
+        "profile_id": profile["id"],
+        "lyrics": "G   Am\nHello world\nDm  G\nGoodbye moon",
+        **LLM_SETTINGS,
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    # The rewritten lyrics should contain chord lines (from realign_chords)
+    lines = data["rewritten_lyrics"].split("\n")
+    # Should have chord lines above lyric lines
+    assert any("G" in line and "Am" not in line.lower().replace("am", "") or "Am" in line for line in lines)
+    assert "Hi there world" in data["rewritten_lyrics"]
+    assert "See ya moon" in data["rewritten_lyrics"]

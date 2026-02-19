@@ -267,9 +267,11 @@ function LLMProvidersTab({ provider, model, savedModels, onSave, onAddModel, onR
 interface ProfileSubTabProps {
   profile: Profile | null;
   onSave: (data: { name: string; description: string | null; is_default: boolean }) => Promise<Profile>;
+  reasoningEffort: string;
+  onChangeReasoningEffort: (value: string) => void;
 }
 
-function ProfileSubTab({ profile, onSave }: ProfileSubTabProps) {
+function ProfileSubTab({ profile, onSave, reasoningEffort, onChangeReasoningEffort }: ProfileSubTabProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState('');
@@ -333,6 +335,18 @@ function ProfileSubTab({ profile, onSave }: ProfileSubTabProps) {
           </form>
         </CardContent>
       </Card>
+
+      <Card className="mt-6">
+        <CardContent className="pt-6">
+          <h3 className="text-sm font-semibold mb-3">Default Reasoning Effort</h3>
+          <p className="text-sm text-muted-foreground mb-3">Controls how much effort the LLM spends thinking before responding. Higher effort may produce better results but takes longer.</p>
+          <Select value={reasoningEffort} onChange={(e: ChangeEvent<HTMLSelectElement>) => onChangeReasoningEffort(e.target.value)}>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </Select>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -356,9 +370,11 @@ interface SettingsPageProps {
   onSaveProfile: (data: { name: string; description: string | null; is_default: boolean }) => Promise<Profile>;
   activeTab: string;
   onChangeTab: (tab: string) => void;
+  reasoningEffort: string;
+  onChangeReasoningEffort: (value: string) => void;
 }
 
-export default function SettingsPage({ provider, model, savedModels, onSave, onAddModel, onRemoveModel, connections, onAddConnection, onRemoveConnection, profile, onSaveProfile, activeTab, onChangeTab }: SettingsPageProps) {
+export default function SettingsPage({ provider, model, savedModels, onSave, onAddModel, onRemoveModel, connections, onAddConnection, onRemoveConnection, profile, onSaveProfile, activeTab, onChangeTab, reasoningEffort, onChangeReasoningEffort }: SettingsPageProps) {
   return (
     <div>
       <div className="flex border-b border-border mb-4">
@@ -379,7 +395,7 @@ export default function SettingsPage({ provider, model, savedModels, onSave, onA
       </div>
 
       {activeTab === 'profile' && (
-        <ProfileSubTab profile={profile} onSave={onSaveProfile} />
+        <ProfileSubTab profile={profile} onSave={onSaveProfile} reasoningEffort={reasoningEffort} onChangeReasoningEffort={onChangeReasoningEffort} />
       )}
 
       {activeTab === 'providers' && (

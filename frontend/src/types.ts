@@ -131,4 +131,5 @@ export interface ChatHistoryRow {
 export interface StreamCallbacks {
   onToken?: (token: string) => void;
   onThinking?: () => void;
+  onPhase?: (phase: string) => void;
 }

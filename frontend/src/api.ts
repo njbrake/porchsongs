@@ -62,7 +62,7 @@ async function login(password: string): Promise<LoginResponse> {
  * Stream a rewrite via SSE. Calls onToken(text) for each chunk,
  * returns the final parsed result object.
  */
-async function rewriteStream(data: Record<string, unknown>, { onToken, onThinking }: StreamCallbacks = {}): Promise<RewriteResult> {
+async function rewriteStream(data: Record<string, unknown>, { onToken, onThinking, onPhase }: StreamCallbacks = {}): Promise<RewriteResult> {
   const url = `${BASE}/rewrite?stream=true`;
   const res = await fetch(url, {
     method: 'POST',
@@ -95,9 +95,11 @@ async function rewriteStream(data: Record<string, unknown>, { onToken, onThinkin
 
     for (const line of lines) {
       if (!line.startsWith('data: ')) continue;
-      const payload = JSON.parse(line.slice(6)) as { done?: boolean; result?: RewriteResult; token?: string; thinking?: boolean };
+      const payload = JSON.parse(line.slice(6)) as { done?: boolean; result?: RewriteResult; token?: string; thinking?: boolean; phase?: string };
       if (payload.done) {
         finalResult = payload.result!;
+      } else if (payload.phase && onPhase) {
+        onPhase(payload.phase);
       } else if (payload.thinking && onThinking) {
         onThinking();
       } else if (payload.token && onToken) {
@@ -108,9 +110,11 @@ async function rewriteStream(data: Record<string, unknown>, { onToken, onThinkin
 
   // Process any remaining data in buffer
   if (buffer.startsWith('data: ')) {
-    const payload = JSON.parse(buffer.slice(6)) as { done?: boolean; result?: RewriteResult; token?: string; thinking?: boolean };
+    const payload = JSON.parse(buffer.slice(6)) as { done?: boolean; result?: RewriteResult; token?: string; thinking?: boolean; phase?: string };
     if (payload.done) {
       finalResult = payload.result!;
+    } else if (payload.phase && onPhase) {
+      onPhase(payload.phase);
     } else if (payload.thinking && onThinking) {
       onThinking();
     } else if (payload.token && onToken) {

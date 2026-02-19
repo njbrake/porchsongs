@@ -71,53 +71,6 @@ def extract_lyrics_only(text: str) -> str:
     return "\n".join(lyrics_lines)
 
 
-def inline_to_above_line(text: str) -> str:
-    """Convert [G]inline [Am]chord format to above-line format."""
-    lines = text.split("\n")
-    result = []
-    chord_re = re.compile(r"\[([A-G][#b]?[^\]]*)\]")
-
-    for line in lines:
-        if "[" not in line:
-            result.append(line)
-            continue
-
-        chord_line = []
-        lyric_line = []
-        pos = 0
-
-        for match in chord_re.finditer(line):
-            start = match.start()
-            chord = match.group(1)
-
-            # Add any text before this chord
-            between = line[pos:start]
-            between_clean = chord_re.sub("", between)
-            lyric_line.append(between_clean)
-
-            # Pad chord line to current position
-            current_lyric_len = sum(len(s) for s in lyric_line)
-            while len("".join(chord_line)) < current_lyric_len:
-                chord_line.append(" ")
-            chord_line.append(chord)
-
-            pos = match.end()
-
-        # Remaining text after last chord
-        remaining = line[pos:]
-        remaining_clean = chord_re.sub("", remaining)
-        lyric_line.append(remaining_clean)
-
-        chord_str = "".join(chord_line)
-        lyric_str = "".join(lyric_line)
-
-        if chord_str.strip():
-            result.append(chord_str)
-        result.append(lyric_str)
-
-    return "\n".join(result)
-
-
 def realign_chords(original_text: str, rewritten_lyrics: str) -> str:
     """Realign chords from the original text above the rewritten lyrics.
 

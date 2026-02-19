@@ -66,6 +66,7 @@ export default function RewriteTab({
   const [mobilePane, setMobilePane] = useState<'chat' | 'lyrics'>('chat');
   const [streamingText, setStreamingText] = useState('');
   const [thinking, setThinking] = useState(false);
+  const [phase, setPhase] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [completedStatus, setCompletedStatus] = useState<'saving' | 'completed' | null>(null);
   const [songTitle, setSongTitle] = useState('');
@@ -104,6 +105,7 @@ export default function RewriteTab({
     setLoading(true);
     setError(null);
     setStreamingText('');
+    setPhase('');
     onNewRewrite(null, null);
 
     const preview = trimmedLyrics.length > 300
@@ -126,6 +128,7 @@ export default function RewriteTab({
       let accumulated = '';
       setThinking(false);
       const result = await api.rewriteStream(reqData, {
+        onPhase: (p) => setPhase(p),
         onThinking: () => setThinking(true),
         onToken: (token) => {
           setThinking(false);
@@ -167,6 +170,7 @@ export default function RewriteTab({
       setError((err as Error).message);
       setStreamingText('');
       setThinking(false);
+      setPhase('');
     } finally {
       setLoading(false);
     }
@@ -177,6 +181,7 @@ export default function RewriteTab({
     setLyrics('');
     setInstruction('');
     setStreamingText('');
+    setPhase('');
     setCompletedStatus(null);
     setError(null);
     setSongTitle('');
@@ -497,14 +502,19 @@ export default function RewriteTab({
                     <Card className="flex flex-col flex-1 overflow-hidden">
                       <CardHeader>Your Version</CardHeader>
                       <pre className="p-3 sm:p-4 font-[family-name:var(--font-mono)] text-xs sm:text-[0.82rem] leading-relaxed whitespace-pre-wrap break-words flex-1 overflow-y-auto">{(() => {
-                        const match = streamingText.match(/<rewritten>\s*([\s\S]*?)(?:<\/rewritten>|$)/);
+                        const match = streamingText.match(/<lyrics>\s*([\s\S]*?)(?:<\/lyrics>|$)/);
                         return match ? match[1]!.trimStart() : streamingText;
                       })()}</pre>
                     </Card>
                   ) : (
                     <Card className="flex flex-col flex-1 items-center justify-center text-muted-foreground gap-3">
                       <div className="size-8 border-3 border-border border-t-primary rounded-full animate-spin" aria-hidden="true" />
-                      <span className="text-sm">{thinking ? 'Thinking...' : 'Rewriting lyrics...'}</span>
+                      <span className="text-sm">{
+                        phase === 'cleaning' ? 'Cleaning up...' :
+                        phase === 'rewriting' ? 'Rewriting lyrics...' :
+                        thinking ? 'Thinking...' :
+                        'Starting...'
+                      }</span>
                     </Card>
                   )}
                 </div>

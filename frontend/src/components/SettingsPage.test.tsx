@@ -17,6 +17,8 @@ const defaults = {
   onSaveProfile: vi.fn(),
   activeTab: 'profile',
   onChangeTab: vi.fn(),
+  reasoningEffort: 'high',
+  onChangeReasoningEffort: vi.fn(),
 };
 
 describe('SettingsPage – Profile sub-tab', () => {

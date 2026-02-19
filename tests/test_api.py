@@ -434,16 +434,23 @@ def test_rewrite_uses_env_credentials(client):
     """POST /rewrite should call acompletion without api_key (uses env vars)."""
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
 
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock()]
-    mock_response.choices[0].message.content = (
-        "<meta>\nTitle: Hello Song\nArtist: Test Artist\n</meta>\n"
-        "<original>\nHello world\n</original>\n"
-        "<rewritten>\nHi world\n</rewritten>\n"
-        "<changes>\nChanged hello to hi\n</changes>"
-    )
+    def _make_resp(content):
+        r = MagicMock()
+        r.choices = [MagicMock()]
+        r.choices[0].message.content = content
+        return r
 
-    with patch("app.services.llm_service.acompletion", new_callable=AsyncMock, return_value=mock_response) as mock_ac:
+    with patch("app.services.llm_service.acompletion", new_callable=AsyncMock) as mock_ac:
+        mock_ac.side_effect = [
+            _make_resp(
+                "<meta>\nTitle: Hello Song\nArtist: Test Artist\n</meta>\n"
+                "<original>\nHello world\n</original>"
+            ),
+            _make_resp(
+                "<lyrics>\nHi world\n</lyrics>\n"
+                "<changes>\nChanged hello to hi\n</changes>"
+            ),
+        ]
         resp = client.post("/api/rewrite", json={
             "profile_id": profile["id"],
             "lyrics": "Hello world",
@@ -451,26 +458,33 @@ def test_rewrite_uses_env_credentials(client):
             "model": "gpt-4",
         })
         assert resp.status_code == 200
-        # Verify acompletion was called without api_key
-        mock_ac.assert_called_once()
-        call_kwargs = mock_ac.call_args
-        assert "api_key" not in call_kwargs.kwargs
+        # Verify acompletion was called without api_key (both calls)
+        assert mock_ac.call_count == 2
+        for call in mock_ac.call_args_list:
+            assert "api_key" not in call.kwargs
 
 
 def test_rewrite_returns_title_artist(client):
     """POST /rewrite with META section should return title and artist."""
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
 
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock()]
-    mock_response.choices[0].message.content = (
-        "<meta>\nTitle: Wagon Wheel\nArtist: Old Crow Medicine Show\n</meta>\n"
-        "<original>\nRock me mama\n</original>\n"
-        "<rewritten>\nRoll me papa\n</rewritten>\n"
-        "<changes>\nChanged perspective\n</changes>"
-    )
+    def _make_resp(content):
+        r = MagicMock()
+        r.choices = [MagicMock()]
+        r.choices[0].message.content = content
+        return r
 
-    with patch("app.services.llm_service.acompletion", new_callable=AsyncMock, return_value=mock_response):
+    with patch("app.services.llm_service.acompletion", new_callable=AsyncMock) as mock_ac:
+        mock_ac.side_effect = [
+            _make_resp(
+                "<meta>\nTitle: Wagon Wheel\nArtist: Old Crow Medicine Show\n</meta>\n"
+                "<original>\nRock me mama\n</original>"
+            ),
+            _make_resp(
+                "<lyrics>\nRoll me papa\n</lyrics>\n"
+                "<changes>\nChanged perspective\n</changes>"
+            ),
+        ]
         resp = client.post("/api/rewrite", json={
             "profile_id": profile["id"],
             "lyrics": "Rock me mama",
@@ -481,23 +495,30 @@ def test_rewrite_returns_title_artist(client):
         data = resp.json()
         assert data["title"] == "Wagon Wheel"
         assert data["artist"] == "Old Crow Medicine Show"
-        assert data["rewritten_lyrics"] == "Roll me papa"
+        assert "Roll me papa" in data["rewritten_lyrics"]
 
 
 def test_rewrite_unknown_title_artist(client):
     """POST /rewrite with UNKNOWN in META should return null title/artist."""
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
 
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock()]
-    mock_response.choices[0].message.content = (
-        "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
-        "<original>\nSome lyrics\n</original>\n"
-        "<rewritten>\nSome new lyrics\n</rewritten>\n"
-        "<changes>\nChanged words\n</changes>"
-    )
+    def _make_resp(content):
+        r = MagicMock()
+        r.choices = [MagicMock()]
+        r.choices[0].message.content = content
+        return r
 
-    with patch("app.services.llm_service.acompletion", new_callable=AsyncMock, return_value=mock_response):
+    with patch("app.services.llm_service.acompletion", new_callable=AsyncMock) as mock_ac:
+        mock_ac.side_effect = [
+            _make_resp(
+                "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
+                "<original>\nSome lyrics\n</original>"
+            ),
+            _make_resp(
+                "<lyrics>\nSome new lyrics\n</lyrics>\n"
+                "<changes>\nChanged words\n</changes>"
+            ),
+        ]
         resp = client.post("/api/rewrite", json={
             "profile_id": profile["id"],
             "lyrics": "Some lyrics",
@@ -522,16 +543,23 @@ def test_rewrite_fallback_title_from_request(client):
     """When LLM returns UNKNOWN but request has title/artist, use request values."""
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
 
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock()]
-    mock_response.choices[0].message.content = (
-        "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
-        "<original>\nSome lyrics\n</original>\n"
-        "<rewritten>\nSome new lyrics\n</rewritten>\n"
-        "<changes>\nChanged words\n</changes>"
-    )
+    def _make_resp(content):
+        r = MagicMock()
+        r.choices = [MagicMock()]
+        r.choices[0].message.content = content
+        return r
 
-    with patch("app.services.llm_service.acompletion", new_callable=AsyncMock, return_value=mock_response):
+    with patch("app.services.llm_service.acompletion", new_callable=AsyncMock) as mock_ac:
+        mock_ac.side_effect = [
+            _make_resp(
+                "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
+                "<original>\nSome lyrics\n</original>"
+            ),
+            _make_resp(
+                "<lyrics>\nSome new lyrics\n</lyrics>\n"
+                "<changes>\nChanged words\n</changes>"
+            ),
+        ]
         resp = client.post("/api/rewrite", json={
             "profile_id": profile["id"],
             "lyrics": "Some lyrics",

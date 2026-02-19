@@ -321,6 +321,8 @@ export default function App() {
             onSaveProfile={handleSaveProfile}
             activeTab={settingsTab}
             onChangeTab={(sub) => setTab('settings', sub)}
+            reasoningEffort={reasoningEffort}
+            onChangeReasoningEffort={setReasoningEffort}
           />
         )}
       </main>

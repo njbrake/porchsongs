@@ -15,6 +15,7 @@ import {
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import useAutoFontSize from '@/hooks/useAutoFontSize';
 import type { Song, SongRevision } from '@/types';
 
 /**
@@ -59,9 +60,11 @@ function splitLyricsForColumns(text: string): { left: string; right: string } | 
   };
 }
 
+const PRE_BASE_CLASS = 'font-[family-name:var(--font-mono)] text-[0.75rem] sm:text-[0.82rem] leading-snug whitespace-pre-wrap break-words sm:whitespace-pre sm:break-normal sm:overflow-x-auto text-foreground';
+
 function PerformanceLyrics({ text }: { text: string }) {
   const columns = useMemo(() => splitLyricsForColumns(text), [text]);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const [autoOneCol, setAutoOneCol] = useState(false);
   const [userOverride, setUserOverride] = useState<number | null>(null);
 
@@ -70,18 +73,21 @@ function PerformanceLyrics({ text }: { text: string }) {
     setUserOverride(null);
   }, [text]);
 
+  const canSplit = columns !== null;
+  const showTwoCol = canSplit && (userOverride === 2 || (userOverride === null && !autoOneCol));
+
   useLayoutEffect(() => {
-    if (columns && !autoOneCol && userOverride === null && containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
+    if (columns && !autoOneCol && userOverride === null && cardRef.current) {
+      const rect = cardRef.current.getBoundingClientRect();
       const available = window.innerHeight - rect.top - 40;
-      if (containerRef.current.scrollHeight > available * 1.5) {
+      if (cardRef.current.scrollHeight > available * 1.5) {
         setAutoOneCol(true);
       }
     }
   }, [columns, autoOneCol, userOverride]);
 
-  const canSplit = columns !== null;
-  const showTwoCol = canSplit && (userOverride === 2 || (userOverride === null && !autoOneCol));
+  const fontSize = useAutoFontSize(cardRef, text, { columnOverhead: showTwoCol ? 33 : 0 });
+  const fontStyle = fontSize !== undefined ? { fontSize: `${fontSize}px` } : undefined;
 
   const toggle = canSplit ? (
     <Button
@@ -94,23 +100,21 @@ function PerformanceLyrics({ text }: { text: string }) {
     </Button>
   ) : null;
 
-  if (!showTwoCol) {
-    return (
-      <div className="relative">
-        {toggle}
-        <Card className="p-4 sm:p-6">
-          <pre className="font-[family-name:var(--font-mono)] text-[0.75rem] sm:text-[0.82rem] leading-snug whitespace-pre-wrap break-words sm:whitespace-pre sm:break-normal sm:overflow-x-auto text-foreground">{text}</pre>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="relative">
       {toggle}
-      <Card ref={containerRef} className="p-4 sm:p-6 xl:grid xl:grid-cols-2 xl:gap-6">
-        <pre className="font-[family-name:var(--font-mono)] text-[0.75rem] sm:text-[0.82rem] leading-snug whitespace-pre-wrap break-words sm:whitespace-pre sm:break-normal sm:overflow-x-auto text-foreground min-w-0 xl:border-r xl:border-border xl:pr-8">{columns!.left}</pre>
-        <pre className="font-[family-name:var(--font-mono)] text-[0.75rem] sm:text-[0.82rem] leading-snug whitespace-pre-wrap break-words sm:whitespace-pre sm:break-normal sm:overflow-x-auto text-foreground min-w-0">{columns!.right}</pre>
+      <Card
+        ref={cardRef}
+        className={cn('p-4 sm:p-6', showTwoCol && 'xl:grid xl:grid-cols-2 xl:gap-6')}
+      >
+        {showTwoCol ? (
+          <>
+            <pre className={cn(PRE_BASE_CLASS, 'min-w-0 xl:border-r xl:border-border xl:pr-8')} style={fontStyle}>{columns!.left}</pre>
+            <pre className={cn(PRE_BASE_CLASS, 'min-w-0')} style={fontStyle}>{columns!.right}</pre>
+          </>
+        ) : (
+          <pre className={PRE_BASE_CLASS} style={fontStyle}>{text}</pre>
+        )}
       </Card>
     </div>
   );

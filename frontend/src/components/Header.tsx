@@ -1,3 +1,5 @@
+import useWakeLock from '@/hooks/useWakeLock';
+
 interface HeaderProps {
   onHomeClick: () => void;
   authActive: boolean;
@@ -5,6 +7,8 @@ interface HeaderProps {
 }
 
 export default function Header({ onHomeClick, authActive, onLogout }: HeaderProps) {
+  const wakeLock = useWakeLock();
+
   return (
     <header className="flex justify-between items-center px-3 sm:px-8 py-1 sm:py-1.5 bg-linear-to-br from-header-bg-from to-header-bg-to text-header-text shadow-md">
       <div className="flex items-baseline gap-0 min-w-0">
@@ -18,16 +22,29 @@ export default function Header({ onHomeClick, authActive, onLogout }: HeaderProp
         </a>
         <span className="text-sm opacity-70 ml-4 hidden md:inline">Make every song yours</span>
       </div>
-      {authActive && (
-        <div className="flex items-center shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
+        {wakeLock.supported && (
+          <button
+            className={`border text-xs px-2 sm:px-3 py-1.5 rounded-full cursor-pointer transition-colors ${
+              wakeLock.active
+                ? 'bg-white/25 border-white/40 text-header-text'
+                : 'bg-white/15 border-white/25 text-header-text opacity-70 hover:opacity-100'
+            } hover:bg-white/25`}
+            onClick={wakeLock.toggle}
+            title={wakeLock.active ? 'Screen staying awake — click to disable' : 'Keep screen awake while viewing lyrics'}
+          >
+            Stay Awake
+          </button>
+        )}
+        {authActive && (
           <button
             className="bg-white/15 border border-white/25 text-header-text text-xs px-2 sm:px-3 py-1.5 rounded-full cursor-pointer hover:bg-white/25 transition-colors"
             onClick={onLogout}
           >
             Log out
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </header>
   );
 }

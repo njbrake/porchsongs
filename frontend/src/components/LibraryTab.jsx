@@ -77,7 +77,7 @@ function PerformanceLyrics({ text }) {
         setAutoOneCol(true);
       }
     }
-  });
+  }, [columns, autoOneCol, userOverride]);
 
   const canSplit = columns !== null;
   const showTwoCol = canSplit && (userOverride === 2 || (userOverride === null && !autoOneCol));

@@ -4,7 +4,7 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
-from any_llm import AnyLLM, LLMProvider, acompletion, alist_models
+from any_llm import LLMProvider, acompletion, alist_models
 
 from .chord_parser import extract_lyrics_only
 

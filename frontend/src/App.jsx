@@ -198,11 +198,11 @@ export default function App() {
     setRewriteMeta(meta);
     setChatMessages([]);
     setCurrentSongId(null);
-  }, []);
+  }, [setCurrentSongId]);
 
   const handleSongSaved = useCallback((songId) => {
     setCurrentSongId(songId);
-  }, []);
+  }, [setCurrentSongId]);
 
   const handleLyricsUpdated = useCallback((newLyrics) => {
     setRewriteResult(prev => prev ? { ...prev, rewritten_lyrics: newLyrics } : prev);
@@ -236,7 +236,7 @@ export default function App() {
     } catch {
       setChatMessages([]);
     }
-  }, [setTab]);
+  }, [setTab, setCurrentSongId]);
 
   const handleLogout = useCallback(() => {
     localStorage.removeItem('porchsongs_app_secret');

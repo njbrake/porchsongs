@@ -35,7 +35,7 @@ function ChatMessage({ msg }) {
   );
 }
 
-export default function ChatPanel({ songId, messages, setMessages, llmSettings, originalLyrics, onLyricsUpdated, initialLoading }) {
+export default function ChatPanel({ songId, messages, setMessages, llmSettings, originalLyrics: _originalLyrics, onLyricsUpdated, initialLoading }) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef(null);

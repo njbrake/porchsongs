@@ -70,6 +70,17 @@ Tests use in-memory SQLite with `StaticPool` + `check_same_thread=False` (requir
 
 LLM-dependent endpoints are tested by mocking `acompletion` and `alist_models` with `AsyncMock` — patch target is `app.services.llm_service.acompletion`. The mock returns a `MagicMock` shaped like a `ChatCompletion` response (`.choices[0].message.content`).
 
+## Definition of Done
+
+Every feature or change must pass all lint and test checks before being considered complete:
+
+```bash
+uv run ruff check backend/                    # backend lint
+cd frontend && npx eslint .                   # frontend lint
+cd /workspace/PorchSongs && uv run pytest     # backend tests (107)
+cd frontend && npx vitest run                 # frontend tests (36)
+```
+
 ## Key Constraints
 
 - **Ruff rules**: `E, F, I, UP, B, SIM, ANN, RUF` with `B008` ignored (FastAPI `Depends()` pattern). All backend code requires type annotations.

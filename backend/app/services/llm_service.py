@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 from typing import TYPE_CHECKING
 
 from any_llm import LLMProvider, acompletion, alist_models
@@ -12,11 +11,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Iterator
 
     from any_llm.types.completion import ChatCompletion, ChatCompletionChunk
-    from sqlalchemy.orm import Session
 
     from ..models import Song
-
-logger = logging.getLogger(__name__)
 
 
 def _get_content(response: ChatCompletion | Iterator[ChatCompletionChunk]) -> str:
@@ -75,11 +71,6 @@ You suggest alternatives that:
 3. Sound natural when sung
 4. Fit the emotional tone of the song"""
 
-EXTRACTION_SYSTEM_PROMPT = """You extract substitution patterns from song rewrites.
-Given original and rewritten lyrics, identify recurring substitution patterns
-the user has applied (e.g., changing vehicle types, locations, activities).
-Return ONLY valid JSON."""
-
 CHAT_SYSTEM_PROMPT = """You are a songwriter's assistant having a conversation about adapting song lyrics.
 The user will ask you to make specific changes to the lyrics. Apply the requested changes while:
 1. Preserving syllable counts per line
@@ -89,9 +80,9 @@ The user will ask you to make specific changes to the lyrics. Apply the requeste
 
 Return your response in this exact format:
 
----LYRICS---
+<lyrics>
 (the complete updated lyrics, every line, preserving blank lines and structure)
----END---
+</lyrics>
 
 (A friendly explanation of what you changed and why)"""
 
@@ -101,11 +92,6 @@ _LOCAL_PROVIDERS = {"ollama", "llamafile", "llamacpp", "lmstudio", "vllm"}
 def get_configured_providers() -> list[dict[str, object]]:
     """Return all known providers. Actual validation happens when listing models."""
     return [{"name": p.value, "local": p.value in _LOCAL_PROVIDERS} for p in LLMProvider]
-
-
-def get_providers() -> list[str]:
-    """Return list of all available provider names."""
-    return [p.value for p in LLMProvider]
 
 
 async def get_models(provider: str, api_base: str | None = None) -> list[str]:
@@ -122,42 +108,14 @@ def build_user_prompt(
     title: str | None,
     artist: str | None,
     lyrics: str,
-    patterns: list[dict[str, str | None]] | None = None,
-    example: dict[str, str] | None = None,
     instruction: str | None = None,
 ) -> str:
-    """Build the user prompt for the LLM, including learned patterns and example."""
+    """Build the user prompt for the LLM."""
     prompt_parts = []
 
     if profile_description.strip():
         prompt_parts.append("ABOUT THE SINGER:")
         prompt_parts.append(profile_description.strip())
-        prompt_parts.append("")
-
-    # Add learned substitution patterns
-    if patterns:
-        prompt_parts.append("YOUR LEARNED SUBSTITUTION PREFERENCES (from past songs):")
-        for p in patterns:
-            line = f"- {p['original']} -> {p['replacement']}"
-            if p.get("category"):
-                line += f" ({p['category']}"
-                if p.get("reasoning"):
-                    line += f": {p['reasoning']}"
-                line += ")"
-            prompt_parts.append(line)
-        prompt_parts.append("")
-
-    # Add recent completed song example
-    if example:
-        prompt_parts.append("EXAMPLE OF A PREVIOUS REWRITE:")
-        prompt_parts.append("Original:")
-        # Truncate to keep within token budget
-        orig_lines = example["original_lyrics"].split("\n")[:30]
-        prompt_parts.append("\n".join(orig_lines))
-        prompt_parts.append("")
-        prompt_parts.append("Rewritten:")
-        rewrite_lines = example["rewritten_lyrics"].split("\n")[:30]
-        prompt_parts.append("\n".join(rewrite_lines))
         prompt_parts.append("")
 
     song_label = ""
@@ -211,10 +169,10 @@ def build_workshop_prompt(
     current_line = rewrite_lines[line_index]
 
     # Get context: 3 lines above and below
-    start = max(0, line_index - 3)
-    end = min(len(rewrite_lines), line_index + 4)
+    ctx_start = max(0, line_index - 3)
+    ctx_end = min(len(rewrite_lines), line_index + 4)
     context_lines = []
-    for i in range(start, end):
+    for i in range(ctx_start, ctx_end):
         marker = " >>> " if i == line_index else "     "
         context_lines.append(f"{marker}{rewrite_lines[i]}")
 
@@ -252,19 +210,17 @@ async def rewrite_lyrics(
     lyrics_with_chords: str,
     provider: str,
     model: str,
-    patterns: list[dict[str, str | None]] | None = None,
-    example: dict[str, str] | None = None,
     instruction: str | None = None,
     api_base: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> dict[str, str | None]:
     """Rewrite lyrics using the configured LLM.
 
     Sends raw pasted input to the LLM which handles cleanup and chord formatting.
     Returns dict with: original_lyrics, rewritten_lyrics, changes_summary, title, artist
     """
-    # Build prompt with patterns, example, and instruction — send raw text
     user_prompt = build_user_prompt(
-        profile_description, title, artist, lyrics_with_chords, patterns, example, instruction
+        profile_description, title, artist, lyrics_with_chords, instruction
     )
 
     # Call the LLM via any-llm-sdk (uses env-var credentials automatically)
@@ -278,6 +234,8 @@ async def rewrite_lyrics(
     }
     if api_base:
         kwargs["api_base"] = api_base
+    if reasoning_effort:
+        kwargs["reasoning_effort"] = reasoning_effort
     response = await acompletion(**kwargs)
 
     raw_response = _get_content(response)
@@ -293,14 +251,13 @@ async def rewrite_lyrics_stream(
     lyrics_with_chords: str,
     provider: str,
     model: str,
-    patterns: list[dict[str, str | None]] | None = None,
-    example: dict[str, str] | None = None,
     instruction: str | None = None,
     api_base: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> AsyncIterator[str]:
     """Stream a rewrite as SSE events: token chunks then a final done payload."""
     user_prompt = build_user_prompt(
-        profile_description, title, artist, lyrics_with_chords, patterns, example, instruction
+        profile_description, title, artist, lyrics_with_chords, instruction
     )
 
     kwargs: dict[str, object] = {
@@ -314,16 +271,22 @@ async def rewrite_lyrics_stream(
     }
     if api_base:
         kwargs["api_base"] = api_base
+    if reasoning_effort:
+        kwargs["reasoning_effort"] = reasoning_effort
 
     response = await acompletion(**kwargs)
 
     accumulated = ""
+    thinking_started = False
     async for chunk in response:  # type: ignore[union-attr]
         delta = chunk.choices[0].delta  # type: ignore[union-attr]
         token = delta.content if delta and delta.content else ""
         if token:
             accumulated += token
             yield f"data: {json.dumps({'token': token})}\n\n"
+        elif not thinking_started and hasattr(delta, "reasoning") and delta.reasoning:
+            thinking_started = True
+            yield f"data: {json.dumps({'thinking': True})}\n\n"
 
     # Parse accumulated text into structured result
     result = _parse_rewrite_response(accumulated, lyrics_with_chords)
@@ -414,6 +377,25 @@ def _parse_rewrite_response(raw: str, fallback_original: str) -> dict[str, str |
     }
 
 
+def _parse_alternatives(raw_response: str) -> list[dict[str, str]]:
+    """Parse numbered alternatives from LLM response."""
+    alternatives: list[dict[str, str]] = []
+    for line in raw_response.strip().split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        for prefix in ("1.", "2.", "3."):
+            if line.startswith(prefix):
+                content = line[len(prefix) :].strip()
+                if "|" in content:
+                    text, reasoning = content.split("|", 1)
+                    alternatives.append({"text": text.strip(), "reasoning": reasoning.strip()})
+                else:
+                    alternatives.append({"text": content, "reasoning": ""})
+                break
+    return alternatives
+
+
 async def workshop_line(
     original_lyrics: str,
     rewritten_lyrics: str,
@@ -422,8 +404,9 @@ async def workshop_line(
     provider: str,
     model: str,
     api_base: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> dict[str, object]:
-    """Get 3 alternative versions of a specific lyric line."""
+    """Get 3 alternative versions of a single lyric line."""
     # Work with lyrics-only (no chords) for the LLM
     orig_lyrics_only = extract_lyrics_only(original_lyrics)
     rewrite_lyrics_only = extract_lyrics_only(rewritten_lyrics)
@@ -442,36 +425,12 @@ async def workshop_line(
     }
     if api_base:
         kwargs["api_base"] = api_base
+    if reasoning_effort:
+        kwargs["reasoning_effort"] = reasoning_effort
     response = await acompletion(**kwargs)
 
     raw_response = _get_content(response)
-
-    # Parse the numbered alternatives
-    alternatives = []
-    for line in raw_response.strip().split("\n"):
-        line = line.strip()
-        if not line:
-            continue
-        # Match lines starting with 1., 2., 3.
-        for prefix in ("1.", "2.", "3."):
-            if line.startswith(prefix):
-                content = line[len(prefix) :].strip()
-                if "|" in content:
-                    text, reasoning = content.split("|", 1)
-                    alternatives.append(
-                        {
-                            "text": text.strip(),
-                            "reasoning": reasoning.strip(),
-                        }
-                    )
-                else:
-                    alternatives.append(
-                        {
-                            "text": content,
-                            "reasoning": "",
-                        }
-                    )
-                break
+    alternatives = _parse_alternatives(raw_response)
 
     # Ensure we return at least something
     if not alternatives:
@@ -480,25 +439,35 @@ async def workshop_line(
     orig_lines = orig_lyrics_only.split("\n")
     rewrite_lines = rewrite_lyrics_only.split("\n")
 
+    original_line = orig_lines[line_index] if line_index < len(orig_lines) else ""
+    current_line = rewrite_lines[line_index] if line_index < len(rewrite_lines) else ""
+
     return {
-        "original_line": orig_lines[line_index] if line_index < len(orig_lines) else "",
-        "current_line": rewrite_lines[line_index] if line_index < len(rewrite_lines) else "",
+        "original_line": original_line,
+        "current_line": current_line,
         "alternatives": alternatives[:3],
     }
 
 
 def _parse_chat_response(raw: str) -> dict[str, str]:
     """Parse chat LLM response, extracting lyrics between markers and explanation."""
+    # Prefer XML tags
+    xml_lyrics = _extract_xml_section(raw, "lyrics")
+    if xml_lyrics is not None:
+        # Everything after </lyrics> is the explanation
+        after = raw.split("</lyrics>", 1)
+        explanation = after[1].strip() if len(after) > 1 else ""
+        return {"lyrics": xml_lyrics, "explanation": explanation}
+
+    # Legacy delimiter fallback
     if "---LYRICS---" in raw and "---END---" in raw:
         before_end = raw.split("---END---", 1)
         lyrics_block = before_end[0].split("---LYRICS---", 1)[1].strip()
         explanation = before_end[1].strip() if len(before_end) > 1 else ""
-    else:
-        # Fallback: treat entire response as lyrics
-        lyrics_block = raw.strip()
-        explanation = ""
+        return {"lyrics": lyrics_block, "explanation": explanation}
 
-    return {"lyrics": lyrics_block, "explanation": explanation}
+    # Fallback: treat entire response as lyrics
+    return {"lyrics": raw.strip(), "explanation": ""}
 
 
 async def chat_edit_lyrics(
@@ -508,6 +477,7 @@ async def chat_edit_lyrics(
     provider: str,
     model: str,
     api_base: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> dict[str, str]:
     """Process a chat-based lyric edit.
 
@@ -531,6 +501,8 @@ async def chat_edit_lyrics(
     }
     if api_base:
         kwargs["api_base"] = api_base
+    if reasoning_effort:
+        kwargs["reasoning_effort"] = reasoning_effort
     response = await acompletion(**kwargs)
 
     raw_response = _get_content(response)
@@ -544,92 +516,3 @@ async def chat_edit_lyrics(
         "assistant_message": raw_response,
         "changes_summary": changes_summary,
     }
-
-
-async def extract_patterns(
-    song: Song,
-    db: Session,
-    provider: str,
-    model: str,
-    api_base: str | None = None,
-) -> list[dict[str, str]]:
-    """Extract substitution patterns from a completed song and save them.
-
-    Called when a song is marked as 'completed'. Uses env-var credentials.
-    """
-    from ..models import SubstitutionPattern
-
-    orig_lyrics = extract_lyrics_only(song.original_lyrics)
-    rewrite_lyrics = extract_lyrics_only(song.rewritten_lyrics)
-
-    user_prompt = f"""Compare these original and rewritten lyrics. Extract substitution patterns.
-
-ORIGINAL:
-{orig_lyrics}
-
-REWRITTEN:
-{rewrite_lyrics}
-
-Return a JSON array of objects with these fields:
-- "original_term": the original word/phrase
-- "replacement_term": what it was changed to
-- "category": one of "vehicle", "location", "activity", "person", "food", "drink", "place", "animal", "clothing", "other"
-- "reasoning": brief explanation of why this substitution makes sense
-
-Example: [{{"original_term": "F-150", "replacement_term": "Subaru", "category": "vehicle", "reasoning": "user drives a Subaru Outback"}}]
-
-Return ONLY the JSON array, no other text."""
-
-    kwargs: dict[str, object] = {
-        "model": model,
-        "provider": provider,
-        "messages": [
-            {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
-    }
-    if api_base:
-        kwargs["api_base"] = api_base
-    response = await acompletion(**kwargs)
-
-    raw = _get_content(response).strip()
-
-    # Parse JSON — handle potential markdown code blocks
-    if raw.startswith("```"):
-        lines = raw.split("\n")
-        raw = "\n".join(lines[1:-1])
-
-    try:
-        pattern_data = json.loads(raw)
-    except json.JSONDecodeError:
-        logger.warning("Failed to parse pattern extraction response as JSON")
-        return []
-
-    if not isinstance(pattern_data, list):
-        return []
-
-    saved = []
-    for p in pattern_data:
-        if not isinstance(p, dict):
-            continue
-        original = p.get("original_term", "").strip()
-        replacement = p.get("replacement_term", "").strip()
-        if not original or not replacement:
-            continue
-
-        pattern = SubstitutionPattern(
-            profile_id=song.profile_id,
-            song_id=song.id,
-            original_term=original,
-            replacement_term=replacement,
-            category=p.get("category", "other"),
-            reasoning=p.get("reasoning", ""),
-        )
-        db.add(pattern)
-        saved.append(p)
-
-    if saved:
-        db.commit()
-        logger.info(f"Extracted {len(saved)} substitution patterns from song {song.id}")
-
-    return saved

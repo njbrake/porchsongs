@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Toaster } from 'sonner';
 import api from '@/api';
 import useLocalStorage from '@/hooks/useLocalStorage';
 import useProviderConnections from '@/hooks/useProviderConnections';
@@ -111,6 +112,7 @@ export default function App() {
   // LLM settings (persisted in localStorage)
   const [provider, setProvider] = useLocalStorage('porchsongs_provider', '');
   const [model, setModel] = useLocalStorage('porchsongs_model', '');
+  const [reasoningEffort, setReasoningEffort] = useLocalStorage('porchsongs_reasoning_effort', 'high');
 
   // Provider connections and saved models for current profile
   const { connections, addConnection, removeConnection } = useProviderConnections(profile?.id);
@@ -139,7 +141,7 @@ export default function App() {
     }
   }, []);
 
-  const llmSettings = { provider, model };
+  const llmSettings = { provider, model, reasoning_effort: reasoningEffort };
 
   // Load profile on mount (only when ready)
   useEffect(() => {
@@ -245,7 +247,12 @@ export default function App() {
   }, []);
 
   if (authState === 'loading') {
-    return null;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-3 text-muted-foreground">
+        <div className="size-8 border-3 border-border border-t-primary rounded-full animate-spin" aria-hidden="true" />
+        <span className="text-sm">Loading...</span>
+      </div>
+    );
   }
 
   if (authState === 'login') {
@@ -275,8 +282,10 @@ export default function App() {
             onLyricsUpdated={handleLyricsUpdated}
             onChangeProvider={setProvider}
             onChangeModel={setModel}
+            reasoningEffort={reasoningEffort}
+            onChangeReasoningEffort={setReasoningEffort}
             savedModels={savedModels}
-            onOpenSettings={() => setTab('settings', 'providers')}
+            onOpenSettings={() => setTab('settings', 'profile')}
           />
         )}
         {activeTab === 'library' && (
@@ -315,6 +324,7 @@ export default function App() {
           />
         )}
       </main>
+      <Toaster position="bottom-right" richColors />
     </>
   );
 }

@@ -7,7 +7,7 @@ describe('ChatPanel', () => {
     songId: 1,
     messages: [] as ChatMessage[],
     setMessages: vi.fn(),
-    llmSettings: { provider: 'openai', model: 'gpt-4o' },
+    llmSettings: { provider: 'openai', model: 'gpt-4o', reasoning_effort: 'high' },
     originalLyrics: 'Some lyrics',
     onLyricsUpdated: vi.fn(),
     initialLoading: false,

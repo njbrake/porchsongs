@@ -1,4 +1,3 @@
-import contextlib
 import json
 from typing import Any
 
@@ -9,11 +8,8 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import (
     ChatMessage,
-    ProfileModel,
-    ProviderConnection,
     Song,
     SongRevision,
-    SubstitutionPattern,
 )
 from ..schemas import (
     ApplyEditRequest,
@@ -25,7 +21,6 @@ from ..schemas import (
     SongRevisionOut,
     SongStatusUpdate,
     SongUpdate,
-    SubstitutionPatternOut,
 )
 from ..services.chord_parser import replace_line_with_chords
 
@@ -132,9 +127,8 @@ def delete_song(song_id: int, db: Session = Depends(get_db)) -> dict[str, bool]:
     song = db.query(Song).filter(Song.id == song_id).first()
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
-    # Delete related revisions, patterns, and chat messages
+    # Delete related revisions and chat messages
     db.query(SongRevision).filter(SongRevision.song_id == song_id).delete()
-    db.query(SubstitutionPattern).filter(SubstitutionPattern.song_id == song_id).delete()
     db.query(ChatMessage).filter(ChatMessage.song_id == song_id).delete()
     db.delete(song)
     db.commit()
@@ -187,7 +181,7 @@ def save_messages(
 
 
 @router.put("/songs/{song_id}/status", response_model=SongOut)
-async def update_song_status(
+def update_song_status(
     song_id: int,
     data: SongStatusUpdate,
     db: Session = Depends(get_db),
@@ -202,41 +196,6 @@ async def update_song_status(
     song.status = data.status
     db.commit()
     db.refresh(song)
-
-    # If marked as completed, extract substitution patterns using song's stored LLM settings
-    if data.status == "completed" and song.llm_provider and song.llm_model:
-        from ..services import llm_service
-
-        # Look up api_base: prefer ProviderConnection, fall back to ProfileModel
-        conn = (
-            db.query(ProviderConnection)
-            .filter(
-                ProviderConnection.profile_id == song.profile_id,
-                ProviderConnection.provider == song.llm_provider,
-            )
-            .first()
-        )
-        api_base = conn.api_base if conn and conn.api_base else None
-        if not api_base:
-            pm = (
-                db.query(ProfileModel)
-                .filter(
-                    ProfileModel.profile_id == song.profile_id,
-                    ProfileModel.provider == song.llm_provider,
-                    ProfileModel.model == song.llm_model,
-                )
-                .first()
-            )
-            api_base = pm.api_base if pm and pm.api_base else None
-
-        with contextlib.suppress(Exception):
-            await llm_service.extract_patterns(
-                song,
-                db,
-                song.llm_provider,
-                song.llm_model,
-                api_base=api_base,
-            )
 
     return song
 
@@ -261,11 +220,12 @@ def apply_edit(data: ApplyEditRequest, db: Session = Depends(get_db)) -> dict[st
     song.current_version = new_version
 
     # Save revision
+    summary = f"Line {data.line_index + 1} edited"
     revision = SongRevision(
         song_id=song.id,
         version=new_version,
         rewritten_lyrics=new_full_text,
-        changes_summary=f"Line {data.line_index + 1} edited",
+        changes_summary=summary,
         edit_type="line",
         edit_context=json.dumps(
             {
@@ -279,11 +239,3 @@ def apply_edit(data: ApplyEditRequest, db: Session = Depends(get_db)) -> dict[st
     db.refresh(song)
 
     return {"rewritten_lyrics": song.rewritten_lyrics, "version": new_version}
-
-
-@router.get("/patterns", response_model=list[SubstitutionPatternOut])
-def list_patterns(profile_id: int | None = None, db: Session = Depends(get_db)) -> list[Any]:
-    query = db.query(SubstitutionPattern)
-    if profile_id is not None:
-        query = query.filter(SubstitutionPattern.profile_id == profile_id)
-    return query.order_by(SubstitutionPattern.created_at.desc()).all()

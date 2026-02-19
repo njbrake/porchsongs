@@ -3,6 +3,7 @@ import api from '@/api';
 import ComparisonView from '@/components/ComparisonView';
 import ChatPanel from '@/components/ChatPanel';
 import ModelSelector from '@/components/ModelSelector';
+import ConfirmDialog from '@/components/ui/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -22,6 +23,8 @@ interface RewriteTabProps {
   onLyricsUpdated: (lyrics: string) => void;
   onChangeProvider: (provider: string) => void;
   onChangeModel: (model: string) => void;
+  reasoningEffort: string;
+  onChangeReasoningEffort: (value: string) => void;
   savedModels: SavedModel[];
   onOpenSettings: () => void;
 }
@@ -39,6 +42,8 @@ export default function RewriteTab({
   onLyricsUpdated,
   onChangeProvider,
   onChangeModel,
+  reasoningEffort,
+  onChangeReasoningEffort,
   savedModels,
   onOpenSettings,
 }: RewriteTabProps) {
@@ -60,10 +65,12 @@ export default function RewriteTab({
   const [loading, setLoading] = useState(false);
   const [mobilePane, setMobilePane] = useState<'chat' | 'lyrics'>('chat');
   const [streamingText, setStreamingText] = useState('');
+  const [thinking, setThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [completedStatus, setCompletedStatus] = useState<'saving' | 'completed' | null>(null);
   const [songTitle, setSongTitle] = useState('');
   const [songArtist, setSongArtist] = useState('');
+  const [scrapDialogOpen, setScrapDialogOpen] = useState(false);
 
   useEffect(() => {
     if (rewriteMeta) {
@@ -78,6 +85,17 @@ export default function RewriteTab({
 
   const needsProfile = !profile?.id;
   const canRewrite = !needsProfile && llmSettings.provider && llmSettings.model && !loading && lyrics.trim().length > 0;
+
+  const rewriteBlocker = needsProfile
+    ? 'Create a profile first'
+    : !llmSettings.provider || !llmSettings.model
+      ? 'Select a model'
+      : lyrics.trim().length === 0
+        ? 'Paste some lyrics above'
+        : null;
+
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
+  const shortcutHint = `${isMac ? '\u2318' : 'Ctrl'}+Enter to rewrite`;
 
   const handleRewrite = async () => {
     const trimmedLyrics = lyrics.trim();
@@ -106,8 +124,11 @@ export default function RewriteTab({
       };
 
       let accumulated = '';
+      setThinking(false);
       const result = await api.rewriteStream(reqData, {
+        onThinking: () => setThinking(true),
         onToken: (token) => {
+          setThinking(false);
           accumulated += token;
           setStreamingText(accumulated);
         },
@@ -145,6 +166,7 @@ export default function RewriteTab({
     } catch (err) {
       setError((err as Error).message);
       setStreamingText('');
+      setThinking(false);
     } finally {
       setLoading(false);
     }
@@ -215,7 +237,11 @@ export default function RewriteTab({
     <div>
       {needsProfile && (
         <Alert variant="warning" className="mb-4">
-          <span>Create a profile in the <strong>Profile</strong> tab to get started.</span>
+          <span>
+            Create a profile in the{' '}
+            <Button variant="link-inline" onClick={onOpenSettings}>Profile tab</Button>
+            {' '}to get started.
+          </span>
         </Alert>
       )}
 
@@ -233,14 +259,29 @@ export default function RewriteTab({
 
       {!rewriteResult && !loading && (
         <>
-          <ModelSelector
-            provider={llmSettings.provider}
-            model={llmSettings.model}
-            savedModels={savedModels}
-            onChangeProvider={onChangeProvider}
-            onChangeModel={onChangeModel}
-            onOpenSettings={onOpenSettings}
-          />
+          <div className="flex items-end gap-3 flex-wrap">
+            <ModelSelector
+              provider={llmSettings.provider}
+              model={llmSettings.model}
+              savedModels={savedModels}
+              onChangeProvider={onChangeProvider}
+              onChangeModel={onChangeModel}
+              onOpenSettings={onOpenSettings}
+            />
+            <div className="flex flex-col gap-1 mb-2">
+              <label className="text-xs text-muted-foreground" htmlFor="reasoning-effort">Effort</label>
+              <select
+                id="reasoning-effort"
+                className="h-9 rounded-md border border-border bg-card px-2 text-sm text-foreground"
+                value={reasoningEffort}
+                onChange={e => onChangeReasoningEffort(e.target.value)}
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+          </div>
 
           <Card>
             <CardContent className="pt-6">
@@ -249,6 +290,12 @@ export default function RewriteTab({
                 value={lyrics}
                 onChange={e => setLyrics(e.target.value)}
                 placeholder="Paste lyrics, chords, or a copy from a tab site — any format works"
+                onKeyDown={e => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canRewrite) {
+                    e.preventDefault();
+                    handleRewrite();
+                  }
+                }}
               />
 
               <Textarea
@@ -257,11 +304,22 @@ export default function RewriteTab({
                 value={instruction}
                 onChange={e => setInstruction(e.target.value)}
                 placeholder="Optional: e.g., 'change truck references to cycling, keep the fatherhood theme'"
+                onKeyDown={e => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canRewrite) {
+                    e.preventDefault();
+                    handleRewrite();
+                  }
+                }}
               />
 
-              <Button className="mt-3" onClick={handleRewrite} disabled={!canRewrite}>
-                Rewrite
-              </Button>
+              <div className="flex items-center gap-3 mt-3">
+                <Button onClick={handleRewrite} disabled={!canRewrite}>
+                  Rewrite
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {rewriteBlocker ?? shortcutHint}
+                </span>
+              </div>
             </CardContent>
           </Card>
         </>
@@ -287,16 +345,31 @@ export default function RewriteTab({
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-2 items-stretch h-[calc(100vh-11rem)] md:h-[calc(100vh-7rem)]">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-2 items-stretch h-[calc(100vh-11rem)] md:h-[calc(100vh-7rem)] transition-all duration-300">
                 <div className={`flex-col min-h-0 ${mobilePane === 'chat' ? 'flex' : 'hidden'} md:flex`}>
-                  <ModelSelector
-                    provider={llmSettings.provider}
-                    model={llmSettings.model}
-                    savedModels={savedModels}
-                    onChangeProvider={onChangeProvider}
-                    onChangeModel={onChangeModel}
-                    onOpenSettings={onOpenSettings}
-                  />
+                  <div className="flex items-end gap-3 flex-wrap">
+                    <ModelSelector
+                      provider={llmSettings.provider}
+                      model={llmSettings.model}
+                      savedModels={savedModels}
+                      onChangeProvider={onChangeProvider}
+                      onChangeModel={onChangeModel}
+                      onOpenSettings={onOpenSettings}
+                    />
+                    <div className="flex flex-col gap-1 mb-2">
+                      <label className="text-xs text-muted-foreground" htmlFor="reasoning-effort-active">Effort</label>
+                      <select
+                        id="reasoning-effort-active"
+                        className="h-9 rounded-md border border-border bg-card px-2 text-sm text-foreground"
+                        value={reasoningEffort}
+                        onChange={e => onChangeReasoningEffort(e.target.value)}
+                      >
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                      </select>
+                    </div>
+                  </div>
 
                   <div className="flex gap-2 mb-2 flex-wrap">
                     <Button variant="secondary" onClick={handleNewSong}>
@@ -312,7 +385,7 @@ export default function RewriteTab({
                     </Button>
                     <Button
                       variant="danger-outline"
-                      onClick={handleScrap}
+                      onClick={() => setScrapDialogOpen(true)}
                       disabled={!currentSongId}
                     >
                       Scrap This
@@ -339,6 +412,7 @@ export default function RewriteTab({
                       onChange={e => handleTitleChange(e.target.value)}
                       onBlur={handleMetaBlur}
                       placeholder="Song title"
+                      aria-label="Song title"
                     />
                     <input
                       className="text-base border-0 border-b border-dashed border-border bg-transparent py-0.5 text-muted-foreground w-full focus:outline-none focus:border-primary placeholder:text-muted-foreground"
@@ -347,6 +421,7 @@ export default function RewriteTab({
                       onChange={e => handleArtistChange(e.target.value)}
                       onBlur={handleMetaBlur}
                       placeholder="Artist"
+                      aria-label="Artist"
                     />
                   </div>
 
@@ -379,8 +454,33 @@ export default function RewriteTab({
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-2 items-stretch h-[calc(100vh-11rem)] md:h-[calc(100vh-7rem)]">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-2 items-stretch h-[calc(100vh-11rem)] md:h-[calc(100vh-7rem)] transition-all duration-300">
                 <div className={`flex-col min-h-0 ${mobilePane === 'chat' ? 'flex' : 'hidden'} md:flex`}>
+                  <div className="flex items-end gap-3 flex-wrap opacity-50 pointer-events-none">
+                    <ModelSelector
+                      provider={llmSettings.provider}
+                      model={llmSettings.model}
+                      savedModels={savedModels}
+                      onChangeProvider={onChangeProvider}
+                      onChangeModel={onChangeModel}
+                      onOpenSettings={onOpenSettings}
+                    />
+                    <div className="flex flex-col gap-1 mb-2">
+                      <label className="text-xs text-muted-foreground" htmlFor="reasoning-effort-loading">Effort</label>
+                      <select
+                        id="reasoning-effort-loading"
+                        className="h-9 rounded-md border border-border bg-card px-2 text-sm text-foreground"
+                        value={reasoningEffort}
+                        disabled
+                        onChange={e => onChangeReasoningEffort(e.target.value)}
+                      >
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                      </select>
+                    </div>
+                  </div>
+
                   <ChatPanel
                     songId={currentSongId}
                     messages={chatMessages}
@@ -393,13 +493,18 @@ export default function RewriteTab({
                 </div>
 
                 <div className={`flex-col min-h-0 overflow-hidden ${mobilePane === 'lyrics' ? 'flex' : 'hidden'} md:flex`}>
-                  {streamingText && (
+                  {streamingText ? (
                     <Card className="flex flex-col flex-1 overflow-hidden">
                       <CardHeader>Your Version</CardHeader>
                       <pre className="p-3 sm:p-4 font-[family-name:var(--font-mono)] text-xs sm:text-[0.82rem] leading-relaxed whitespace-pre-wrap break-words flex-1 overflow-y-auto">{(() => {
                         const match = streamingText.match(/<rewritten>\s*([\s\S]*?)(?:<\/rewritten>|$)/);
                         return match ? match[1]!.trimStart() : streamingText;
                       })()}</pre>
+                    </Card>
+                  ) : (
+                    <Card className="flex flex-col flex-1 items-center justify-center text-muted-foreground gap-3">
+                      <div className="size-8 border-3 border-border border-t-primary rounded-full animate-spin" aria-hidden="true" />
+                      <span className="text-sm">{thinking ? 'Thinking...' : 'Rewriting lyrics...'}</span>
                     </Card>
                   )}
                 </div>
@@ -408,6 +513,16 @@ export default function RewriteTab({
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={scrapDialogOpen}
+        onOpenChange={setScrapDialogOpen}
+        title="Scrap This Song"
+        description="Are you sure you want to scrap this song? The draft will be permanently deleted."
+        confirmLabel="Scrap"
+        variant="destructive"
+        onConfirm={handleScrap}
+      />
     </div>
   );
 }

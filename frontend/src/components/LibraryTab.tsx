@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, type DragEvent } from 'react';
+import { toast } from 'sonner';
 import api from '@/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +15,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
+import ConfirmDialog from '@/components/ui/confirm-dialog';
+import PromptDialog, { type PromptField } from '@/components/ui/prompt-dialog';
 import { cn } from '@/lib/utils';
 import useAutoFontSize from '@/hooks/useAutoFontSize';
 import type { Song, SongRevision } from '@/types';
@@ -178,16 +181,10 @@ interface SongMenuProps {
   onReopen: (song: Song) => void;
   folders: string[];
   onMoveToFolder: (song: Song, folder: string) => void;
+  onMoveToNewFolder: (song: Song) => void;
 }
 
-function SongMenu({ song, onDelete, onRename, onEdit, onReopen, folders, onMoveToFolder }: SongMenuProps) {
-  const handleNewFolder = () => {
-    const name = prompt('Move to new folder:');
-    if (name && name.trim()) {
-      onMoveToFolder(song, name.trim());
-    }
-  };
-
+function SongMenu({ song, onDelete, onRename, onEdit, onReopen, folders, onMoveToFolder, onMoveToNewFolder }: SongMenuProps) {
   const otherFolders = folders.filter(f => f !== song.folder);
 
   return (
@@ -217,7 +214,7 @@ function SongMenu({ song, onDelete, onRename, onEdit, onReopen, folders, onMoveT
             Move to {f}
           </DropdownMenuItem>
         ))}
-        <DropdownMenuItem onClick={handleNewFolder}>
+        <DropdownMenuItem onClick={() => onMoveToNewFolder(song)}>
           Move to new folder&hellip;
         </DropdownMenuItem>
         {song.folder && (
@@ -233,6 +230,16 @@ function SongMenu({ song, onDelete, onRename, onEdit, onReopen, folders, onMoveT
     </DropdownMenu>
   );
 }
+
+type SortKey = 'date' | 'title' | 'artist' | 'status';
+type SortDir = 'asc' | 'desc';
+
+type DialogState =
+  | { kind: 'none' }
+  | { kind: 'delete'; songId: number }
+  | { kind: 'bulkDelete'; count: number }
+  | { kind: 'rename'; song: Song }
+  | { kind: 'newFolder'; song?: Song };
 
 interface LibraryTabProps {
   onLoadSong: (song: Song) => void;
@@ -253,6 +260,9 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
   const [localFolders, setLocalFolders] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const selectMode = selectedIds.size > 0;
+  const [sortKey, setSortKey] = useState<SortKey>('date');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [dialogState, setDialogState] = useState<DialogState>({ kind: 'none' });
 
   useEffect(() => {
     api.listSongs().then(data => {
@@ -285,6 +295,29 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
     }
     return result;
   }, [songs, searchQuery, activeFolder]);
+
+  const sortedSongs = useMemo(() => {
+    const sorted = [...filteredSongs].sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case 'title':
+          cmp = (a.title || '').localeCompare(b.title || '');
+          break;
+        case 'artist':
+          cmp = (a.artist || '').localeCompare(b.artist || '');
+          break;
+        case 'status':
+          cmp = (a.status || '').localeCompare(b.status || '');
+          break;
+        case 'date':
+        default:
+          cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          break;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return sorted;
+  }, [filteredSongs, sortKey, sortDir]);
 
   useEffect(() => {
     if (initialSongId != null && loaded) {
@@ -336,12 +369,15 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
       setSongs(prev => prev.map(s => s.id === song.id ? updated : s));
       onLoadSong(updated);
     } catch (err) {
-      alert('Failed to reopen: ' + (err as Error).message);
+      toast.error('Failed to reopen: ' + (err as Error).message);
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this saved song?')) return;
+  const handleDeleteRequest = (id: number) => {
+    setDialogState({ kind: 'delete', songId: id });
+  };
+
+  const handleDeleteConfirmed = async (id: number) => {
     try {
       await api.deleteSong(id);
       setSongs(prev => prev.filter(s => s.id !== id));
@@ -350,7 +386,7 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
         pushSongUrl(null);
       }
     } catch (err) {
-      alert('Failed to delete: ' + (err as Error).message);
+      toast.error('Failed to delete: ' + (err as Error).message);
     }
   };
 
@@ -359,20 +395,22 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
     if (viewingSong?.id === updated.id) setViewingSong(updated);
   };
 
-  const handleRename = async (song: Song) => {
-    const newTitle = prompt('Song title:', song.title || '');
-    if (newTitle === null) return;
-    const newArtist = prompt('Artist:', song.artist || '');
-    if (newArtist === null) return;
+  const handleRenameRequest = (song: Song) => {
+    setDialogState({ kind: 'rename', song });
+  };
+
+  const handleRenameConfirmed = async (song: Song, values: Record<string, string>) => {
     try {
       const updates: Record<string, string | null> = {};
-      if (newTitle.trim() !== (song.title || '')) updates.title = newTitle.trim() || null;
-      if (newArtist.trim() !== (song.artist || '')) updates.artist = newArtist.trim() || null;
+      const newTitle = (values.title ?? '').trim();
+      const newArtist = (values.artist ?? '').trim();
+      if (newTitle !== (song.title || '')) updates.title = newTitle || null;
+      if (newArtist !== (song.artist || '')) updates.artist = newArtist || null;
       if (Object.keys(updates).length === 0) return;
       const updated = await api.updateSong(song.id, updates as Partial<Song>);
       handleSongUpdated(updated);
     } catch (err) {
-      alert('Failed to rename: ' + (err as Error).message);
+      toast.error('Failed to rename: ' + (err as Error).message);
     }
   };
 
@@ -381,8 +419,12 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
       const updated = await api.updateSong(song.id, { folder: folderName } as Partial<Song>);
       handleSongUpdated(updated);
     } catch (err) {
-      alert('Failed to move song: ' + (err as Error).message);
+      toast.error('Failed to move song: ' + (err as Error).message);
     }
+  };
+
+  const handleMoveToNewFolder = (song: Song) => {
+    setDialogState({ kind: 'newFolder', song });
   };
 
   const handleDragStart = (e: DragEvent, songId: number) => {
@@ -417,12 +459,14 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
   };
 
   const handleCreateFolder = () => {
-    const name = prompt('New folder name:');
-    if (!name || !name.trim()) return;
-    const trimmed = name.trim();
-    if (draggingSongId) {
-      const song = songs.find(s => s.id === draggingSongId);
-      if (song) handleMoveToFolder(song, trimmed);
+    setDialogState({ kind: 'newFolder', song: draggingSongId ? songs.find(s => s.id === draggingSongId) : undefined });
+  };
+
+  const handleNewFolderConfirmed = (values: Record<string, string>, song?: Song) => {
+    const trimmed = (values.name ?? '').trim();
+    if (!trimmed) return;
+    if (song) {
+      handleMoveToFolder(song, trimmed);
     } else {
       setLocalFolders(prev => prev.includes(trimmed) ? prev : [...prev, trimmed]);
     }
@@ -446,9 +490,11 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
     setSelectedIds(new Set());
   };
 
-  const handleBulkDelete = async () => {
-    const count = selectedIds.size;
-    if (!confirm(`Delete ${count} selected song${count > 1 ? 's' : ''}?`)) return;
+  const handleBulkDeleteRequest = () => {
+    setDialogState({ kind: 'bulkDelete', count: selectedIds.size });
+  };
+
+  const handleBulkDeleteConfirmed = async () => {
     try {
       await Promise.all([...selectedIds].map(id => api.deleteSong(id)));
       setSongs(prev => prev.filter(s => !selectedIds.has(s.id)));
@@ -458,7 +504,7 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
       }
       setSelectedIds(new Set());
     } catch (err) {
-      alert('Failed to delete some songs: ' + (err as Error).message);
+      toast.error('Failed to delete some songs: ' + (err as Error).message);
     }
   };
 
@@ -473,9 +519,33 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
       }));
       setSelectedIds(new Set());
     } catch (err) {
-      alert('Failed to move some songs: ' + (err as Error).message);
+      toast.error('Failed to move some songs: ' + (err as Error).message);
     }
   };
+
+  const handleDownloadPdf = (song: Song) => {
+    toast.promise(
+      api.downloadSongPdf(song.id, song.title, song.artist),
+      {
+        loading: 'Generating PDF...',
+        success: 'PDF downloaded',
+        error: 'Failed to download PDF',
+      }
+    );
+  };
+
+  // Rename dialog fields
+  const renameFields: PromptField[] = useMemo(() => {
+    if (dialogState.kind !== 'rename') return [];
+    return [
+      { key: 'title', label: 'Song title', defaultValue: dialogState.song.title || '', placeholder: 'Song title' },
+      { key: 'artist', label: 'Artist', defaultValue: dialogState.song.artist || '', placeholder: 'Artist' },
+    ];
+  }, [dialogState]);
+
+  const newFolderFields: PromptField[] = useMemo(() => [
+    { key: 'name', label: 'Folder name', placeholder: 'Enter folder name' },
+  ], []);
 
   // --- Performance View (single song) ---
   if (viewingSong) {
@@ -485,13 +555,13 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
         <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center mb-3 gap-3">
           <Button variant="secondary" onClick={handleBack}>&larr; All Songs</Button>
           <div className="flex gap-2 justify-end flex-wrap">
-            <Button variant="secondary" onClick={() => api.downloadSongPdf(song.id, song.title, song.artist)}>Download PDF</Button>
+            <Button variant="secondary" onClick={() => handleDownloadPdf(song)}>Download PDF</Button>
             {song.status === 'completed' ? (
               <Button variant="secondary" onClick={() => handleReopen(song)}>Reopen for Editing</Button>
             ) : (
               <Button variant="secondary" onClick={() => onLoadSong(song)}>Edit in Rewrite</Button>
             )}
-            <Button variant="danger" onClick={() => handleDelete(song.id)}>Delete</Button>
+            <Button variant="danger" onClick={() => handleDeleteRequest(song.id)}>Delete</Button>
           </div>
         </div>
 
@@ -538,12 +608,34 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
             </div>
           </div>
         )}
+
+        <ConfirmDialog
+          open={dialogState.kind === 'delete'}
+          onOpenChange={(open) => { if (!open) setDialogState({ kind: 'none' }); }}
+          title="Delete Song"
+          description="Are you sure you want to delete this song? This action cannot be undone."
+          confirmLabel="Delete"
+          variant="destructive"
+          onConfirm={() => {
+            if (dialogState.kind === 'delete') handleDeleteConfirmed(dialogState.songId);
+          }}
+        />
+      </div>
+    );
+  }
+
+  // --- Loading ---
+  if (!loaded) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+        <div className="size-8 border-3 border-border border-t-primary rounded-full animate-spin" aria-hidden="true" />
+        <span className="text-sm">Loading songs...</span>
       </div>
     );
   }
 
   // --- Song List ---
-  if (loaded && songs.length === 0) {
+  if (songs.length === 0) {
     return (
       <div className="text-center py-16 px-8 text-muted-foreground">
         <p>No saved songs yet. Rewrite a song and save it!</p>
@@ -557,12 +649,32 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
-        <Input
-          placeholder="Search songs by title or artist..."
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          className="bg-card"
-        />
+        <div className="flex gap-2">
+          <Input
+            placeholder="Search songs by title or artist..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="bg-card flex-1"
+          />
+          <Select
+            className="w-auto py-2 px-2 text-xs"
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as SortKey)}
+          >
+            <option value="date">Date</option>
+            <option value="title">Title</option>
+            <option value="artist">Artist</option>
+            <option value="status">Status</option>
+          </Select>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+            title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
+          >
+            {sortDir === 'asc' ? '\u2191' : '\u2193'}
+          </Button>
+        </div>
         <div className="flex flex-wrap gap-1.5 items-center overflow-x-auto">
           {hasFolders && (
             <button
@@ -614,10 +726,8 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
               e.preventDefault();
               const songId = parseInt(e.dataTransfer.getData('text/plain'), 10);
               if (!songId) return;
-              const name = prompt('New folder name:');
-              if (!name || !name.trim()) return;
               const song = songs.find(s => s.id === songId);
-              if (song) handleMoveToFolder(song, name.trim());
+              if (song) setDialogState({ kind: 'newFolder', song });
             }}
             title="Create new folder"
           >
@@ -645,12 +755,12 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
               <option value="__remove__">Remove from folder</option>
             </Select>
           )}
-          <Button variant="danger" size="sm" onClick={handleBulkDelete}>Delete Selected</Button>
+          <Button variant="danger" size="sm" onClick={handleBulkDeleteRequest}>Delete Selected</Button>
         </div>
       )}
 
       <div className="flex flex-col gap-3">
-        {filteredSongs.map(song => {
+        {sortedSongs.map(song => {
           const date = new Date(song.created_at).toLocaleDateString();
           const artist = song.artist ? ` by ${song.artist}` : '';
           const isSelected = selectedIds.has(song.id);
@@ -699,19 +809,20 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
                 <div className="flex gap-2" onClick={e => e.stopPropagation()}>
                   <SongMenu
                     song={song}
-                    onDelete={handleDelete}
-                    onRename={handleRename}
+                    onDelete={handleDeleteRequest}
+                    onRename={handleRenameRequest}
                     onEdit={onLoadSong}
                     onReopen={handleReopen}
                     folders={folders}
                     onMoveToFolder={handleMoveToFolder}
+                    onMoveToNewFolder={handleMoveToNewFolder}
                   />
                 </div>
               </div>
             </Card>
           );
         })}
-        {filteredSongs.length === 0 && loaded && songs.length > 0 && (
+        {sortedSongs.length === 0 && songs.length > 0 && (
           <div className="text-center py-16 px-8 text-muted-foreground">
             {activeFolder && !searchQuery ? (
               <p>No songs in this folder yet. Use the &hellip; menu on a song to move it here, or drag songs onto the folder tab.</p>
@@ -721,6 +832,50 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={dialogState.kind === 'delete'}
+        onOpenChange={(open) => { if (!open) setDialogState({ kind: 'none' }); }}
+        title="Delete Song"
+        description="Are you sure you want to delete this song? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          if (dialogState.kind === 'delete') handleDeleteConfirmed(dialogState.songId);
+        }}
+      />
+
+      <ConfirmDialog
+        open={dialogState.kind === 'bulkDelete'}
+        onOpenChange={(open) => { if (!open) setDialogState({ kind: 'none' }); }}
+        title="Delete Songs"
+        description={dialogState.kind === 'bulkDelete' ? `Are you sure you want to delete ${dialogState.count} selected song${dialogState.count > 1 ? 's' : ''}? This action cannot be undone.` : ''}
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={handleBulkDeleteConfirmed}
+      />
+
+      <PromptDialog
+        open={dialogState.kind === 'rename'}
+        onOpenChange={(open) => { if (!open) setDialogState({ kind: 'none' }); }}
+        title="Rename Song"
+        fields={renameFields}
+        confirmLabel="Save"
+        onConfirm={(values) => {
+          if (dialogState.kind === 'rename') handleRenameConfirmed(dialogState.song, values);
+        }}
+      />
+
+      <PromptDialog
+        open={dialogState.kind === 'newFolder'}
+        onOpenChange={(open) => { if (!open) setDialogState({ kind: 'none' }); }}
+        title="New Folder"
+        fields={newFolderFields}
+        confirmLabel="Create"
+        onConfirm={(values) => {
+          handleNewFolderConfirmed(values, dialogState.kind === 'newFolder' ? dialogState.song : undefined);
+        }}
+      />
     </div>
   );
 }

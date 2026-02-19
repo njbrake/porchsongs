@@ -217,6 +217,7 @@ def test_apply_edit(client):
     assert data["version"] == 2
 
 
+
 def test_apply_edit_invalid_line(client):
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
     song = client.post("/api/songs", json={

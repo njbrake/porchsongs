@@ -250,41 +250,40 @@ def _snap_to_boundary(text: str, pos: int) -> int:
     return right
 
 
-def replace_line_with_chords(full_text: str, lyrics_line_index: int, new_line_text: str) -> str:
-    """Replace the Nth lyrics line in a chord-annotated text, re-placing chords.
+def replace_line_with_chords(
+    full_text: str,
+    lyrics_line_index: int,
+    new_line_text: str,
+) -> str:
+    """Replace a single lyrics line in a chord-annotated text, re-placing chords.
 
     Args:
         full_text: Full text with chord lines above lyric lines.
         lyrics_line_index: Zero-based index into lyrics-only lines.
-        new_line_text: Replacement text for that lyrics line.
+        new_line_text: Replacement text for the line.
 
     Returns:
         Full text with the line replaced and chords realigned.
     """
     parsed = separate_chords_and_lyrics(full_text)
 
-    # Find the Nth lyrics entry (entries that have actual lyric content or are non-chord)
+    # Map lyrics-only index to parsed entry index
     lyrics_count = 0
-    target_entry_index = None
-    for idx, _entry in enumerate(parsed):
-        # Count every entry as a lyrics line (mirrors extract_lyrics_only)
+    target_entry_idx: int | None = None
+    for idx in range(len(parsed)):
         if lyrics_count == lyrics_line_index:
-            target_entry_index = idx
+            target_entry_idx = idx
             break
         lyrics_count += 1
 
-    if target_entry_index is None:
-        raise IndexError(
-            f"Lyrics line index {lyrics_line_index} out of range (max {lyrics_count - 1})"
-        )
+    if target_entry_idx is None:
+        max_idx = lyrics_count - 1
+        raise IndexError(f"Lyrics line index {lyrics_line_index} out of range (max {max_idx})")
 
-    entry = parsed[target_entry_index]
-
-    # Replace the lyrics text
+    entry = parsed[target_entry_idx]
     old_lyric = entry["lyrics"]
     entry["lyrics"] = new_line_text
 
-    # If this entry has chords, realign them
     if entry["chords"] is not None and new_line_text.strip():
         chord_positions = _extract_chord_positions(entry["chords"])
         entry["chords"] = _place_chords(chord_positions, old_lyric, new_line_text)

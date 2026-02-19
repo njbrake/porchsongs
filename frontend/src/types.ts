@@ -62,6 +62,7 @@ export interface ChatMessage {
 export interface LlmSettings {
   provider: string;
   model: string;
+  reasoning_effort: string;
 }
 
 export interface SavedModel {
@@ -83,17 +84,6 @@ export interface Provider {
   local: boolean;
 }
 
-export interface Pattern {
-  id: number;
-  profile_id: number;
-  original: string;
-  replacement: string;
-}
-
-export interface Folder {
-  name: string;
-}
-
 // API request types
 
 export interface RewriteRequest {
@@ -102,17 +92,10 @@ export interface RewriteRequest {
   instruction?: string | null;
   provider: string;
   model: string;
+  reasoning_effort?: string | null;
   source_url?: string | null;
   title?: string | null;
   artist?: string | null;
-}
-
-export interface WorkshopRequest {
-  song_id: number;
-  line_index: number;
-  instruction?: string | null;
-  provider: string;
-  model: string;
 }
 
 export interface ChatRequest {
@@ -120,24 +103,15 @@ export interface ChatRequest {
   messages: { role: string; content: string }[];
   provider: string;
   model: string;
+  reasoning_effort?: string | null;
 }
 
 // API response types
-
-export interface WorkshopResult {
-  original_line: string;
-  current_line: string;
-  alternatives: { text: string; reasoning: string }[];
-}
 
 export interface ChatResult {
   rewritten_lyrics: string;
   changes_summary: string;
   assistant_message: string;
-}
-
-export interface ApplyEditResult {
-  rewritten_lyrics: string;
 }
 
 export interface AuthRequiredResponse {
@@ -156,4 +130,5 @@ export interface ChatHistoryRow {
 
 export interface StreamCallbacks {
   onToken?: (token: string) => void;
+  onThinking?: () => void;
 }

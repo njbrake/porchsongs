@@ -6,10 +6,7 @@ import type {
   SavedModel,
   ProviderConnection,
   Provider,
-  Pattern,
-  WorkshopResult,
   ChatResult,
-  ApplyEditResult,
   AuthRequiredResponse,
   LoginResponse,
   ChatHistoryRow,
@@ -65,7 +62,7 @@ async function login(password: string): Promise<LoginResponse> {
  * Stream a rewrite via SSE. Calls onToken(text) for each chunk,
  * returns the final parsed result object.
  */
-async function rewriteStream(data: Record<string, unknown>, { onToken }: StreamCallbacks = {}): Promise<RewriteResult> {
+async function rewriteStream(data: Record<string, unknown>, { onToken, onThinking }: StreamCallbacks = {}): Promise<RewriteResult> {
   const url = `${BASE}/rewrite?stream=true`;
   const res = await fetch(url, {
     method: 'POST',
@@ -98,9 +95,11 @@ async function rewriteStream(data: Record<string, unknown>, { onToken }: StreamC
 
     for (const line of lines) {
       if (!line.startsWith('data: ')) continue;
-      const payload = JSON.parse(line.slice(6)) as { done?: boolean; result?: RewriteResult; token?: string };
+      const payload = JSON.parse(line.slice(6)) as { done?: boolean; result?: RewriteResult; token?: string; thinking?: boolean };
       if (payload.done) {
         finalResult = payload.result!;
+      } else if (payload.thinking && onThinking) {
+        onThinking();
       } else if (payload.token && onToken) {
         onToken(payload.token);
       }
@@ -109,9 +108,11 @@ async function rewriteStream(data: Record<string, unknown>, { onToken }: StreamC
 
   // Process any remaining data in buffer
   if (buffer.startsWith('data: ')) {
-    const payload = JSON.parse(buffer.slice(6)) as { done?: boolean; result?: RewriteResult; token?: string };
+    const payload = JSON.parse(buffer.slice(6)) as { done?: boolean; result?: RewriteResult; token?: string; thinking?: boolean };
     if (payload.done) {
       finalResult = payload.result!;
+    } else if (payload.thinking && onThinking) {
+      onThinking();
     } else if (payload.token && onToken) {
       onToken(payload.token);
     }
@@ -150,21 +151,11 @@ const api = {
   updateSongStatus: (id: number, data: { status: string }) => _fetch<Song>(`/songs/${id}/status`, { method: 'PUT', body: JSON.stringify(data) }),
   getSongRevisions: (id: number) => _fetch<SongRevision[]>(`/songs/${id}/revisions`),
 
-  // Workshop
-  workshopLine: (data: Record<string, unknown>) => _fetch<WorkshopResult>('/workshop-line', { method: 'POST', body: JSON.stringify(data) }),
-  applyEdit: (data: Record<string, unknown>) => _fetch<ApplyEditResult>('/apply-edit', { method: 'POST', body: JSON.stringify(data) }),
-
   // Chat
-  chat: (data: Record<string, unknown>) => _fetch<ChatResult>('/chat', { method: 'POST', body: JSON.stringify(data) }),
+  chat: (data: Record<string, unknown>, signal?: AbortSignal) => _fetch<ChatResult>('/chat', { method: 'POST', body: JSON.stringify(data), signal }),
   getChatHistory: (songId: number) => _fetch<ChatHistoryRow[]>(`/songs/${songId}/messages`),
   saveChatMessages: (songId: number, messages: { role: string; content: string; is_note: boolean }[]) =>
     _fetch<void>(`/songs/${songId}/messages`, { method: 'POST', body: JSON.stringify(messages) }),
-
-  // Patterns
-  getPatterns: (profileId?: number) => {
-    const query = profileId ? `?profile_id=${profileId}` : '';
-    return _fetch<Pattern[]>(`/patterns${query}`);
-  },
 
   // Profile Models (saved provider+model combos)
   listProfileModels: (profileId: number) => _fetch<SavedModel[]>(`/profiles/${profileId}/models`),

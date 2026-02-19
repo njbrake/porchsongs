@@ -1,6 +1,6 @@
 """Tests for endpoints that call the LLM, using mocked acompletion/list_models."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 
 def _fake_completion_response(content):
@@ -12,12 +12,6 @@ def _fake_completion_response(content):
     resp = MagicMock()
     resp.choices = [choice]
     return resp
-
-
-def _mock_acompletion(content):
-    """Return an AsyncMock of acompletion that resolves to a fake response."""
-    mock = AsyncMock(return_value=_fake_completion_response(content))
-    return mock
 
 
 def _make_profile_and_song(client):
@@ -189,6 +183,7 @@ def test_workshop_line_index_out_of_range(mock_acompletion, client):
         **LLM_SETTINGS,
     })
     assert resp.status_code == 400
+
 
 
 # --- POST /api/chat ---

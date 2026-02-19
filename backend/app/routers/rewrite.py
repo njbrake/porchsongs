@@ -50,47 +50,16 @@ def _lookup_api_base(
     return None
 
 
-def _load_rewrite_context(
-    req: RewriteRequest, db: Session
-) -> tuple[str, str, list[dict[str, str | None]], dict[str, str] | None, str | None]:
-    """Shared helper: load profile, patterns, example, and api_base for a rewrite."""
+def _load_rewrite_context(req: RewriteRequest, db: Session) -> tuple[str, str, str | None]:
+    """Shared helper: load profile description, lyrics, and api_base for a rewrite."""
     profile = db.query(Profile).filter(Profile.id == req.profile_id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
 
     profile_description = profile.description or ""
     lyrics = req.lyrics
-
-    from ..models import SubstitutionPattern
-
-    patterns = (
-        db.query(SubstitutionPattern).filter(SubstitutionPattern.profile_id == req.profile_id).all()
-    )
-    pattern_list: list[dict[str, str | None]] = [
-        {
-            "original": p.original_term,
-            "replacement": p.replacement_term,
-            "category": p.category,
-            "reasoning": p.reasoning,
-        }
-        for p in patterns
-    ]
-
-    recent_completed = (
-        db.query(Song)
-        .filter(Song.profile_id == req.profile_id, Song.status == "completed")
-        .order_by(Song.created_at.desc())
-        .first()
-    )
-    example = None
-    if recent_completed:
-        example = {
-            "original_lyrics": recent_completed.original_lyrics,
-            "rewritten_lyrics": recent_completed.rewritten_lyrics,
-        }
-
     api_base = _lookup_api_base(db, req.profile_id, req.provider, req.model)
-    return profile_description, lyrics, pattern_list, example, api_base
+    return profile_description, lyrics, api_base
 
 
 @router.post("/rewrite", response_model=RewriteResponse)
@@ -99,7 +68,7 @@ async def rewrite(
     db: Session = Depends(get_db),
     stream: bool = Query(default=False),
 ) -> dict[str, str | None] | StreamingResponse:
-    profile_description, lyrics, pattern_list, example, api_base = _load_rewrite_context(req, db)
+    profile_description, lyrics, api_base = _load_rewrite_context(req, db)
 
     if stream:
         generator = llm_service.rewrite_lyrics_stream(
@@ -109,10 +78,9 @@ async def rewrite(
             lyrics_with_chords=lyrics,
             provider=req.provider,
             model=req.model,
-            patterns=pattern_list,
-            example=example,
             instruction=req.instruction,
             api_base=api_base,
+            reasoning_effort=req.reasoning_effort,
         )
         return StreamingResponse(
             generator,
@@ -131,10 +99,9 @@ async def rewrite(
             lyrics_with_chords=lyrics,
             provider=req.provider,
             model=req.model,
-            patterns=pattern_list,
-            example=example,
             instruction=req.instruction,
             api_base=api_base,
+            reasoning_effort=req.reasoning_effort,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {e}") from None
@@ -167,6 +134,7 @@ async def workshop_line(
             provider=req.provider,
             model=req.model,
             api_base=api_base,
+            reasoning_effort=req.reasoning_effort,
         )
     except IndexError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
@@ -198,6 +166,7 @@ async def chat(req: ChatRequest, db: Session = Depends(get_db)) -> ChatResponse:
             provider=req.provider,
             model=req.model,
             api_base=api_base,
+            reasoning_effort=req.reasoning_effort,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {e}") from None

@@ -48,36 +48,6 @@ def test_prompt_with_instruction():
     assert "USER INSTRUCTIONS: Change truck references to bikes" in prompt
 
 
-def test_prompt_with_patterns():
-    prompt = build_user_prompt(
-        profile_description="Test user",
-        title=None,
-        artist=None,
-        lyrics="Some lyrics",
-        patterns=[
-            {"original": "F-150", "replacement": "Subaru", "category": "vehicle", "reasoning": "user drives Subaru"},
-        ],
-    )
-    assert "F-150 -> Subaru" in prompt
-    assert "vehicle" in prompt
-
-
-def test_prompt_with_example():
-    prompt = build_user_prompt(
-        profile_description="Test user",
-        title=None,
-        artist=None,
-        lyrics="Some lyrics",
-        example={
-            "original_lyrics": "Original verse one",
-            "rewritten_lyrics": "Rewritten verse one",
-        },
-    )
-    assert "EXAMPLE OF A PREVIOUS REWRITE" in prompt
-    assert "Original verse one" in prompt
-    assert "Rewritten verse one" in prompt
-
-
 # --- build_workshop_prompt ---
 
 
@@ -113,10 +83,25 @@ def test_workshop_prompt_out_of_range():
         )
 
 
+
 # --- _parse_chat_response ---
 
 
-def test_parse_chat_with_markers():
+def test_parse_chat_with_xml_tags():
+    raw = "<lyrics>\nHello world\nSecond line\n</lyrics>\nI changed the first word."
+    result = _parse_chat_response(raw)
+    assert result["lyrics"] == "Hello world\nSecond line"
+    assert "changed" in result["explanation"]
+
+
+def test_parse_chat_with_xml_tags_no_explanation():
+    raw = "<lyrics>\nHello\n</lyrics>"
+    result = _parse_chat_response(raw)
+    assert result["lyrics"] == "Hello"
+    assert result["explanation"] == ""
+
+
+def test_parse_chat_with_legacy_markers():
     raw = "---LYRICS---\nHello world\nSecond line\n---END---\nI changed the first word."
     result = _parse_chat_response(raw)
     assert result["lyrics"] == "Hello world\nSecond line"

@@ -71,6 +71,7 @@ class RewriteRequest(BaseModel):
     instruction: str | None = None
     provider: str
     model: str
+    reasoning_effort: str | None = None
 
 
 class RewriteResponse(BaseModel):
@@ -147,6 +148,7 @@ class WorkshopLineRequest(BaseModel):
     instruction: str | None = None  # optional user instruction
     provider: str
     model: str
+    reasoning_effort: str | None = None
 
 
 class WorkshopAlternative(BaseModel):
@@ -170,26 +172,6 @@ class ApplyEditRequest(BaseModel):
 class ApplyEditResponse(BaseModel):
     rewritten_lyrics: str
     version: int
-
-
-# --- Substitution Patterns ---
-class SubstitutionPatternOut(BaseModel):
-    id: int
-    profile_id: int
-    song_id: int
-    original_term: str
-    replacement_term: str
-    category: str | None
-    reasoning: str | None
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-# --- Providers ---
-class ProviderInfo(BaseModel):
-    name: str
-    models: list[str]
 
 
 # --- Chat ---
@@ -220,6 +202,7 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     provider: str
     model: str
+    reasoning_effort: str | None = None
 
 
 class ChatResponse(BaseModel):

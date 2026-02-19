@@ -9,18 +9,26 @@ interface ComparisonViewProps {
   onRewrittenBlur: () => void;
 }
 
-export default function ComparisonView({ original, rewritten, onRewrittenChange, onRewrittenBlur }: ComparisonViewProps) {
+export default function ComparisonView({
+  original,
+  rewritten,
+  onRewrittenChange,
+  onRewrittenBlur,
+}: ComparisonViewProps) {
   const [showOriginal, setShowOriginal] = useState(false);
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       <Card className="flex flex-col flex-1 overflow-hidden">
-        <CardHeader>Your Version</CardHeader>
+        <CardHeader className="flex items-center justify-between">
+          <span>Your Version</span>
+        </CardHeader>
         <textarea
           className="flex-1 p-3 sm:p-4 font-[family-name:var(--font-mono)] text-xs sm:text-[0.82rem] leading-relaxed whitespace-pre-wrap break-words overflow-y-auto w-full border-0 bg-transparent resize-none cursor-text focus:outline-none focus:bg-[#fdfcfa]"
           value={rewritten}
           onChange={e => onRewrittenChange(e.target.value)}
           onBlur={onRewrittenBlur}
+          aria-label="Rewritten lyrics editor"
         />
       </Card>
 

@@ -80,6 +80,17 @@ const DialogBody = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
 );
 DialogBody.displayName = 'DialogBody';
 
+const DialogFooter = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn('flex justify-end gap-2 px-5 py-4 border-t border-border', className)}
+      {...props}
+    />
+  )
+);
+DialogFooter.displayName = 'DialogFooter';
+
 export {
   Dialog,
   DialogTrigger,
@@ -90,4 +101,5 @@ export {
   DialogHeader,
   DialogTitle,
   DialogBody,
+  DialogFooter,
 };

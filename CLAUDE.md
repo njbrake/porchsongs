@@ -76,6 +76,7 @@ Every feature or change must pass all lint and test checks before being consider
 
 ```bash
 uv run ruff check backend/                    # backend lint
+uv run ruff format --check backend/           # backend formatting
 cd frontend && npx eslint .                   # frontend lint
 cd /workspace/PorchSongs && uv run pytest     # backend tests (107)
 cd frontend && npx vitest run                 # frontend tests (36)

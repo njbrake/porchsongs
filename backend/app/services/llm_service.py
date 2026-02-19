@@ -100,10 +100,7 @@ _LOCAL_PROVIDERS = {"ollama", "llamafile", "llamacpp", "lmstudio", "vllm"}
 
 def get_configured_providers() -> list[dict[str, object]]:
     """Return all known providers. Actual validation happens when listing models."""
-    return [
-        {"name": p.value, "local": p.value in _LOCAL_PROVIDERS}
-        for p in LLMProvider
-    ]
+    return [{"name": p.value, "local": p.value in _LOCAL_PROVIDERS} for p in LLMProvider]
 
 
 def get_providers() -> list[str]:

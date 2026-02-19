@@ -18,14 +18,14 @@ cd backend && uv run uvicorn app.main:app --reload
 cd frontend && npm run dev
 
 # Tests (from project root)
-uv run pytest           # all 96 tests
+uv run pytest           # all 107 tests
 uv run pytest -v        # verbose
 uv run pytest tests/test_api.py::test_create_profile  # single test
 
 # Lint & type check
 uv run ruff check backend/
 uv run ruff format backend/
-uv run ty check
+cd frontend && npm run typecheck    # tsc --noEmit
 
 # Docker
 docker compose up --build
@@ -33,7 +33,9 @@ docker compose up --build
 
 ## Architecture
 
-**FastAPI backend** (`backend/app/`) serves a **React 19 frontend** (`frontend/src/`) built with Vite. In production, FastAPI serves the built `frontend/dist/` as static files. In development, Vite proxies `/api` requests to the backend.
+**FastAPI backend** (`backend/app/`) serves a **React 19 + TypeScript frontend** (`frontend/src/`) built with Vite. In production, FastAPI serves the built `frontend/dist/` as static files. In development, Vite proxies `/api` requests to the backend.
+
+The frontend uses strict TypeScript with `@/` path aliases (e.g. `import api from '@/api'`). Shared domain interfaces live in `src/types.ts`.
 
 ### LLM Integration
 
@@ -77,13 +79,15 @@ Every feature or change must pass all lint and test checks before being consider
 ```bash
 uv run ruff check backend/                    # backend lint
 uv run ruff format --check backend/           # backend formatting
-cd frontend && npx eslint .                   # frontend lint
+cd frontend && npx eslint src/                # frontend lint
+cd frontend && npm run typecheck              # TypeScript type check
 cd /workspace/PorchSongs && uv run pytest     # backend tests (107)
 cd frontend && npx vitest run                 # frontend tests (36)
 ```
 
 ## Key Constraints
 
+- **TypeScript**: strict mode with `noUncheckedIndexedAccess`. Use `@/` path aliases for all imports. Domain types are in `src/types.ts`.
 - **Ruff rules**: `E, F, I, UP, B, SIM, ANN, RUF` with `B008` ignored (FastAPI `Depends()` pattern). All backend code requires type annotations.
 - **Config**: `Settings` in `config.py` uses `extra="ignore"` so arbitrary env vars (like `OPENAI_API_KEY`) don't crash startup.
 - **Migrations**: `main.py` auto-adds missing columns on startup via `ALTER TABLE` — no migration framework, just column existence checks with SQLAlchemy `inspect`.

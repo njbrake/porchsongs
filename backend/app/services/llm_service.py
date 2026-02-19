@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from typing import TYPE_CHECKING
 
 from any_llm import AnyLLM, LLMProvider, acompletion, alist_models
@@ -96,37 +95,19 @@ Return your response in this exact format:
 
 (A friendly explanation of what you changed and why)"""
 
-# Keyless providers that need a base URL to be usable
-_KEYLESS_PROVIDERS = {"ollama", "llamafile", "llamacpp", "lmstudio", "vllm"}
+_LOCAL_PROVIDERS = {"ollama", "llamafile", "llamacpp", "lmstudio", "vllm"}
 
 
-def get_configured_providers() -> list[dict[str, str | None]]:
-    """Return providers that have their API key env var set.
-
-    For keyless providers (ollama, llamafile, etc.), include only if their
-    ENV_API_BASE_NAME env var is set.
-    """
-    configured = []
-    for provider in LLMProvider:
-        try:
-            cls = AnyLLM.get_provider_class(provider.value)
-        except Exception:
-            continue
-
-        env_key = getattr(cls, "ENV_API_KEY_NAME", None)
-        env_base = getattr(cls, "ENV_API_BASE_NAME", None)
-
-        if provider.value in _KEYLESS_PROVIDERS:
-            # Keyless/local providers are always listed
-            configured.append({"name": provider.value, "env_key": env_base})
-        elif env_key and os.getenv(env_key):
-            configured.append({"name": provider.value, "env_key": env_key})
-
-    return configured
+def get_configured_providers() -> list[dict[str, object]]:
+    """Return all known providers. Actual validation happens when listing models."""
+    return [
+        {"name": p.value, "local": p.value in _LOCAL_PROVIDERS}
+        for p in LLMProvider
+    ]
 
 
 def get_providers() -> list[str]:
-    """Return list of all available provider names from the LLMProvider enum."""
+    """Return list of all available provider names."""
     return [p.value for p in LLMProvider]
 
 

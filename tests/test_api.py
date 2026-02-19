@@ -236,15 +236,13 @@ def test_apply_edit_invalid_line(client):
 # --- Providers ---
 
 
-@patch("app.services.llm_service.os.getenv", return_value="fake-key")
-def test_list_providers(mock_getenv, client):
+def test_list_providers(client):
     resp = client.get("/api/providers")
     assert resp.status_code == 200
     providers = resp.json()
     assert isinstance(providers, list)
-    # Providers are now dicts with 'name' and 'env_key'
-    if providers:
-        assert "name" in providers[0]
+    assert len(providers) > 0
+    assert "name" in providers[0]
 
 
 # --- fetch-tab endpoint removed ---
@@ -545,3 +543,165 @@ def test_rewrite_fallback_title_from_request(client):
         data = resp.json()
         assert data["title"] == "My Song"
         assert data["artist"] == "My Artist"
+
+
+# --- Provider Connections ---
+
+
+def test_list_connections_empty(client):
+    profile = client.post("/api/profiles", json={"name": "Test"}).json()
+    resp = client.get(f"/api/profiles/{profile['id']}/connections")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+def test_add_connection(client):
+    profile = client.post("/api/profiles", json={"name": "Test"}).json()
+    resp = client.post(f"/api/profiles/{profile['id']}/connections", json={
+        "provider": "openai",
+    })
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["provider"] == "openai"
+    assert data["api_base"] is None
+    assert data["profile_id"] == profile["id"]
+
+
+def test_add_connection_with_api_base(client):
+    profile = client.post("/api/profiles", json={"name": "Test"}).json()
+    resp = client.post(f"/api/profiles/{profile['id']}/connections", json={
+        "provider": "ollama",
+        "api_base": "http://localhost:11434",
+    })
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["provider"] == "ollama"
+    assert data["api_base"] == "http://localhost:11434"
+
+
+def test_add_connection_upsert(client):
+    profile = client.post("/api/profiles", json={"name": "Test"}).json()
+    pid = profile["id"]
+
+    client.post(f"/api/profiles/{pid}/connections", json={"provider": "ollama"})
+    # Same provider — should update api_base
+    client.post(f"/api/profiles/{pid}/connections", json={
+        "provider": "ollama",
+        "api_base": "http://localhost:11434",
+    })
+
+    resp = client.get(f"/api/profiles/{pid}/connections")
+    conns = resp.json()
+    assert len(conns) == 1
+    assert conns[0]["api_base"] == "http://localhost:11434"
+
+
+def test_add_connection_profile_not_found(client):
+    resp = client.post("/api/profiles/9999/connections", json={"provider": "openai"})
+    assert resp.status_code == 404
+
+
+def test_delete_connection(client):
+    profile = client.post("/api/profiles", json={"name": "Test"}).json()
+    pid = profile["id"]
+    conn = client.post(f"/api/profiles/{pid}/connections", json={
+        "provider": "openai",
+    }).json()
+
+    resp = client.delete(f"/api/profiles/{pid}/connections/{conn['id']}")
+    assert resp.status_code == 200
+
+    resp = client.get(f"/api/profiles/{pid}/connections")
+    assert resp.json() == []
+
+
+def test_delete_connection_cascades_models(client):
+    """Deleting a connection should also delete ProfileModel rows for that provider."""
+    profile = client.post("/api/profiles", json={"name": "Test"}).json()
+    pid = profile["id"]
+
+    # Add connection + two models for same provider
+    conn = client.post(f"/api/profiles/{pid}/connections", json={
+        "provider": "openai",
+    }).json()
+    client.post(f"/api/profiles/{pid}/models", json={
+        "provider": "openai", "model": "gpt-4",
+    })
+    client.post(f"/api/profiles/{pid}/models", json={
+        "provider": "openai", "model": "gpt-3.5-turbo",
+    })
+    # Add a model for a different provider (should survive)
+    client.post(f"/api/profiles/{pid}/models", json={
+        "provider": "anthropic", "model": "claude-3-opus",
+    })
+
+    # Delete the openai connection
+    client.delete(f"/api/profiles/{pid}/connections/{conn['id']}")
+
+    # openai models gone, anthropic model survives
+    resp = client.get(f"/api/profiles/{pid}/models")
+    models = resp.json()
+    assert len(models) == 1
+    assert models[0]["provider"] == "anthropic"
+
+
+def test_delete_profile_cascades_connections(client):
+    """Deleting a profile should also delete its connections."""
+    profile = client.post("/api/profiles", json={"name": "Test"}).json()
+    pid = profile["id"]
+    client.post(f"/api/profiles/{pid}/connections", json={"provider": "openai"})
+
+    client.delete(f"/api/profiles/{pid}")
+
+    # Profile gone — connections endpoint should 404
+    resp = client.get(f"/api/profiles/{pid}/connections")
+    assert resp.status_code == 404
+
+
+def test_lookup_api_base_prefers_connection(client):
+    """Rewrite should use api_base from ProviderConnection over ProfileModel."""
+    profile = client.post("/api/profiles", json={"name": "Test"}).json()
+    pid = profile["id"]
+
+    # Set up connection with a specific api_base
+    client.post(f"/api/profiles/{pid}/connections", json={
+        "provider": "openai",
+        "api_base": "http://connection-base:8080",
+    })
+    # ProfileModel has a different api_base (legacy)
+    client.post(f"/api/profiles/{pid}/models", json={
+        "provider": "openai",
+        "model": "gpt-4",
+        "api_base": "http://model-base:9090",
+    })
+
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = (
+        "<meta>\nTitle: T\nArtist: A\n</meta>\n"
+        "<original>\nHello\n</original>\n"
+        "<rewritten>\nHi\n</rewritten>\n"
+        "<changes>\nChanged\n</changes>"
+    )
+
+    with patch("app.services.llm_service.acompletion", new_callable=AsyncMock, return_value=mock_response) as mock_ac:
+        resp = client.post("/api/rewrite", json={
+            "profile_id": pid,
+            "lyrics": "Hello",
+            "provider": "openai",
+            "model": "gpt-4",
+        })
+        assert resp.status_code == 200
+        call_kwargs = mock_ac.call_args.kwargs
+        assert call_kwargs.get("api_base") == "http://connection-base:8080"
+
+
+def test_list_connections_not_found(client):
+    resp = client.get("/api/profiles/9999/connections")
+    assert resp.status_code == 404
+
+
+def test_delete_connection_not_found(client):
+    profile = client.post("/api/profiles", json={"name": "Test"}).json()
+    resp = client.delete(f"/api/profiles/{profile['id']}/connections/9999")
+    assert resp.status_code == 404

@@ -152,6 +152,11 @@ const api = {
   addProfileModel: (profileId, data) => _fetch(`/profiles/${profileId}/models`, { method: 'POST', body: JSON.stringify(data) }),
   deleteProfileModel: (profileId, modelId) => _fetch(`/profiles/${profileId}/models/${modelId}`, { method: 'DELETE' }),
 
+  // Provider Connections
+  listProviderConnections: (profileId) => _fetch(`/profiles/${profileId}/connections`),
+  addProviderConnection: (profileId, data) => _fetch(`/profiles/${profileId}/connections`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteProviderConnection: (profileId, connectionId) => _fetch(`/profiles/${profileId}/connections/${connectionId}`, { method: 'DELETE' }),
+
   // PDF
   downloadSongPdf: async (id, title, artist) => {
     const res = await fetch(`${BASE}/songs/${id}/pdf`, { headers: _getAuthHeaders() });

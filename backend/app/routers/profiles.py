@@ -5,8 +5,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Profile, ProfileModel
-from ..schemas import ProfileCreate, ProfileModelCreate, ProfileModelOut, ProfileOut, ProfileUpdate
+from ..models import Profile, ProfileModel, ProviderConnection
+from ..schemas import (
+    ProfileCreate,
+    ProfileModelCreate,
+    ProfileModelOut,
+    ProfileOut,
+    ProfileUpdate,
+    ProviderConnectionCreate,
+    ProviderConnectionOut,
+)
 
 router = APIRouter()
 
@@ -70,6 +78,7 @@ def delete_profile(profile_id: int, db: Session = Depends(get_db)) -> dict[str, 
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
     db.query(ProfileModel).filter(ProfileModel.profile_id == profile_id).delete()
+    db.query(ProviderConnection).filter(ProviderConnection.profile_id == profile_id).delete()
     db.delete(profile)
     db.commit()
     return {"ok": True}
@@ -130,5 +139,73 @@ def delete_profile_model(
     if not pm:
         raise HTTPException(status_code=404, detail="Saved model not found")
     db.delete(pm)
+    db.commit()
+    return {"ok": True}
+
+
+# --- Provider Connections ---
+
+
+@router.get("/profiles/{profile_id}/connections", response_model=list[ProviderConnectionOut])
+def list_connections(profile_id: int, db: Session = Depends(get_db)) -> list[Any]:
+    profile = db.query(Profile).filter(Profile.id == profile_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return (
+        db.query(ProviderConnection)
+        .filter(ProviderConnection.profile_id == profile_id)
+        .order_by(ProviderConnection.created_at.desc())
+        .all()
+    )
+
+
+@router.post(
+    "/profiles/{profile_id}/connections", response_model=ProviderConnectionOut, status_code=201
+)
+def add_connection(
+    profile_id: int, data: ProviderConnectionCreate, db: Session = Depends(get_db)
+) -> ProviderConnection:
+    profile = db.query(Profile).filter(Profile.id == profile_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    existing = (
+        db.query(ProviderConnection)
+        .filter(
+            ProviderConnection.profile_id == profile_id,
+            ProviderConnection.provider == data.provider,
+        )
+        .first()
+    )
+    if existing:
+        existing.api_base = data.api_base
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    conn = ProviderConnection(profile_id=profile_id, **data.model_dump())
+    db.add(conn)
+    db.commit()
+    db.refresh(conn)
+    return conn
+
+
+@router.delete("/profiles/{profile_id}/connections/{connection_id}")
+def delete_connection(
+    profile_id: int, connection_id: int, db: Session = Depends(get_db)
+) -> dict[str, bool]:
+    conn = (
+        db.query(ProviderConnection)
+        .filter(ProviderConnection.id == connection_id, ProviderConnection.profile_id == profile_id)
+        .first()
+    )
+    if not conn:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    # Cascade-delete all ProfileModel rows for this provider
+    db.query(ProfileModel).filter(
+        ProfileModel.profile_id == profile_id,
+        ProfileModel.provider == conn.provider,
+    ).delete()
+    db.delete(conn)
     db.commit()
     return {"ok": True}

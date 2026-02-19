@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from './api';
 import useLocalStorage from './hooks/useLocalStorage';
+import useProviderConnections from './hooks/useProviderConnections';
 import useSavedModels from './hooks/useSavedModels';
 import Header from './components/Header';
 import Tabs from './components/Tabs';
@@ -10,10 +11,19 @@ import SettingsPage from './components/SettingsPage';
 import LoginPage from './components/LoginPage';
 
 const TAB_KEYS = ['rewrite', 'library', 'settings'];
+const SETTINGS_SUB_TABS = ['profile', 'providers'];
 
 function tabFromPath(pathname) {
   const seg = pathname.replace(/^\//, '').split('/')[0].toLowerCase();
   return TAB_KEYS.includes(seg) ? seg : 'rewrite';
+}
+
+function settingsTabFromPath(pathname) {
+  const parts = pathname.replace(/^\//, '').split('/');
+  if (parts[0]?.toLowerCase() === 'settings' && SETTINGS_SUB_TABS.includes(parts[1]?.toLowerCase())) {
+    return parts[1].toLowerCase();
+  }
+  return 'profile';
 }
 
 function songIdFromPath(pathname) {
@@ -27,6 +37,7 @@ function songIdFromPath(pathname) {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(() => tabFromPath(window.location.pathname));
+  const [settingsTab, setSettingsTab] = useState(() => settingsTabFromPath(window.location.pathname));
   const [initialSongId, setInitialSongId] = useState(() => songIdFromPath(window.location.pathname));
   // Auth state: "loading" | "login" | "ready"
   const [authState, setAuthState] = useState('loading');
@@ -67,6 +78,7 @@ export default function App() {
   useEffect(() => {
     const onPopState = () => {
       setActiveTab(tabFromPath(window.location.pathname));
+      setSettingsTab(settingsTabFromPath(window.location.pathname));
       setInitialSongId(songIdFromPath(window.location.pathname));
     };
     window.addEventListener('popstate', onPopState);
@@ -74,13 +86,23 @@ export default function App() {
   }, []);
 
   // Wrapper that updates both state and URL
-  const setTab = useCallback((key) => {
-    setActiveTab(key);
-    const target = key === 'rewrite' ? '/' : `/${key}`;
-    if (window.location.pathname !== target) {
-      window.history.pushState(null, '', target);
+  const setTab = useCallback((key, subTab) => {
+    if (key === 'settings') {
+      const sub = subTab || settingsTab || 'profile';
+      setActiveTab('settings');
+      setSettingsTab(sub);
+      const target = `/settings/${sub}`;
+      if (window.location.pathname !== target) {
+        window.history.pushState(null, '', target);
+      }
+    } else {
+      setActiveTab(key);
+      const target = key === 'rewrite' ? '/' : `/${key}`;
+      if (window.location.pathname !== target) {
+        window.history.pushState(null, '', target);
+      }
     }
-  }, []);
+  }, [settingsTab]);
 
   // Profile state
   const [profile, setProfile] = useState(null);
@@ -89,8 +111,9 @@ export default function App() {
   const [provider, setProvider] = useLocalStorage('porchsongs_provider', '');
   const [model, setModel] = useLocalStorage('porchsongs_model', '');
 
-  // Saved models for current profile
-  const { savedModels, addModel, removeModel } = useSavedModels(profile?.id);
+  // Provider connections and saved models for current profile
+  const { connections, addConnection, removeConnection } = useProviderConnections(profile?.id);
+  const { savedModels, addModel, removeModel, refresh: refreshModels } = useSavedModels(profile?.id);
 
   // Rewrite state (shared between RewriteTab, comparison, workshop, chat)
   const [rewriteResult, setRewriteResult] = useState(null);
@@ -252,7 +275,7 @@ export default function App() {
             onChangeProvider={setProvider}
             onChangeModel={setModel}
             savedModels={savedModels}
-            onOpenSettings={() => setTab('settings')}
+            onOpenSettings={() => setTab('settings', 'providers')}
           />
         )}
         {activeTab === 'library' && (
@@ -266,8 +289,28 @@ export default function App() {
             onSave={(p, m) => { setProvider(p); setModel(m); }}
             onAddModel={addModel}
             onRemoveModel={removeModel}
+            connections={connections}
+            onAddConnection={addConnection}
+            onRemoveConnection={async (connId) => {
+              const conn = connections.find(c => c.id === connId);
+              await removeConnection(connId);
+              // Clean up active selection if it was from the removed provider
+              if (conn && conn.provider === provider) {
+                const remaining = savedModels.filter(m => m.provider !== conn.provider);
+                if (remaining.length > 0) {
+                  setProvider(remaining[0].provider);
+                  setModel(remaining[0].model);
+                } else {
+                  setProvider('');
+                  setModel('');
+                }
+              }
+              refreshModels();
+            }}
             profile={profile}
             onSaveProfile={handleSaveProfile}
+            activeTab={settingsTab}
+            onChangeTab={(sub) => setTab('settings', sub)}
           />
         )}
       </main>

@@ -7,7 +7,14 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import ChatMessage, ProfileModel, Song, SongRevision, SubstitutionPattern
+from ..models import (
+    ChatMessage,
+    ProfileModel,
+    ProviderConnection,
+    Song,
+    SongRevision,
+    SubstitutionPattern,
+)
 from ..schemas import (
     ApplyEditRequest,
     ApplyEditResponse,
@@ -200,17 +207,27 @@ async def update_song_status(
     if data.status == "completed" and song.llm_provider and song.llm_model:
         from ..services import llm_service
 
-        # Look up api_base from the saved ProfileModel
-        pm = (
-            db.query(ProfileModel)
+        # Look up api_base: prefer ProviderConnection, fall back to ProfileModel
+        conn = (
+            db.query(ProviderConnection)
             .filter(
-                ProfileModel.profile_id == song.profile_id,
-                ProfileModel.provider == song.llm_provider,
-                ProfileModel.model == song.llm_model,
+                ProviderConnection.profile_id == song.profile_id,
+                ProviderConnection.provider == song.llm_provider,
             )
             .first()
         )
-        api_base = pm.api_base if pm else None
+        api_base = conn.api_base if conn and conn.api_base else None
+        if not api_base:
+            pm = (
+                db.query(ProfileModel)
+                .filter(
+                    ProfileModel.profile_id == song.profile_id,
+                    ProfileModel.provider == song.llm_provider,
+                    ProfileModel.model == song.llm_model,
+                )
+                .first()
+            )
+            api_base = pm.api_base if pm and pm.api_base else None
 
         with contextlib.suppress(Exception):
             await llm_service.extract_patterns(

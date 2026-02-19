@@ -10,8 +10,13 @@ const defaults = {
   onSave: vi.fn(),
   onAddModel: vi.fn(),
   onRemoveModel: vi.fn(),
+  connections: [],
+  onAddConnection: vi.fn(),
+  onRemoveConnection: vi.fn(),
   profile: null,
   onSaveProfile: vi.fn(),
+  activeTab: 'profile',
+  onChangeTab: vi.fn(),
 };
 
 describe('SettingsPage – Profile sub-tab', () => {

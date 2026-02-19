@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import ChatMessage as ChatMessageModel
-from ..models import Profile, ProfileModel, Song
+from ..models import Profile, ProfileModel, ProviderConnection, Song
 from ..schemas import (
     ChatRequest,
     ChatResponse,
@@ -21,19 +21,33 @@ router = APIRouter()
 def _lookup_api_base(
     db: Session, profile_id: int | None, provider: str | None, model: str | None
 ) -> str | None:
-    """Look up api_base from the saved ProfileModel for a given profile+provider+model."""
-    if not profile_id or not provider or not model:
+    """Look up api_base: prefer ProviderConnection, fall back to ProfileModel."""
+    if not profile_id or not provider:
         return None
-    pm = (
-        db.query(ProfileModel)
+    conn = (
+        db.query(ProviderConnection)
         .filter(
-            ProfileModel.profile_id == profile_id,
-            ProfileModel.provider == provider,
-            ProfileModel.model == model,
+            ProviderConnection.profile_id == profile_id,
+            ProviderConnection.provider == provider,
         )
         .first()
     )
-    return pm.api_base if pm else None
+    if conn and conn.api_base:
+        return conn.api_base
+    # Backward compat: check ProfileModel
+    if model:
+        pm = (
+            db.query(ProfileModel)
+            .filter(
+                ProfileModel.profile_id == profile_id,
+                ProfileModel.provider == provider,
+                ProfileModel.model == model,
+            )
+            .first()
+        )
+        if pm and pm.api_base:
+            return pm.api_base
+    return None
 
 
 def _load_rewrite_context(
@@ -227,7 +241,7 @@ async def chat(req: ChatRequest, db: Session = Depends(get_db)) -> ChatResponse:
 
 
 @router.get("/providers")
-def list_providers() -> list[dict[str, str | None]]:
+def list_providers() -> list[dict[str, str | bool]]:
     return llm_service.get_configured_providers()
 
 

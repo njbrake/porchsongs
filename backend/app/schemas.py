@@ -45,6 +45,22 @@ class ProfileModelOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# --- Provider Connections ---
+class ProviderConnectionCreate(BaseModel):
+    provider: str
+    api_base: str | None = None
+
+
+class ProviderConnectionOut(BaseModel):
+    id: int
+    profile_id: int
+    provider: str
+    api_base: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # --- Rewrite ---
 class RewriteRequest(BaseModel):
     profile_id: int

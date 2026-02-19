@@ -72,6 +72,16 @@ class ChatMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
 
+class ProviderConnection(Base):
+    __tablename__ = "provider_connections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    profile_id: Mapped[int] = mapped_column(Integer, ForeignKey("profiles.id"), nullable=False)
+    provider: Mapped[str] = mapped_column(String, nullable=False)
+    api_base: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+
+
 class ProfileModel(Base):
     __tablename__ = "profile_models"
 

@@ -49,6 +49,20 @@ def _run_migrations() -> None:
                 conn.execute(text("ALTER TABLE profiles ADD COLUMN description TEXT"))
                 logger.info("Migrated profiles: added 'description' column")
 
+    # Seed provider_connections from existing profile_models (one-time, idempotent)
+    tables = inspector.get_table_names()
+    if "provider_connections" in tables and "profile_models" in tables:
+        with engine.begin() as conn:
+            count = conn.execute(text("SELECT COUNT(*) FROM provider_connections")).scalar()
+            if count == 0:
+                conn.execute(
+                    text(
+                        "INSERT INTO provider_connections (profile_id, provider, api_base, created_at) "
+                        "SELECT DISTINCT profile_id, provider, api_base, CURRENT_TIMESTAMP FROM profile_models"
+                    )
+                )
+                logger.info("Migrated: seeded provider_connections from profile_models")
+
 
 _run_migrations()
 
@@ -145,7 +159,8 @@ if _static_dir is not None:
     @app.get("/rewrite")
     @app.get("/library")
     @app.get("/library/{rest:path}")
-    @app.get("/profile")
+    @app.get("/settings")
+    @app.get("/settings/{rest:path}")
     async def _spa_fallback() -> HTMLResponse:
         """Serve index.html for SPA client-side routes."""
         return HTMLResponse(_index_html.read_text())

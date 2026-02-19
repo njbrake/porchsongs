@@ -21,10 +21,9 @@ export default function useSavedModels(profileId) {
     refresh();
   }, [refresh]);
 
-  const addModel = useCallback(async (provider, model, apiBase = null) => {
+  const addModel = useCallback(async (provider, model) => {
     if (!profileId) return;
     const body = { provider, model };
-    if (apiBase) body.api_base = apiBase;
     const added = await api.addProfileModel(profileId, body);
     setSavedModels(prev => {
       // Replace if same provider+model already exists, otherwise append

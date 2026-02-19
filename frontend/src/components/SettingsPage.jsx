@@ -9,105 +9,55 @@ import { Badge } from './ui/badge';
 import { Card, CardContent } from './ui/card';
 import { cn } from '../lib/utils';
 
-function LLMProvidersTab({ provider, model, savedModels, onSave, onAddModel, onRemoveModel }) {
-  const [providers, setProviders] = useState([]);
-  const [loadingProviders, setLoadingProviders] = useState(true);
-  const [localProvider, setLocalProvider] = useState('');
-  const [localModel, setLocalModel] = useState('');
-  const [localApiBase, setLocalApiBase] = useState('');
-  const [connectionVerified, setConnectionVerified] = useState(false);
+function ProviderCard({ conn, providerModels, activeProvider, activeModel, onActivate, onAddModel, onRemoveModel, onDisconnect }) {
   const [models, setModels] = useState([]);
-  const [loadingModels, setLoadingModels] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('');
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
 
-  useEffect(() => {
-    api.listProviders()
-      .then(setProviders)
-      .catch(() => setProviders([]))
-      .finally(() => setLoadingProviders(false));
-  }, []);
-
-  const handleProviderChange = (newProvider) => {
-    setLocalProvider(newProvider);
-    setLocalApiBase('');
-    setConnectionVerified(false);
-    setModels([]);
-    setLocalModel('');
+  const loadModels = () => {
+    setLoading(true);
     setError('');
+    api.listProviderModels(conn.provider, conn.api_base || undefined)
+      .then(list => {
+        setModels(list);
+        // Pre-select first model not already saved
+        const savedNames = new Set(providerModels.map(m => m.model));
+        const first = list.find(m => !savedNames.has(m)) || list[0] || '';
+        setSelectedModel(first);
+      })
+      .catch(err => { setError(err.message); setModels([]); })
+      .finally(() => setLoading(false));
   };
 
-  useEffect(() => {
-    if (!localProvider) {
-      setModels([]);
-      return;
-    }
-    if (localApiBase) return;
-    setLoadingModels(true);
-    setError('');
-    setConnectionVerified(false);
-    api.listProviderModels(localProvider)
-      .then(modelList => {
-        setModels(modelList);
-        setConnectionVerified(true);
-        if (modelList.length && !modelList.includes(localModel)) {
-          setLocalModel(modelList[0]);
-        }
-      })
-      .catch(err => {
-        setError(err.message);
-        setModels([]);
-      })
-      .finally(() => setLoadingModels(false));
-  }, [localProvider]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleVerifyConnection = () => {
-    if (!localProvider) return;
-    setLoadingModels(true);
-    setError('');
-    setConnectionVerified(false);
-    api.listProviderModels(localProvider, localApiBase || undefined)
-      .then(modelList => {
-        setModels(modelList);
-        setConnectionVerified(true);
-        if (modelList.length && !modelList.includes(localModel)) {
-          setLocalModel(modelList[0]);
-        }
-      })
-      .catch(err => {
-        setError(err.message);
-        setModels([]);
-      })
-      .finally(() => setLoadingModels(false));
+  const handleShowAdd = () => {
+    setShowAdd(true);
+    loadModels();
   };
 
   const handleAdd = async () => {
-    if (!localProvider || !localModel) return;
+    if (!selectedModel) return;
     setError('');
     try {
-      const result = await onAddModel(localProvider, localModel, localApiBase || null);
-      if (!result) {
-        setError('Create a profile first (Profile tab) before adding models.');
-        return;
-      }
-      onSave(localProvider, localModel);
+      await onAddModel(conn.provider, selectedModel);
+      onActivate(conn.provider, selectedModel);
+      setShowAdd(false);
+      setSelectedModel('');
     } catch (err) {
       setError(err.message);
     }
-  };
-
-  const handleActivate = (sm) => {
-    onSave(sm.provider, sm.model);
   };
 
   const handleDelete = async (sm) => {
     try {
       await onRemoveModel(sm.id);
-      if (sm.provider === provider && sm.model === model) {
-        const remaining = savedModels.filter(m => m.id !== sm.id);
+      if (sm.provider === activeProvider && sm.model === activeModel) {
+        const remaining = providerModels.filter(m => m.id !== sm.id);
         if (remaining.length > 0) {
-          onSave(remaining[0].provider, remaining[0].model);
+          onActivate(remaining[0].provider, remaining[0].model);
         } else {
-          onSave('', '');
+          onActivate('', '');
         }
       }
     } catch (err) {
@@ -115,116 +65,175 @@ function LLMProvidersTab({ provider, model, savedModels, onSave, onAddModel, onR
     }
   };
 
-  const noProviders = !loadingProviders && !providers.length;
-
-  if (loadingProviders) {
-    return (
-      <div className="flex items-center gap-3 py-8 text-muted-foreground text-sm">
-        <div className="size-5 border-2 border-border border-t-primary rounded-full animate-spin" />
-        <span>Loading providers...</span>
-      </div>
-    );
-  }
-
-  if (noProviders) {
-    return (
-      <p className="text-muted-foreground py-4">
-        No LLM providers configured. Add API keys (e.g. OPENAI_API_KEY) to your .env and restart.
-      </p>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-6">
-      {/* Saved Models */}
-      <Card>
-        <CardContent className="pt-5">
-          <h3 className="text-xs uppercase tracking-wide text-muted-foreground mb-3 pb-1.5 border-b border-border">Saved Models</h3>
-          {savedModels.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic">No models saved yet. Add one below.</p>
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              {savedModels.map(sm => {
-                const isActive = sm.provider === provider && sm.model === model;
-                return (
-                  <div key={sm.id} className={cn(
-                    'flex items-center border border-border rounded-md overflow-hidden transition-colors',
-                    isActive && 'border-primary bg-selected-bg'
-                  )}>
-                    <button
-                      className="flex-1 flex items-center justify-between bg-transparent border-0 px-3 py-2 cursor-pointer text-left text-sm text-foreground hover:bg-panel transition-colors"
-                      onClick={() => handleActivate(sm)}
-                    >
-                      <span className="flex items-baseline gap-0.5">
-                        <span className="font-semibold">{sm.provider}</span>
-                        <span className="text-muted-foreground mx-0.5">/</span>
-                        <span className="text-muted-foreground">{sm.model}</span>
-                        {sm.api_base && <span className="text-xs text-muted-foreground ml-2">@ {sm.api_base}</span>}
-                      </span>
-                      {isActive && <Badge variant="active">Active</Badge>}
-                    </button>
-                    <button
-                      className="bg-transparent border-0 border-l border-border px-2.5 py-2 text-lg text-muted-foreground cursor-pointer leading-none hover:text-danger hover:bg-error-bg transition-colors"
-                      onClick={() => handleDelete(sm)}
-                      title="Remove model"
-                    >
-                      &times;
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Add Model */}
-      <Card>
-        <CardContent className="pt-5">
-          <h3 className="text-xs uppercase tracking-wide text-muted-foreground mb-3 pb-1.5 border-b border-border">Add Model</h3>
-          <div className="mb-3">
-            <Label>Provider</Label>
-            <Select value={localProvider} onChange={e => handleProviderChange(e.target.value)}>
-              <option value="">Select provider...</option>
-              {providers.map(p => (
-                <option key={p.name} value={p.name}>{p.name}</option>
-              ))}
-            </Select>
+    <Card>
+      <CardContent className="pt-5">
+        {/* Provider header */}
+        <div className="flex items-center justify-between mb-3 pb-1.5 border-b border-border">
+          <div className="flex items-baseline gap-2">
+            <h3 className="text-sm font-semibold text-foreground">{conn.provider}</h3>
+            {conn.api_base && <span className="text-xs text-muted-foreground">@ {conn.api_base}</span>}
           </div>
-          {localProvider && (
-            <div className="mb-3">
-              <Label>Base URL <span className="font-normal text-muted-foreground">(optional, for local LLMs)</span></Label>
-              <div className="flex gap-2">
-                <Input
-                  value={localApiBase}
-                  onChange={e => { setLocalApiBase(e.target.value); setConnectionVerified(false); setModels([]); setLocalModel(''); }}
-                  placeholder="http://localhost:11434"
-                  className="flex-1"
-                />
-                {localApiBase && (
-                  <Button variant="secondary" onClick={handleVerifyConnection} disabled={loadingModels}>
-                    {loadingModels ? 'Verifying...' : 'Verify'}
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-          {connectionVerified && (
-            <div className="mb-3">
+          <button
+            className="text-xs text-muted-foreground hover:text-danger transition-colors cursor-pointer bg-transparent border-0"
+            onClick={() => onDisconnect(conn.id)}
+          >
+            Disconnect
+          </button>
+        </div>
+
+        {/* Models list */}
+        {providerModels.length === 0 && !showAdd && (
+          <p className="text-sm text-muted-foreground italic mb-3">No models added yet.</p>
+        )}
+        {providerModels.length > 0 && (
+          <div className="flex flex-col gap-1.5 mb-3">
+            {providerModels.map(sm => {
+              const isActive = sm.provider === activeProvider && sm.model === activeModel;
+              return (
+                <div key={sm.id} className={cn(
+                  'flex items-center border border-border rounded-md overflow-hidden transition-colors',
+                  isActive && 'border-primary bg-selected-bg'
+                )}>
+                  <button
+                    className="flex-1 flex items-center justify-between bg-transparent border-0 px-3 py-2 cursor-pointer text-left text-sm text-foreground hover:bg-panel transition-colors"
+                    onClick={() => onActivate(sm.provider, sm.model)}
+                  >
+                    <span className="text-muted-foreground">{sm.model}</span>
+                    {isActive && <Badge variant="active">Active</Badge>}
+                  </button>
+                  <button
+                    className="bg-transparent border-0 border-l border-border px-2.5 py-2 text-lg text-muted-foreground cursor-pointer leading-none hover:text-danger hover:bg-error-bg transition-colors"
+                    onClick={() => handleDelete(sm)}
+                    title="Remove model"
+                  >
+                    &times;
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Add model inline */}
+        {showAdd ? (
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
               <Label>Model</Label>
-              <Select value={localModel} onChange={e => setLocalModel(e.target.value)} disabled={loadingModels}>
-                {loadingModels && <option value="">Loading models...</option>}
-                {!loadingModels && models.length === 0 && <option value="">No models found</option>}
-                {!loadingModels && models.map(m => (
+              <Select value={selectedModel} onChange={e => setSelectedModel(e.target.value)} disabled={loading}>
+                {loading && <option value="">Loading...</option>}
+                {!loading && models.length === 0 && <option value="">No models found</option>}
+                {!loading && models.map(m => (
                   <option key={m} value={m}>{m}</option>
                 ))}
               </Select>
             </div>
+            <Button onClick={handleAdd} disabled={!selectedModel || loading}>Add</Button>
+            <Button variant="secondary" onClick={() => { setShowAdd(false); setError(''); }}>Cancel</Button>
+          </div>
+        ) : (
+          <Button variant="secondary" size="sm" onClick={handleShowAdd}>+ Add Model</Button>
+        )}
+        {error && <p className="text-sm text-danger mt-2">{error}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function LLMProvidersTab({ provider, model, savedModels, onSave, onAddModel, onRemoveModel, connections, onAddConnection, onRemoveConnection }) {
+  const [providers, setProviders] = useState([]);
+  const [connProvider, setConnProvider] = useState('');
+  const [connApiBase, setConnApiBase] = useState('');
+  const [connVerifying, setConnVerifying] = useState(false);
+  const [connError, setConnError] = useState('');
+
+  useEffect(() => {
+    api.listProviders()
+      .then(setProviders)
+      .catch(() => setProviders([]));
+  }, []);
+
+  const isLocalProvider = (name) => providers.find(p => p.name === name)?.local;
+  const connectedProviderNames = new Set(connections.map(c => c.provider));
+  const availableProviders = providers.filter(p => !connectedProviderNames.has(p.name));
+  const isLocal = isLocalProvider(connProvider);
+
+  const handleAddConnection = async () => {
+    if (!connProvider) return;
+
+    setConnVerifying(true);
+    setConnError('');
+    try {
+      await api.listProviderModels(connProvider, connApiBase || undefined);
+      const result = await onAddConnection(connProvider, connApiBase || null);
+      if (!result) {
+        setConnError('Create a profile first (Profile tab) before adding providers.');
+        return;
+      }
+      setConnProvider('');
+      setConnApiBase('');
+    } catch (err) {
+      setConnError(isLocalProvider(connProvider)
+        ? 'Could not connect. Check the base URL and that the server is running.'
+        : err.message);
+    } finally {
+      setConnVerifying(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* One card per connected provider */}
+      {connections.map(conn => (
+        <ProviderCard
+          key={conn.id}
+          conn={conn}
+          providerModels={savedModels.filter(m => m.provider === conn.provider)}
+          activeProvider={provider}
+          activeModel={model}
+          onActivate={onSave}
+          onAddModel={onAddModel}
+          onRemoveModel={onRemoveModel}
+          onDisconnect={onRemoveConnection}
+        />
+      ))}
+
+      {/* Add Provider */}
+      <Card>
+        <CardContent className="pt-5">
+          <h3 className="text-xs uppercase tracking-wide text-muted-foreground mb-3 pb-1.5 border-b border-border">Add Provider</h3>
+          {availableProviders.length === 0 && providers.length > 0 ? (
+            <p className="text-sm text-muted-foreground italic">All available providers are connected.</p>
+          ) : (
+            <>
+              <div className="mb-3">
+                <Label>Provider</Label>
+                <Select value={connProvider} onChange={e => { setConnProvider(e.target.value); setConnApiBase(''); setConnError(''); }}>
+                  <option value="">Select provider...</option>
+                  {availableProviders.map(p => (
+                    <option key={p.name} value={p.name}>{p.name}</option>
+                  ))}
+                </Select>
+              </div>
+              {connProvider && isLocal && (
+                <div className="mb-3">
+                  <Label>Base URL</Label>
+                  <Input
+                    value={connApiBase}
+                    onChange={e => setConnApiBase(e.target.value)}
+                    placeholder="http://localhost:11434"
+                  />
+                </div>
+              )}
+              {connError && <p className="text-sm text-danger mb-3">{connError}</p>}
+              <Button
+                onClick={handleAddConnection}
+                disabled={!connProvider || connVerifying || (isLocal && !connApiBase)}
+              >
+                {connVerifying ? 'Verifying...' : 'Connect'}
+              </Button>
+            </>
           )}
-          {error && <p className="text-sm text-danger mb-3">{error}</p>}
-          <Button onClick={handleAdd} disabled={!localProvider || !localModel}>
-            Add Model
-          </Button>
         </CardContent>
       </Card>
     </div>
@@ -304,9 +313,7 @@ const SETTINGS_TABS = [
   { key: 'providers', label: 'LLM Providers' },
 ];
 
-export default function SettingsPage({ provider, model, savedModels, onSave, onAddModel, onRemoveModel, profile, onSaveProfile }) {
-  const [activeTab, setActiveTab] = useState('profile');
-
+export default function SettingsPage({ provider, model, savedModels, onSave, onAddModel, onRemoveModel, connections, onAddConnection, onRemoveConnection, profile, onSaveProfile, activeTab, onChangeTab }) {
   return (
     <div>
       <div className="flex border-b border-border mb-4">
@@ -319,7 +326,7 @@ export default function SettingsPage({ provider, model, savedModels, onSave, onA
                 ? 'text-primary border-primary'
                 : 'text-muted-foreground border-transparent hover:text-foreground'
             )}
-            onClick={() => setActiveTab(t.key)}
+            onClick={() => onChangeTab(t.key)}
           >
             {t.label}
           </button>
@@ -338,6 +345,9 @@ export default function SettingsPage({ provider, model, savedModels, onSave, onA
           onSave={onSave}
           onAddModel={onAddModel}
           onRemoveModel={onRemoveModel}
+          connections={connections}
+          onAddConnection={onAddConnection}
+          onRemoveConnection={onRemoveConnection}
         />
       )}
     </div>

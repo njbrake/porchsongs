@@ -2,7 +2,9 @@
 
 from app.services.llm_service import (
     _parse_chat_response,
+    _parse_clean_response,
     _parse_rewrite_response,
+    build_clean_prompt,
     build_user_prompt,
     build_workshop_prompt,
 )
@@ -23,7 +25,7 @@ def test_prompt_with_description():
     assert "Luke Combs" in prompt
     assert "Beer Never Broke My Heart" in prompt
     assert "Long neck ice cold beer never broke my heart" in prompt
-    assert "PASTED INPUT:" in prompt
+    assert "LYRICS:" in prompt
 
 
 def test_prompt_without_description():
@@ -122,94 +124,90 @@ def test_parse_chat_empty_explanation():
     assert result["explanation"] == ""
 
 
+# --- build_clean_prompt ---
+
+
+def test_clean_prompt_contains_input():
+    prompt = build_clean_prompt("G  Am\nHello world")
+    assert "Hello world" in prompt
+    assert "PASTED INPUT:" in prompt
+
+
+def test_clean_prompt_references_meta():
+    prompt = build_clean_prompt("Some lyrics")
+    assert "title" in prompt.lower()
+    assert "artist" in prompt.lower()
+
+
+def test_clean_prompt_no_rewrite_instructions():
+    prompt = build_clean_prompt("Some lyrics")
+    assert "rewrite" not in prompt.lower()
+    assert "syllable" not in prompt.lower()
+
+
+# --- _parse_clean_response ---
+
+
+def test_parse_clean_basic():
+    raw = (
+        "<meta>\nTitle: Wagon Wheel\nArtist: Old Crow\n</meta>\n"
+        "<original>\nG  Am\nHello world\n</original>"
+    )
+    result = _parse_clean_response(raw, "fallback")
+    assert result["title"] == "Wagon Wheel"
+    assert result["artist"] == "Old Crow"
+    assert result["original"] == "G  Am\nHello world"
+
+
+def test_parse_clean_unknown_maps_to_none():
+    raw = (
+        "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
+        "<original>\nHello\n</original>"
+    )
+    result = _parse_clean_response(raw, "fallback")
+    assert result["title"] is None
+    assert result["artist"] is None
+
+
+def test_parse_clean_missing_tags_fallback():
+    raw = "Just some text without XML tags"
+    result = _parse_clean_response(raw, "fallback original")
+    assert result["original"] == "fallback original"
+    assert result["title"] is None
+    assert result["artist"] is None
+
+
 # --- _parse_rewrite_response ---
 
 
-def test_parse_rewrite_3_section():
+def test_parse_rewrite_with_lyrics_tag():
+    """New format: <lyrics> + <changes> XML tags."""
     raw = (
-        "---ORIGINAL---\nG  Am\nHello world\n"
-        "---REWRITTEN---\nG  Am\nHi there world\n"
-        "---CHANGES---\nChanged hello to hi"
-    )
-    result = _parse_rewrite_response(raw, "fallback")
-    assert result["original_lyrics"] == "G  Am\nHello world"
-    assert result["rewritten_lyrics"] == "G  Am\nHi there world"
-    assert result["changes_summary"] == "Changed hello to hi"
-    assert result["title"] is None
-    assert result["artist"] is None
-
-
-def test_parse_rewrite_no_changes_section():
-    raw = (
-        "---ORIGINAL---\nHello world\n"
-        "---REWRITTEN---\nHi there world"
-    )
-    result = _parse_rewrite_response(raw, "fallback")
-    assert result["original_lyrics"] == "Hello world"
-    assert result["rewritten_lyrics"] == "Hi there world"
-    assert result["changes_summary"] == "No change summary provided by the model."
-    assert result["title"] is None
-    assert result["artist"] is None
-
-
-def test_parse_rewrite_old_format_fallback():
-    raw = "Hi there world\n---CHANGES---\nChanged hello to hi"
-    result = _parse_rewrite_response(raw, "original input")
-    assert result["original_lyrics"] == "original input"
-    assert result["rewritten_lyrics"] == "Hi there world"
-    assert result["changes_summary"] == "Changed hello to hi"
-    assert result["title"] is None
-    assert result["artist"] is None
-
-
-def test_parse_rewrite_no_delimiters():
-    raw = "Just some rewritten text"
-    result = _parse_rewrite_response(raw, "original input")
-    assert result["original_lyrics"] == "original input"
-    assert result["rewritten_lyrics"] == "Just some rewritten text"
-    assert result["changes_summary"] == "No change summary provided by the model."
-    assert result["title"] is None
-    assert result["artist"] is None
-
-
-def test_parse_rewrite_with_meta():
-    """Full 4-section XML response extracts title and artist."""
-    raw = (
-        "<meta>\nTitle: Wagon Wheel\nArtist: Old Crow Medicine Show\n</meta>\n"
-        "<original>\nG  Am\nHello world\n</original>\n"
-        "<rewritten>\nG  Am\nHi there world\n</rewritten>\n"
+        "<lyrics>\nHi there world\nSee ya moon\n</lyrics>\n"
         "<changes>\nChanged hello to hi\n</changes>"
     )
     result = _parse_rewrite_response(raw, "fallback")
-    assert result["title"] == "Wagon Wheel"
-    assert result["artist"] == "Old Crow Medicine Show"
-    assert result["original_lyrics"] == "G  Am\nHello world"
-    assert result["rewritten_lyrics"] == "G  Am\nHi there world"
+    assert result["rewritten_lyrics"] == "Hi there world\nSee ya moon"
     assert result["changes_summary"] == "Changed hello to hi"
 
 
-def test_parse_rewrite_with_meta_unknown():
-    """META section with UNKNOWN values maps to None."""
-    raw = (
-        "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
-        "<original>\nHello\n</original>\n"
-        "<rewritten>\nHi\n</rewritten>\n"
-        "<changes>\nChanged greeting. Title and artist could not be determined.\n</changes>"
-    )
-    result = _parse_rewrite_response(raw, "fallback")
-    assert result["title"] is None
-    assert result["artist"] is None
-    assert "could not be determined" in result["changes_summary"]
+def test_parse_rewrite_no_tags():
+    """When no XML tags are present, treat entire response as lyrics."""
+    raw = "Just some rewritten text"
+    result = _parse_rewrite_response(raw, "original input")
+    assert result["rewritten_lyrics"] == "Just some rewritten text"
+    assert result["changes_summary"] == "No change summary provided by the model."
 
 
-def test_parse_rewrite_without_meta_backward_compat():
-    """No META section (legacy format) results in title/artist as None."""
-    raw = (
-        "---ORIGINAL---\nHello world\n"
-        "---REWRITTEN---\nHi world\n"
-        "---CHANGES---\nChanged hello"
-    )
+def test_parse_rewrite_empty_response():
+    """Empty response should fall back to the provided lyrics."""
+    result = _parse_rewrite_response("", "fallback lyrics")
+    assert result["rewritten_lyrics"] == "fallback lyrics"
+
+
+def test_parse_rewrite_lyrics_only_no_changes():
+    """<lyrics> tag present but no <changes> tag."""
+    raw = "<lyrics>\nHi there world\n</lyrics>"
     result = _parse_rewrite_response(raw, "fallback")
-    assert result["title"] is None
-    assert result["artist"] is None
-    assert result["rewritten_lyrics"] == "Hi world"
+    assert result["rewritten_lyrics"] == "Hi there world"
+    assert result["changes_summary"] == "No change summary provided by the model."

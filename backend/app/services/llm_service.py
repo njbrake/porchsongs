@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from any_llm import LLMProvider, acompletion, alist_models
 
-from .chord_parser import extract_lyrics_only
+from .chord_parser import extract_lyrics_only, realign_chords
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Iterator
@@ -23,46 +23,51 @@ def _get_content(response: ChatCompletion | Iterator[ChatCompletionChunk]) -> st
     return content
 
 
-SYSTEM_PROMPT = """You are a songwriter's assistant. You take raw pasted song input (which may include
-ads, navigation text, duplicate sections, or formatting artifacts from tab sites) and produce
-two clean versions: a cleaned-up original and a personalized rewrite.
+CLEAN_SYSTEM_PROMPT = """You are a songwriter's assistant. Your ONLY job is to clean up raw pasted \
+song input. Do NOT rewrite or change the lyrics in any way.
 
-STEP 0 — IDENTIFY:
+STEP 1 — IDENTIFY:
 - Determine the song's title and artist from the input
 - If you cannot determine either, use "UNKNOWN"
 
-STEP 1 — CLEAN UP:
+STEP 2 — CLEAN UP:
 - Strip any ads, site navigation, duplicate headers, or non-song text
 - Preserve chord charts in above-line format (chords on their own line above the lyric line)
 - Keep section headers like [Verse], [Chorus], etc.
 - Preserve blank lines between sections
+- Do NOT change any lyrics or chord positions
 
-STEP 2 — REWRITE:
-- Adapt the lyrics so they feel personally relevant to the singer
-- Preserve the chord chart format exactly (same chords, same positions)
-- SYLLABLE COUNT: Each lyric line MUST have the same number of syllables as the original
-- RHYME SCHEME: Keep the exact same rhyme pattern
-- THEME & EMOTION: Same emotional arc
-- SINGABILITY: Words must sound natural when sung
-- MINIMAL CHANGES: Only change what doesn't fit. Leave lines that already work
-
-YOU MUST RESPOND WITH ALL FOUR SECTIONS using these exact XML tags:
+Respond with exactly these two XML sections:
 
 <meta>
 Title: <song title or UNKNOWN>
 Artist: <artist name or UNKNOWN>
 </meta>
 <original>
-(the cleaned-up version of the pasted input — this is critical, do NOT skip this section)
-</original>
-<rewritten>
-(personalized rewrite with chords preserved)
-</rewritten>
-<changes>
-(brief summary of what you changed and why; if title or artist is UNKNOWN, mention this and ask the user to fill them in)
-</changes>
+(the cleaned-up version of the pasted input with chords preserved)
+</original>"""
 
-All four sections are required. The <original> section must contain the cleaned-up input."""
+REWRITE_SYSTEM_PROMPT = """You are a songwriter's assistant. You rewrite lyrics so they feel \
+personally relevant to the singer.
+
+Rules:
+- SYLLABLE COUNT: Each lyric line MUST have the same number of syllables as the original
+- RHYME SCHEME: Keep the exact same rhyme pattern
+- THEME & EMOTION: Same emotional arc
+- SINGABILITY: Words must sound natural when sung
+- MINIMAL CHANGES: Only change what doesn't fit. Leave lines that already work
+- NO CHORDS: The input contains lyrics only. Do not add chord annotations.
+- Preserve section headers like [Verse], [Chorus], etc.
+- Preserve blank lines between sections
+
+Respond with exactly these two XML sections:
+
+<lyrics>
+(the rewritten lyrics — no chords, just lyrics and section headers)
+</lyrics>
+<changes>
+(brief summary of what you changed and why)
+</changes>"""
 
 WORKSHOP_SYSTEM_PROMPT = """You are a songwriter's assistant helping refine individual lyric lines.
 You suggest alternatives that:
@@ -103,6 +108,11 @@ async def get_models(provider: str, api_base: str | None = None) -> list[str]:
     return [m.id if hasattr(m, "id") else str(m) for m in raw]
 
 
+def build_clean_prompt(lyrics: str) -> str:
+    """Build the user prompt for the cleanup LLM call."""
+    return f"Clean up this pasted input. Identify the title and artist.\n\nPASTED INPUT:\n{lyrics}"
+
+
 def build_user_prompt(
     profile_description: str,
     title: str | None,
@@ -110,7 +120,10 @@ def build_user_prompt(
     lyrics: str,
     instruction: str | None = None,
 ) -> str:
-    """Build the user prompt for the LLM."""
+    """Build the user prompt for the rewrite LLM call.
+
+    Receives lyrics-only text (no chords) for rewriting.
+    """
     prompt_parts = []
 
     if profile_description.strip():
@@ -135,18 +148,15 @@ def build_user_prompt(
         prompt_parts.append("")
 
     prompt_parts.append(
-        "Clean up this pasted input (strip any non-song content, formatting artifacts, duplicates) "
-        "then rewrite the lyrics to feel like the singer's own life. Same syllable count per line, "
-        "same rhyme scheme, same emotions. Preserve chords in above-line format. "
-        "Only change imagery/references that don't fit."
+        "Rewrite the lyrics to feel like the singer's own life. Same syllable count per line, "
+        "same rhyme scheme, same emotions. Only change imagery/references that don't fit."
     )
     prompt_parts.append("")
-    prompt_parts.append("PASTED INPUT:")
+    prompt_parts.append("LYRICS:")
     prompt_parts.append(lyrics)
     prompt_parts.append("")
     prompt_parts.append(
-        "Use the response format specified in your instructions "
-        "(<meta>, <original>, <rewritten>, <changes> XML sections)."
+        "Use the response format specified in your instructions (<lyrics>, <changes> XML sections)."
     )
 
     return "\n".join(prompt_parts)
@@ -214,34 +224,60 @@ async def rewrite_lyrics(
     api_base: str | None = None,
     reasoning_effort: str | None = None,
 ) -> dict[str, str | None]:
-    """Rewrite lyrics using the configured LLM.
+    """Rewrite lyrics using 2 sequential LLM calls.
 
-    Sends raw pasted input to the LLM which handles cleanup and chord formatting.
+    Call 1: Clean up raw input, identify title/artist.
+    Call 2: Rewrite lyrics (chords stripped, handled programmatically).
     Returns dict with: original_lyrics, rewritten_lyrics, changes_summary, title, artist
     """
-    user_prompt = build_user_prompt(
-        profile_description, title, artist, lyrics_with_chords, instruction
-    )
-
-    # Call the LLM via any-llm-sdk (uses env-var credentials automatically)
-    kwargs: dict[str, object] = {
+    base_kwargs: dict[str, object] = {
         "model": model,
         "provider": provider,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
     }
     if api_base:
-        kwargs["api_base"] = api_base
+        base_kwargs["api_base"] = api_base
     if reasoning_effort:
-        kwargs["reasoning_effort"] = reasoning_effort
-    response = await acompletion(**kwargs)
+        base_kwargs["reasoning_effort"] = reasoning_effort
 
-    raw_response = _get_content(response)
+    # --- Call 1: Clean + Identify ---
+    clean_response = await acompletion(
+        **base_kwargs,
+        messages=[
+            {"role": "system", "content": CLEAN_SYSTEM_PROMPT},
+            {"role": "user", "content": build_clean_prompt(lyrics_with_chords)},
+        ],
+    )
+    clean_result = _parse_clean_response(_get_content(clean_response), lyrics_with_chords)
+    clean_text = clean_result["original"]
+    meta_title = title or clean_result["title"]
+    meta_artist = artist or clean_result["artist"]
 
-    # Parse the 3-section response format
-    return _parse_rewrite_response(raw_response, lyrics_with_chords)
+    # --- Strip chords for rewrite ---
+    lyrics_only = extract_lyrics_only(clean_text)
+
+    # --- Call 2: Rewrite ---
+    rewrite_prompt = build_user_prompt(
+        profile_description, meta_title, meta_artist, lyrics_only, instruction
+    )
+    rewrite_response = await acompletion(
+        **base_kwargs,
+        messages=[
+            {"role": "system", "content": REWRITE_SYSTEM_PROMPT},
+            {"role": "user", "content": rewrite_prompt},
+        ],
+    )
+    rewrite_result = _parse_rewrite_response(_get_content(rewrite_response), lyrics_only)
+
+    # --- Realign chords programmatically ---
+    rewritten_with_chords = realign_chords(clean_text, rewrite_result["rewritten_lyrics"])
+
+    return {
+        "original_lyrics": clean_text,
+        "rewritten_lyrics": rewritten_with_chords,
+        "changes_summary": rewrite_result["changes_summary"],
+        "title": meta_title,
+        "artist": meta_artist,
+    }
 
 
 async def rewrite_lyrics_stream(
@@ -255,26 +291,51 @@ async def rewrite_lyrics_stream(
     api_base: str | None = None,
     reasoning_effort: str | None = None,
 ) -> AsyncIterator[str]:
-    """Stream a rewrite as SSE events: token chunks then a final done payload."""
-    user_prompt = build_user_prompt(
-        profile_description, title, artist, lyrics_with_chords, instruction
-    )
+    """Stream a rewrite as SSE events with phase indicators.
 
-    kwargs: dict[str, object] = {
+    Call 1 (non-streaming): Clean + Identify
+    Call 2 (streaming): Rewrite lyrics
+    Post-processing: Realign chords programmatically
+    """
+    base_kwargs: dict[str, object] = {
         "model": model,
         "provider": provider,
-        "stream": True,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
     }
     if api_base:
-        kwargs["api_base"] = api_base
+        base_kwargs["api_base"] = api_base
     if reasoning_effort:
-        kwargs["reasoning_effort"] = reasoning_effort
+        base_kwargs["reasoning_effort"] = reasoning_effort
 
-    response = await acompletion(**kwargs)
+    # --- Phase 1: Clean + Identify (non-streaming) ---
+    yield f"data: {json.dumps({'phase': 'cleaning'})}\n\n"
+    clean_response = await acompletion(
+        **base_kwargs,
+        messages=[
+            {"role": "system", "content": CLEAN_SYSTEM_PROMPT},
+            {"role": "user", "content": build_clean_prompt(lyrics_with_chords)},
+        ],
+    )
+    clean_result = _parse_clean_response(_get_content(clean_response), lyrics_with_chords)
+    clean_text = clean_result["original"]
+    meta_title = title or clean_result["title"]
+    meta_artist = artist or clean_result["artist"]
+
+    # --- Strip chords for rewrite ---
+    lyrics_only = extract_lyrics_only(clean_text)
+
+    # --- Phase 2: Rewrite (streaming) ---
+    yield f"data: {json.dumps({'phase': 'rewriting'})}\n\n"
+    rewrite_prompt = build_user_prompt(
+        profile_description, meta_title, meta_artist, lyrics_only, instruction
+    )
+    response = await acompletion(
+        **base_kwargs,
+        stream=True,
+        messages=[
+            {"role": "system", "content": REWRITE_SYSTEM_PROMPT},
+            {"role": "user", "content": rewrite_prompt},
+        ],
+    )
 
     accumulated = ""
     thinking_started = False
@@ -288,8 +349,19 @@ async def rewrite_lyrics_stream(
             thinking_started = True
             yield f"data: {json.dumps({'thinking': True})}\n\n"
 
-    # Parse accumulated text into structured result
-    result = _parse_rewrite_response(accumulated, lyrics_with_chords)
+    # Parse accumulated rewrite response
+    rewrite_result = _parse_rewrite_response(accumulated, lyrics_only)
+
+    # --- Post-processing: Realign chords ---
+    rewritten_with_chords = realign_chords(clean_text, rewrite_result["rewritten_lyrics"])
+
+    result: dict[str, str | None] = {
+        "original_lyrics": clean_text,
+        "rewritten_lyrics": rewritten_with_chords,
+        "changes_summary": rewrite_result["changes_summary"],
+        "title": meta_title,
+        "artist": meta_artist,
+    }
     yield f"data: {json.dumps({'done': True, 'result': result})}\n\n"
 
 
@@ -317,63 +389,49 @@ def _parse_meta_section(meta_text: str) -> dict[str, str | None]:
     return {"title": title, "artist": artist}
 
 
-def _parse_rewrite_response(raw: str, fallback_original: str) -> dict[str, str | None]:
-    """Parse the LLM rewrite response.
+def _parse_clean_response(raw: str, fallback_original: str) -> dict[str, str | None]:
+    """Parse the cleanup LLM response (Call 1).
 
-    Supports two formats:
-    - XML tags: <meta>, <original>, <rewritten>, <changes>
-    - Legacy delimiters: ---ORIGINAL---/---REWRITTEN---/---CHANGES---
-
-    Returns dict with: original_lyrics, rewritten_lyrics, changes_summary, title, artist
+    Extracts <meta> (title/artist) and <original> (cleaned text).
+    Falls back to fallback_original if <original> tag is missing.
     """
-    original_lyrics = fallback_original
-    rewritten_lyrics = raw.strip()
-    changes_summary = "No change summary provided by the model."
     title: str | None = None
     artist: str | None = None
 
-    # Try XML tags first
-    xml_rewritten = _extract_xml_section(raw, "rewritten")
-    if xml_rewritten is not None:
-        rewritten_lyrics = xml_rewritten
+    xml_meta = _extract_xml_section(raw, "meta")
+    if xml_meta is not None:
+        parsed_meta = _parse_meta_section(xml_meta)
+        title = parsed_meta["title"]
+        artist = parsed_meta["artist"]
 
-        xml_original = _extract_xml_section(raw, "original")
-        if xml_original is not None:
-            original_lyrics = xml_original
+    xml_original = _extract_xml_section(raw, "original")
+    original = xml_original if xml_original is not None else fallback_original
+
+    return {"original": original, "title": title, "artist": artist}
+
+
+def _parse_rewrite_response(raw: str, fallback_lyrics: str) -> dict[str, str]:
+    """Parse the rewrite LLM response (Call 2).
+
+    Extracts <lyrics> and <changes> XML sections.
+    Returns dict with: rewritten_lyrics, changes_summary
+    """
+    rewritten_lyrics = raw.strip()
+    changes_summary = "No change summary provided by the model."
+
+    xml_lyrics = _extract_xml_section(raw, "lyrics")
+    if xml_lyrics is not None:
+        rewritten_lyrics = xml_lyrics
 
         xml_changes = _extract_xml_section(raw, "changes")
         if xml_changes is not None:
             changes_summary = xml_changes
-
-        xml_meta = _extract_xml_section(raw, "meta")
-        if xml_meta is not None:
-            parsed_meta = _parse_meta_section(xml_meta)
-            title = parsed_meta["title"]
-            artist = parsed_meta["artist"]
-    elif "---REWRITTEN---" in raw:
-        # Legacy delimiter format
-        before_rewritten, after_rewritten = raw.split("---REWRITTEN---", 1)
-
-        if "---ORIGINAL---" in before_rewritten:
-            original_lyrics = before_rewritten.split("---ORIGINAL---", 1)[1].strip()
-
-        if "---CHANGES---" in after_rewritten:
-            rewritten_block, changes_block = after_rewritten.split("---CHANGES---", 1)
-            rewritten_lyrics = rewritten_block.strip()
-            changes_summary = changes_block.strip()
-        else:
-            rewritten_lyrics = after_rewritten.strip()
-    elif "---CHANGES---" in raw:
-        parts = raw.split("---CHANGES---", 1)
-        rewritten_lyrics = parts[0].strip()
-        changes_summary = parts[1].strip()
+    elif not rewritten_lyrics:
+        rewritten_lyrics = fallback_lyrics
 
     return {
-        "original_lyrics": original_lyrics,
         "rewritten_lyrics": rewritten_lyrics,
         "changes_summary": changes_summary,
-        "title": title,
-        "artist": artist,
     }
 
 

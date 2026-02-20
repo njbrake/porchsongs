@@ -5,7 +5,6 @@ from app.services.chord_parser import (
     _place_chords,
     _snap_to_boundary,
     extract_lyrics_only,
-    inline_to_above_line,
     is_chord_line,
     realign_chords,
     replace_line_with_chords,
@@ -91,25 +90,6 @@ def test_extract_lyrics_preserves_empty_lines():
     text = "G  C\nHello\n\nDm  G\nWorld"
     lyrics = extract_lyrics_only(text)
     assert lyrics == "Hello\n\nWorld"
-
-
-# --- inline_to_above_line ---
-
-
-def test_inline_to_above():
-    text = "[G]Take me [Am]home"
-    result = inline_to_above_line(text)
-    lines = result.split("\n")
-    assert len(lines) == 2
-    # Chord line should have G and Am at appropriate positions
-    assert "G" in lines[0]
-    assert "Am" in lines[0]
-    assert "Take me home" in lines[1]
-
-
-def test_inline_no_chords_passthrough():
-    text = "Just lyrics here"
-    assert inline_to_above_line(text) == "Just lyrics here"
 
 
 # --- _extract_chord_positions ---

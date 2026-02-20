@@ -153,6 +153,6 @@ cd frontend && npm run typecheck
 
 ## LLM Providers
 
-Built on [any-llm](https://github.com/abhaymathur21/any-llm) — 38+ providers including OpenAI, Anthropic, Google, Mistral, Groq, and Ollama. Bring your own API key.
+Built on [any-llm](https://github.com/mozilla-ai/any-llm) — 38+ providers including OpenAI, Anthropic, Google, Mistral, Groq, and Ollama. Bring your own API key.
 
-For fully local/offline use, try [llamafile](https://github.com/Mozilla-Ocho/llamafile).
+For fully local/offline use, try [llamafile](https://github.com/mozilla-ai/llamafile).

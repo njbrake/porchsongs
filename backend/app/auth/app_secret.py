@@ -4,6 +4,7 @@ from typing import Any
 
 import bcrypt
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -72,7 +73,14 @@ class AppSecretBackend(AuthBackend):
             created_at=datetime.now(UTC),
         )
         db.add(user)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            user = db.query(User).filter(User.email == LOCAL_EMAIL).first()
+            if user:
+                return user
+            raise
         db.refresh(user)
         self.on_user_created(db, user)
         return user

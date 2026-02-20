@@ -137,6 +137,8 @@ async def update_song(
         song.artist = data.artist
     if data.rewritten_lyrics is not None:
         song.rewritten_lyrics = data.rewritten_lyrics
+    if data.font_size is not None:
+        song.font_size = data.font_size if data.font_size > 0 else None
     if data.folder is not None:
         song.folder = data.folder if data.folder != "" else None
     db.commit()

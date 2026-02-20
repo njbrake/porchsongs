@@ -20,6 +20,7 @@ export interface Song {
   rewritten_lyrics: string;
   changes_summary: string | null;
   status: 'draft' | 'completed';
+  font_size: number | null;
   folder: string | null;
   llm_provider: string | null;
   llm_model: string | null;

@@ -32,10 +32,20 @@ STEP 1 — IDENTIFY:
 
 STEP 2 — CLEAN UP:
 - Strip any ads, site navigation, duplicate headers, or non-song text
-- Preserve chord charts in above-line format (chords on their own line above the lyric line)
 - Keep section headers like [Verse], [Chorus], etc.
 - Preserve blank lines between sections
-- Do NOT change any lyrics or chord positions
+- Do NOT change any lyrics
+
+CHORD PRESERVATION (critical):
+- Chords appear on their own line directly ABOVE the lyric line they belong to
+- The horizontal spacing of each chord is meaningful — it aligns the chord to a specific \
+word or syllable in the lyric line below
+- You MUST keep every chord line exactly as-is: same chords, same spacing, same position
+- Do NOT reformat, re-space, or merge chord lines
+- Example of correct above-line chord format:
+    G          C          D
+    Amazing grace how sweet the sound
+  The spaces before G, C, and D position them above specific words. Preserve this exactly.
 
 Respond with exactly these two XML sections:
 
@@ -44,7 +54,7 @@ Title: <song title or UNKNOWN>
 Artist: <artist name or UNKNOWN>
 </meta>
 <original>
-(the cleaned-up version of the pasted input with chords preserved)
+(the cleaned-up version of the pasted input with chords and their spacing preserved exactly)
 </original>"""
 
 REWRITE_SYSTEM_PROMPT = """You are a songwriter's assistant. You rewrite lyrics so they feel \

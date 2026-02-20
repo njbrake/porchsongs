@@ -283,7 +283,7 @@ export default function App() {
       />
       <Tabs active={activeTab} onChange={setTab} />
       <main className="max-w-[1800px] mx-auto px-2 sm:px-4 py-4">
-        {activeTab === 'rewrite' && (
+        <div style={{ display: activeTab === 'rewrite' ? undefined : 'none' }}>
           <RewriteTab
             profile={profile}
             llmSettings={llmSettings}
@@ -302,7 +302,7 @@ export default function App() {
             savedModels={savedModels}
             onOpenSettings={() => setTab('settings', 'profile')}
           />
-        )}
+        </div>
         {activeTab === 'library' && (
           <LibraryTab onLoadSong={handleLoadSong} initialSongId={initialSongId} onInitialSongConsumed={() => setInitialSongId(null)} />
         )}

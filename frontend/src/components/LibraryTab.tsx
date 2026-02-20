@@ -65,16 +65,22 @@ function splitLyricsForColumns(text: string): { left: string; right: string } | 
 
 const PRE_BASE_CLASS = 'font-[family-name:var(--font-mono)] text-[0.75rem] sm:text-[0.82rem] leading-snug whitespace-pre-wrap break-words sm:whitespace-pre sm:break-normal sm:overflow-x-auto text-foreground';
 
-function PerformanceLyrics({ text }: { text: string }) {
+function PerformanceLyrics({ song, onSongUpdated }: { song: Song; onSongUpdated: (song: Song) => void }) {
+  const text = song.rewritten_lyrics;
   const columns = useMemo(() => splitLyricsForColumns(text), [text]);
   const cardRef = useRef<HTMLDivElement>(null);
   const [autoOneCol, setAutoOneCol] = useState(false);
   const [userOverride, setUserOverride] = useState<number | null>(null);
+  const [localFontSize, setLocalFontSize] = useState<number | null>(song.font_size);
 
   useLayoutEffect(() => {
     setAutoOneCol(false);
     setUserOverride(null);
   }, [text]);
+
+  useEffect(() => {
+    setLocalFontSize(song.font_size);
+  }, [song.font_size]);
 
   const canSplit = columns !== null;
   const showTwoCol = canSplit && (userOverride === 2 || (userOverride === null && !autoOneCol));
@@ -89,23 +95,75 @@ function PerformanceLyrics({ text }: { text: string }) {
     }
   }, [columns, autoOneCol, userOverride]);
 
-  const fontSize = useAutoFontSize(cardRef, text, { columnOverhead: showTwoCol ? 33 : 0 });
-  const fontStyle = fontSize !== undefined ? { fontSize: `${fontSize}px` } : undefined;
+  const autoFontSize = useAutoFontSize(cardRef, text, { columnOverhead: showTwoCol ? 33 : 0 });
+  const effectiveSize = localFontSize ?? autoFontSize;
+  const fontStyle = effectiveSize !== undefined ? { fontSize: `${effectiveSize}px` } : undefined;
+  const isAuto = localFontSize === null;
+  const sliderValue = effectiveSize ?? 16;
 
-  const toggle = canSplit ? (
-    <Button
-      variant="secondary"
-      size="sm"
-      className="absolute top-2 right-2 z-10 opacity-60 hover:opacity-100"
-      onClick={() => setUserOverride(showTwoCol ? 1 : 2)}
-    >
-      {showTwoCol ? '1 Column' : '2 Columns'}
-    </Button>
-  ) : null;
+  const persistFontSize = useCallback((value: number | null) => {
+    const sendValue = value === null ? 0 : value;
+    api.updateSong(song.id, { font_size: sendValue } as Partial<Song>).then(updated => {
+      onSongUpdated(updated);
+    }).catch(() => {});
+  }, [song.id, onSongUpdated]);
+
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLocalFontSize(Number(e.target.value));
+  };
+
+  const handleSliderCommit = () => {
+    persistFontSize(localFontSize);
+  };
+
+  const handleResetToAuto = () => {
+    setLocalFontSize(null);
+    persistFontSize(null);
+  };
+
+  const controls = (
+    <div className="absolute top-2 right-2 z-10 flex items-center gap-2 opacity-60 hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-1.5 bg-background/80 backdrop-blur-sm rounded-md px-2 py-1 border border-border">
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
+          {isAuto ? 'Auto' : `${Math.round(sliderValue)}px`}
+        </span>
+        <input
+          type="range"
+          min={10}
+          max={28}
+          step={1}
+          value={Math.round(sliderValue)}
+          onChange={handleSliderChange}
+          onMouseUp={handleSliderCommit}
+          onTouchEnd={handleSliderCommit}
+          className="w-20 h-1 accent-primary cursor-pointer"
+          title="Text size"
+        />
+        {!isAuto && (
+          <button
+            onClick={handleResetToAuto}
+            className="text-xs text-muted-foreground hover:text-foreground cursor-pointer ml-0.5"
+            title="Reset to auto size"
+          >
+            &times;
+          </button>
+        )}
+      </div>
+      {canSplit && (
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setUserOverride(showTwoCol ? 1 : 2)}
+        >
+          {showTwoCol ? '1 Column' : '2 Columns'}
+        </Button>
+      )}
+    </div>
+  );
 
   return (
     <div className="relative">
-      {toggle}
+      {controls}
       <Card
         ref={cardRef}
         className={cn('p-4 sm:p-6', showTwoCol && 'xl:grid xl:grid-cols-2 xl:gap-6')}
@@ -570,7 +628,7 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
           {song.artist && <div className="text-sm text-muted-foreground mt-0.5">{song.artist}</div>}
         </div>
 
-        <PerformanceLyrics text={song.rewritten_lyrics} />
+        <PerformanceLyrics song={song} onSongUpdated={handleSongUpdated} />
 
         <Button variant="secondary" className="mt-6" onClick={handleShowDetails}>
           {showDetails ? 'Hide Details' : 'Show Original & History'}

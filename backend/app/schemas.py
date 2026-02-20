@@ -121,6 +121,7 @@ class SongOut(BaseModel):
     changes_summary: str | None
     llm_provider: str | None
     llm_model: str | None
+    font_size: float | None = None
     folder: str | None = None
     status: str
     current_version: int
@@ -147,6 +148,7 @@ class SongUpdate(BaseModel):
     title: str | None = None
     artist: str | None = None
     rewritten_lyrics: str | None = None
+    font_size: float | None = None
     folder: str | None = None
 
 

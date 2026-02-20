@@ -5,11 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from ..auth.dependencies import get_current_user
+from ..auth.scoping import get_user_song
 from ..database import get_db
 from ..models import (
     ChatMessage,
     Song,
     SongRevision,
+    User,
 )
 from ..schemas import (
     ApplyEditRequest,
@@ -28,13 +31,14 @@ router = APIRouter()
 
 
 @router.get("/songs", response_model=list[SongOut])
-def list_songs(
+async def list_songs(
     profile_id: int | None = None,
     search: str | None = None,
     folder: str | None = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[Any]:
-    query = db.query(Song)
+    query = db.query(Song).filter(Song.user_id == current_user.id)
     if profile_id is not None:
         query = query.filter(Song.profile_id == profile_id)
     if search:
@@ -49,24 +53,35 @@ def list_songs(
 
 
 @router.get("/songs/folders", response_model=list[str])
-def list_folders(db: Session = Depends(get_db)) -> list[str]:
-    rows = db.query(Song.folder).filter(Song.folder.isnot(None), Song.folder != "").distinct().all()
+async def list_folders(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[str]:
+    rows = (
+        db.query(Song.folder)
+        .filter(Song.user_id == current_user.id, Song.folder.isnot(None), Song.folder != "")
+        .distinct()
+        .all()
+    )
     return sorted(row[0] for row in rows)
 
 
 @router.get("/songs/{song_id}", response_model=SongOut)
-def get_song(song_id: int, db: Session = Depends(get_db)) -> Song:
-    song = db.query(Song).filter(Song.id == song_id).first()
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
-    return song
+async def get_song(
+    song_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Song:
+    return get_user_song(db, current_user, song_id)
 
 
 @router.get("/songs/{song_id}/pdf")
-def download_song_pdf(song_id: int, db: Session = Depends(get_db)) -> Response:
-    song = db.query(Song).filter(Song.id == song_id).first()
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
+async def download_song_pdf(
+    song_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    song = get_user_song(db, current_user, song_id)
 
     from ..services.pdf_service import generate_song_pdf
 
@@ -84,8 +99,12 @@ def download_song_pdf(song_id: int, db: Session = Depends(get_db)) -> Response:
 
 
 @router.post("/songs", response_model=SongOut, status_code=201)
-def create_song(data: SongCreate, db: Session = Depends(get_db)) -> Song:
-    song = Song(**data.model_dump(), status="draft", current_version=1)
+async def create_song(
+    data: SongCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Song:
+    song = Song(**data.model_dump(), user_id=current_user.id, status="draft", current_version=1)
     db.add(song)
     db.commit()
     db.refresh(song)
@@ -105,10 +124,13 @@ def create_song(data: SongCreate, db: Session = Depends(get_db)) -> Song:
 
 
 @router.put("/songs/{song_id}", response_model=SongOut)
-def update_song(song_id: int, data: SongUpdate, db: Session = Depends(get_db)) -> Song:
-    song = db.query(Song).filter(Song.id == song_id).first()
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
+async def update_song(
+    song_id: int,
+    data: SongUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Song:
+    song = get_user_song(db, current_user, song_id)
     if data.title is not None:
         song.title = data.title
     if data.artist is not None:
@@ -123,23 +145,27 @@ def update_song(song_id: int, data: SongUpdate, db: Session = Depends(get_db)) -
 
 
 @router.delete("/songs/{song_id}")
-def delete_song(song_id: int, db: Session = Depends(get_db)) -> dict[str, bool]:
-    song = db.query(Song).filter(Song.id == song_id).first()
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
+async def delete_song(
+    song_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, bool]:
+    song = get_user_song(db, current_user, song_id)
     # Delete related revisions and chat messages
-    db.query(SongRevision).filter(SongRevision.song_id == song_id).delete()
-    db.query(ChatMessage).filter(ChatMessage.song_id == song_id).delete()
+    db.query(SongRevision).filter(SongRevision.song_id == song.id).delete()
+    db.query(ChatMessage).filter(ChatMessage.song_id == song.id).delete()
     db.delete(song)
     db.commit()
     return {"ok": True}
 
 
 @router.get("/songs/{song_id}/revisions", response_model=list[SongRevisionOut])
-def list_revisions(song_id: int, db: Session = Depends(get_db)) -> list[Any]:
-    song = db.query(Song).filter(Song.id == song_id).first()
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
+async def list_revisions(
+    song_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[Any]:
+    get_user_song(db, current_user, song_id)
     revisions = (
         db.query(SongRevision)
         .filter(SongRevision.song_id == song_id)
@@ -150,10 +176,12 @@ def list_revisions(song_id: int, db: Session = Depends(get_db)) -> list[Any]:
 
 
 @router.get("/songs/{song_id}/messages", response_model=list[ChatMessageOut])
-def list_messages(song_id: int, db: Session = Depends(get_db)) -> list[Any]:
-    song = db.query(Song).filter(Song.id == song_id).first()
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
+async def list_messages(
+    song_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[Any]:
+    get_user_song(db, current_user, song_id)
     return (
         db.query(ChatMessage)
         .filter(ChatMessage.song_id == song_id)
@@ -163,12 +191,13 @@ def list_messages(song_id: int, db: Session = Depends(get_db)) -> list[Any]:
 
 
 @router.post("/songs/{song_id}/messages", response_model=list[ChatMessageOut], status_code=201)
-def save_messages(
-    song_id: int, messages: list[ChatMessageCreate], db: Session = Depends(get_db)
+async def save_messages(
+    song_id: int,
+    messages: list[ChatMessageCreate],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> list[Any]:
-    song = db.query(Song).filter(Song.id == song_id).first()
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
+    get_user_song(db, current_user, song_id)
     rows = []
     for msg in messages:
         row = ChatMessage(song_id=song_id, role=msg.role, content=msg.content, is_note=msg.is_note)
@@ -181,14 +210,13 @@ def save_messages(
 
 
 @router.put("/songs/{song_id}/status", response_model=SongOut)
-def update_song_status(
+async def update_song_status(
     song_id: int,
     data: SongStatusUpdate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Song:
-    song = db.query(Song).filter(Song.id == song_id).first()
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
+    song = get_user_song(db, current_user, song_id)
 
     if data.status not in ("draft", "completed"):
         raise HTTPException(status_code=400, detail="Status must be 'draft' or 'completed'")
@@ -201,10 +229,12 @@ def update_song_status(
 
 
 @router.post("/apply-edit", response_model=ApplyEditResponse)
-def apply_edit(data: ApplyEditRequest, db: Session = Depends(get_db)) -> dict[str, str | int]:
-    song = db.query(Song).filter(Song.id == data.song_id).first()
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
+async def apply_edit(
+    data: ApplyEditRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, str | int]:
+    song = get_user_song(db, current_user, data.song_id)
 
     # Replace the line in the full chord text
     try:

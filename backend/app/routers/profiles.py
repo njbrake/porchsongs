@@ -1,11 +1,13 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from ..auth.dependencies import get_current_user
+from ..auth.scoping import get_user_profile
 from ..database import get_db
-from ..models import Profile, ProfileModel, ProviderConnection
+from ..models import Profile, ProfileModel, ProviderConnection, User
 from ..schemas import (
     ProfileCreate,
     ProfileModelCreate,
@@ -20,21 +22,35 @@ router = APIRouter()
 
 
 @router.get("/profiles", response_model=list[ProfileOut])
-def list_profiles(db: Session = Depends(get_db)) -> list[Any]:
-    return db.query(Profile).order_by(Profile.created_at.desc()).all()
+async def list_profiles(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[Any]:
+    return (
+        db.query(Profile)
+        .filter(Profile.user_id == current_user.id)
+        .order_by(Profile.created_at.desc())
+        .all()
+    )
 
 
 @router.post("/profiles", response_model=ProfileOut, status_code=201)
-def create_profile(data: ProfileCreate, db: Session = Depends(get_db)) -> Profile:
-    # If this profile is set as default, unset other defaults
+async def create_profile(
+    data: ProfileCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Profile:
+    # If this profile is set as default, unset other defaults for this user
     if data.is_default:
-        db.query(Profile).filter(Profile.is_default.is_(True)).update({"is_default": False})
+        db.query(Profile).filter(
+            Profile.user_id == current_user.id, Profile.is_default.is_(True)
+        ).update({"is_default": False})
 
-    # If no profiles exist, make this one the default
-    if db.query(Profile).count() == 0:
+    # If no profiles exist for this user, make this one the default
+    if db.query(Profile).filter(Profile.user_id == current_user.id).count() == 0:
         data.is_default = True
 
-    profile = Profile(**data.model_dump())
+    profile = Profile(**data.model_dump(), user_id=current_user.id)
     db.add(profile)
     db.commit()
     db.refresh(profile)
@@ -42,26 +58,32 @@ def create_profile(data: ProfileCreate, db: Session = Depends(get_db)) -> Profil
 
 
 @router.get("/profiles/{profile_id}", response_model=ProfileOut)
-def get_profile(profile_id: int, db: Session = Depends(get_db)) -> Profile:
-    profile = db.query(Profile).filter(Profile.id == profile_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    return profile
+async def get_profile(
+    profile_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Profile:
+    return get_user_profile(db, current_user, profile_id)
 
 
 @router.put("/profiles/{profile_id}", response_model=ProfileOut)
-def update_profile(profile_id: int, data: ProfileUpdate, db: Session = Depends(get_db)) -> Profile:
-    profile = db.query(Profile).filter(Profile.id == profile_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
+async def update_profile(
+    profile_id: int,
+    data: ProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Profile:
+    profile = get_user_profile(db, current_user, profile_id)
 
     update_data = data.model_dump(exclude_unset=True)
 
-    # If setting as default, unset others
+    # If setting as default, unset others for this user
     if update_data.get("is_default"):
-        db.query(Profile).filter(Profile.is_default.is_(True), Profile.id != profile_id).update(
-            {"is_default": False}
-        )
+        db.query(Profile).filter(
+            Profile.user_id == current_user.id,
+            Profile.is_default.is_(True),
+            Profile.id != profile_id,
+        ).update({"is_default": False})
 
     for key, value in update_data.items():
         setattr(profile, key, value)
@@ -73,22 +95,26 @@ def update_profile(profile_id: int, data: ProfileUpdate, db: Session = Depends(g
 
 
 @router.delete("/profiles/{profile_id}")
-def delete_profile(profile_id: int, db: Session = Depends(get_db)) -> dict[str, bool]:
-    profile = db.query(Profile).filter(Profile.id == profile_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    db.query(ProfileModel).filter(ProfileModel.profile_id == profile_id).delete()
-    db.query(ProviderConnection).filter(ProviderConnection.profile_id == profile_id).delete()
+async def delete_profile(
+    profile_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, bool]:
+    profile = get_user_profile(db, current_user, profile_id)
+    db.query(ProfileModel).filter(ProfileModel.profile_id == profile.id).delete()
+    db.query(ProviderConnection).filter(ProviderConnection.profile_id == profile.id).delete()
     db.delete(profile)
     db.commit()
     return {"ok": True}
 
 
 @router.get("/profiles/{profile_id}/models", response_model=list[ProfileModelOut])
-def list_profile_models(profile_id: int, db: Session = Depends(get_db)) -> list[Any]:
-    profile = db.query(Profile).filter(Profile.id == profile_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
+async def list_profile_models(
+    profile_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[Any]:
+    get_user_profile(db, current_user, profile_id)
     return (
         db.query(ProfileModel)
         .filter(ProfileModel.profile_id == profile_id)
@@ -98,12 +124,13 @@ def list_profile_models(profile_id: int, db: Session = Depends(get_db)) -> list[
 
 
 @router.post("/profiles/{profile_id}/models", response_model=ProfileModelOut, status_code=201)
-def add_profile_model(
-    profile_id: int, data: ProfileModelCreate, db: Session = Depends(get_db)
+async def add_profile_model(
+    profile_id: int,
+    data: ProfileModelCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> ProfileModel:
-    profile = db.query(Profile).filter(Profile.id == profile_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
+    get_user_profile(db, current_user, profile_id)
 
     existing = (
         db.query(ProfileModel)
@@ -128,15 +155,21 @@ def add_profile_model(
 
 
 @router.delete("/profiles/{profile_id}/models/{model_id}")
-def delete_profile_model(
-    profile_id: int, model_id: int, db: Session = Depends(get_db)
+async def delete_profile_model(
+    profile_id: int,
+    model_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> dict[str, bool]:
+    get_user_profile(db, current_user, profile_id)
     pm = (
         db.query(ProfileModel)
         .filter(ProfileModel.id == model_id, ProfileModel.profile_id == profile_id)
         .first()
     )
     if not pm:
+        from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="Saved model not found")
     db.delete(pm)
     db.commit()
@@ -147,10 +180,12 @@ def delete_profile_model(
 
 
 @router.get("/profiles/{profile_id}/connections", response_model=list[ProviderConnectionOut])
-def list_connections(profile_id: int, db: Session = Depends(get_db)) -> list[Any]:
-    profile = db.query(Profile).filter(Profile.id == profile_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
+async def list_connections(
+    profile_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[Any]:
+    get_user_profile(db, current_user, profile_id)
     return (
         db.query(ProviderConnection)
         .filter(ProviderConnection.profile_id == profile_id)
@@ -162,12 +197,13 @@ def list_connections(profile_id: int, db: Session = Depends(get_db)) -> list[Any
 @router.post(
     "/profiles/{profile_id}/connections", response_model=ProviderConnectionOut, status_code=201
 )
-def add_connection(
-    profile_id: int, data: ProviderConnectionCreate, db: Session = Depends(get_db)
+async def add_connection(
+    profile_id: int,
+    data: ProviderConnectionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> ProviderConnection:
-    profile = db.query(Profile).filter(Profile.id == profile_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
+    get_user_profile(db, current_user, profile_id)
 
     existing = (
         db.query(ProviderConnection)
@@ -191,15 +227,21 @@ def add_connection(
 
 
 @router.delete("/profiles/{profile_id}/connections/{connection_id}")
-def delete_connection(
-    profile_id: int, connection_id: int, db: Session = Depends(get_db)
+async def delete_connection(
+    profile_id: int,
+    connection_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> dict[str, bool]:
+    get_user_profile(db, current_user, profile_id)
     conn = (
         db.query(ProviderConnection)
         .filter(ProviderConnection.id == connection_id, ProviderConnection.profile_id == profile_id)
         .first()
     )
     if not conn:
+        from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="Connection not found")
     # Cascade-delete all ProfileModel rows for this provider
     db.query(ProfileModel).filter(

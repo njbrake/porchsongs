@@ -1,0 +1,17 @@
+[session]
+default_tool = "claude"
+
+[sandbox]
+enabled_by_default = true
+default_image = "ghcr.io/njbrake/aoe-dev-sandbox:latest"
+environment = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GH_TOKEN", "DATABASE_URL"]
+volume_ignores = ["node_modules", ".venv", "target"]
+
+[hooks]
+on_create = ["cd backend && uv sync", "cd frontend && npm install"]
+
+[worktree]
+enabled = true
+bare_repo_path_template = "./{branch}"
+auto_cleanup = true
+delete_branch_on_cleanup = false

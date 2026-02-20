@@ -2,9 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from ..auth.dependencies import get_current_user
+from ..auth.scoping import get_user_profile, get_user_song
 from ..database import get_db
 from ..models import ChatMessage as ChatMessageModel
-from ..models import Profile, ProfileModel, ProviderConnection, Song
+from ..models import ProfileModel, ProviderConnection, User
 from ..schemas import (
     ChatRequest,
     ChatResponse,
@@ -50,25 +52,17 @@ def _lookup_api_base(
     return None
 
 
-def _load_rewrite_context(req: RewriteRequest, db: Session) -> tuple[str, str, str | None]:
-    """Shared helper: load profile description, lyrics, and api_base for a rewrite."""
-    profile = db.query(Profile).filter(Profile.id == req.profile_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
-
-    profile_description = profile.description or ""
-    lyrics = req.lyrics
-    api_base = _lookup_api_base(db, req.profile_id, req.provider, req.model)
-    return profile_description, lyrics, api_base
-
-
 @router.post("/rewrite", response_model=RewriteResponse)
 async def rewrite(
     req: RewriteRequest,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     stream: bool = Query(default=False),
 ) -> dict[str, str | None] | StreamingResponse:
-    profile_description, lyrics, api_base = _load_rewrite_context(req, db)
+    profile = get_user_profile(db, current_user, req.profile_id)
+    profile_description = profile.description or ""
+    lyrics = req.lyrics
+    api_base = _lookup_api_base(db, req.profile_id, req.provider, req.model)
 
     if stream:
         generator = llm_service.rewrite_lyrics_stream(
@@ -117,11 +111,11 @@ async def rewrite(
 
 @router.post("/workshop-line", response_model=WorkshopLineResponse)
 async def workshop_line(
-    req: WorkshopLineRequest, db: Session = Depends(get_db)
+    req: WorkshopLineRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    song = db.query(Song).filter(Song.id == req.song_id).first()
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
+    song = get_user_song(db, current_user, req.song_id)
 
     api_base = _lookup_api_base(db, song.profile_id, req.provider, req.model)
 
@@ -145,12 +139,14 @@ async def workshop_line(
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest, db: Session = Depends(get_db)) -> ChatResponse:
-    from ..models import SongRevision
+async def chat(
+    req: ChatRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ChatResponse:
+    from ..models import Profile, SongRevision
 
-    song = db.query(Song).filter(Song.id == req.song_id).first()
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
+    song = get_user_song(db, current_user, req.song_id)
 
     profile = db.query(Profile).filter(Profile.id == song.profile_id).first()
     profile_description = profile.description if profile else ""
@@ -210,12 +206,18 @@ async def chat(req: ChatRequest, db: Session = Depends(get_db)) -> ChatResponse:
 
 
 @router.get("/providers")
-def list_providers() -> list[dict[str, str | bool]]:
+async def list_providers(
+    current_user: User = Depends(get_current_user),
+) -> list[dict[str, str | bool]]:
     return llm_service.get_configured_providers()
 
 
 @router.get("/providers/{provider}/models")
-async def list_provider_models(provider: str, api_base: str | None = None) -> list[str]:
+async def list_provider_models(
+    provider: str,
+    api_base: str | None = None,
+    current_user: User = Depends(get_current_user),
+) -> list[str]:
     try:
         return await llm_service.get_models(provider, api_base=api_base)
     except Exception as e:

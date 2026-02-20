@@ -31,7 +31,7 @@ describe('SettingsPage – Profile sub-tab', () => {
   });
 
   it('populates form from existing profile', () => {
-    const profile = { id: 1, name: 'Alice', description: 'I love hiking', is_default: true, created_at: '' };
+    const profile = { id: 1, user_id: 1, name: 'Alice', description: 'I love hiking', is_default: true, created_at: '' };
     render(<SettingsPage {...defaults} profile={profile} />);
     expect(screen.getByLabelText('Name')).toHaveValue('Alice');
     expect(screen.getByLabelText(/About you/)).toHaveValue('I love hiking');
@@ -56,7 +56,7 @@ describe('SettingsPage – Profile sub-tab', () => {
   it('shows "Saved!" status message after successful save', async () => {
     const user = userEvent.setup();
     const onSaveProfile = vi.fn().mockResolvedValue({});
-    render(<SettingsPage {...defaults} profile={{ id: 1, name: 'Test', description: '', is_default: true, created_at: '' }} onSaveProfile={onSaveProfile} />);
+    render(<SettingsPage {...defaults} profile={{ id: 1, user_id: 1, name: 'Test', description: '', is_default: true, created_at: '' }} onSaveProfile={onSaveProfile} />);
 
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(screen.getByText('Saved!')).toBeInTheDocument();

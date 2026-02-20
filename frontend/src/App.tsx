@@ -10,7 +10,7 @@ import RewriteTab from '@/components/RewriteTab';
 import LibraryTab from '@/components/LibraryTab';
 import SettingsPage from '@/components/SettingsPage';
 import LoginPage from '@/components/LoginPage';
-import type { Profile, RewriteResult, RewriteMeta, ChatMessage, Song } from '@/types';
+import type { Profile, RewriteResult, RewriteMeta, ChatMessage, Song, AuthConfig, AuthUser } from '@/types';
 
 const TAB_KEYS = ['rewrite', 'library', 'settings'];
 const SETTINGS_SUB_TABS = ['profile', 'providers'];
@@ -43,19 +43,26 @@ export default function App() {
   const [initialSongId, setInitialSongId] = useState(() => songIdFromPath(window.location.pathname));
   // Auth state: "loading" | "login" | "ready"
   const [authState, setAuthState] = useState<'loading' | 'login' | 'ready'>('loading');
-  const [authActive, setAuthActive] = useState(false);
+  const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null);
+  const [currentAuthUser, setCurrentAuthUser] = useState<AuthUser | null>(null);
 
   // Check auth requirement on mount
   useEffect(() => {
-    api.checkAuthRequired()
-      .then(({ required }) => {
-        setAuthActive(required);
-        if (!required) {
+    api.getAuthConfig()
+      .then((config) => {
+        setAuthConfig(config);
+        if (!config.required) {
           setAuthState('ready');
         } else {
-          // Check if we already have a stored token
-          const token = localStorage.getItem('porchsongs_app_secret');
-          setAuthState(token ? 'ready' : 'login');
+          // Try to restore session from refresh token
+          api.tryRestoreSession().then((user) => {
+            if (user) {
+              setCurrentAuthUser(user);
+              setAuthState('ready');
+            } else {
+              setAuthState('login');
+            }
+          });
         }
       })
       .catch(() => {
@@ -67,14 +74,15 @@ export default function App() {
   // Listen for logout events (e.g. 401 from expired/changed token)
   useEffect(() => {
     const handler = () => {
-      if (authActive) {
-        localStorage.removeItem('porchsongs_app_secret');
+      if (authConfig?.required) {
+        api.logout();
+        setCurrentAuthUser(null);
         setAuthState('login');
       }
     };
     window.addEventListener('porchsongs-logout', handler);
     return () => window.removeEventListener('porchsongs-logout', handler);
-  }, [authActive]);
+  }, [authConfig]);
 
   // Sync tab from URL on back/forward navigation
   useEffect(() => {
@@ -242,8 +250,14 @@ export default function App() {
   }, [setTab, setCurrentSongId]);
 
   const handleLogout = useCallback(() => {
-    localStorage.removeItem('porchsongs_app_secret');
+    api.logout();
+    setCurrentAuthUser(null);
     setAuthState('login');
+  }, []);
+
+  const handleLogin = useCallback(async (user: AuthUser) => {
+    setCurrentAuthUser(user);
+    setAuthState('ready');
   }, []);
 
   if (authState === 'loading') {
@@ -256,14 +270,15 @@ export default function App() {
   }
 
   if (authState === 'login') {
-    return <LoginPage onLogin={() => setAuthState('ready')} />;
+    return <LoginPage authConfig={authConfig} onLogin={handleLogin} />;
   }
 
   return (
     <>
       <Header
         onHomeClick={() => setTab('rewrite')}
-        authActive={authActive}
+        user={currentAuthUser}
+        authRequired={authConfig?.required ?? false}
         onLogout={handleLogout}
       />
       <Tabs active={activeTab} onChange={setTab} />

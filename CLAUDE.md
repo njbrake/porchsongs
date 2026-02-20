@@ -18,16 +18,20 @@ cd backend && uv run uvicorn app.main:app --reload
 cd frontend && npm run dev
 
 # Tests (from project root)
-uv run pytest           # all 107 tests
-uv run pytest -v        # verbose
-uv run pytest tests/test_api.py::test_create_profile  # single test
+DATABASE_URL="sqlite:///:memory:" uv run pytest           # all tests (~120)
+DATABASE_URL="sqlite:///:memory:" uv run pytest -v         # verbose
+DATABASE_URL="sqlite:///:memory:" uv run pytest tests/test_api.py::test_create_profile  # single test
 
 # Lint & type check
 uv run ruff check backend/
 uv run ruff format backend/
 cd frontend && npm run typecheck    # tsc --noEmit
 
-# Docker
+# Database migrations
+uv run alembic upgrade head         # apply all migrations
+uv run alembic revision --autogenerate -m "description"  # generate new migration
+
+# Docker (includes PostgreSQL)
 docker compose up --build
 ```
 
@@ -37,9 +41,28 @@ docker compose up --build
 
 The frontend uses strict TypeScript with `@/` path aliases (e.g. `import api from '@/api'`). Shared domain interfaces live in `src/types.ts`.
 
+### Auth System
+
+Authentication uses a plugin architecture defined in `backend/app/auth/`:
+
+- **`base.py`** — Abstract `AuthBackend` class with `get_auth_config()`, `authenticate_login()`, `on_user_created()` hooks
+- **`app_secret.py`** — OSS single-user backend: gates behind `APP_SECRET` env var, auto-creates a local user
+- **`loader.py`** — Plugin loading: uses `PREMIUM_PLUGIN` env var to load external auth backends, falls back to `AppSecretBackend`
+- **`tokens.py`** — JWT access tokens (15min) + refresh tokens (30 days), HS256
+- **`dependencies.py`** — FastAPI `Depends()` for `get_current_user` and `get_current_admin`. Zero-config dev mode: if `APP_SECRET` not set, auto-returns local user
+- **`scoping.py`** — `get_user_profile()` and `get_user_song()` helpers for data isolation
+
+Auth endpoints live in `backend/app/routers/auth.py` (`/api/auth/config`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout`, `/api/auth/me`).
+
+Every data endpoint uses `Depends(get_current_user)` and filters by `user_id` for data isolation. All router functions are `async def`.
+
+### Database
+
+PostgreSQL in production, in-memory SQLite for tests. Alembic handles migrations (`alembic/` directory). The `User` and `RefreshToken` models support the auth layer. `Profile` and `Song` have `user_id` FK columns for data isolation.
+
 ### LLM Integration
 
-All LLM calls go through `any-llm-sdk` which supports 38+ providers. API keys are read from server-side environment variables (e.g. `OPENAI_API_KEY`) — the SDK resolves them automatically. The frontend never handles or stores API keys. `GET /api/providers` returns only providers whose env var is set. Optional auth via `APP_SECRET` env var gates all `/api/` routes behind a bearer token. All LLM-calling functions are `async` and must use `acompletion`/`alist_models` (not the sync versions), because FastAPI async endpoints run on the event loop.
+All LLM calls go through `any-llm-sdk` which supports 38+ providers. API keys are read from server-side environment variables (e.g. `OPENAI_API_KEY`) — the SDK resolves them automatically. The frontend never handles or stores API keys. `GET /api/providers` returns only providers whose env var is set. All LLM-calling functions are `async` and must use `acompletion`/`alist_models` (not the sync versions), because FastAPI async endpoints run on the event loop.
 
 Three LLM interaction modes:
 - **Full rewrite** (`POST /api/rewrite`) — rewrites entire song at once; supports `?stream=true` for SSE streaming
@@ -68,9 +91,11 @@ Each profile can have per-provider LLM configuration (custom `api_base`) stored 
 
 ## Testing
 
-Tests use in-memory SQLite with `StaticPool` + `check_same_thread=False` (required because FastAPI TestClient runs in a separate thread). The `client` fixture overrides `get_db` to use the test DB.
+Tests use in-memory SQLite with `StaticPool` + `check_same_thread=False` (required because FastAPI TestClient runs in a separate thread). The `client` fixture overrides both `get_db` and `get_current_user` to inject a test DB and test user. Set `DATABASE_URL=sqlite:///:memory:` when running tests to avoid connecting to PostgreSQL.
 
 LLM-dependent endpoints are tested by mocking `acompletion` and `alist_models` with `AsyncMock` — patch target is `app.services.llm_service.acompletion`. The mock returns a `MagicMock` shaped like a `ChatCompletion` response (`.choices[0].message.content`).
+
+Auth tests in `tests/test_auth.py` use a separate `auth_client` fixture that does NOT override `get_current_user`, allowing the real auth flow to be tested. Use `reset_auth_backend()` between tests that mock settings.
 
 ## Definition of Done
 
@@ -81,8 +106,8 @@ uv run ruff check backend/                    # backend lint
 uv run ruff format --check backend/           # backend formatting
 cd frontend && npx eslint src/                # frontend lint
 cd frontend && npm run typecheck              # TypeScript type check
-cd /workspace/PorchSongs && uv run pytest     # backend tests (107)
-cd frontend && npx vitest run                 # frontend tests (36)
+DATABASE_URL="sqlite:///:memory:" uv run pytest  # backend tests (~120)
+cd frontend && npx vitest run                 # frontend tests (~37)
 ```
 
 ## Key Constraints
@@ -90,5 +115,7 @@ cd frontend && npx vitest run                 # frontend tests (36)
 - **TypeScript**: strict mode with `noUncheckedIndexedAccess`. Use `@/` path aliases for all imports. Domain types are in `src/types.ts`.
 - **Ruff rules**: `E, F, I, UP, B, SIM, ANN, RUF` with `B008` ignored (FastAPI `Depends()` pattern). All backend code requires type annotations.
 - **Config**: `Settings` in `config.py` uses `extra="ignore"` so arbitrary env vars (like `OPENAI_API_KEY`) don't crash startup.
-- **Migrations**: `main.py` auto-adds missing columns on startup via `ALTER TABLE` — no migration framework, just column existence checks with SQLAlchemy `inspect`.
+- **Migrations**: Alembic manages database migrations. Migration files live in `alembic/versions/`. Run `alembic upgrade head` to apply.
 - **Schemas**: `source_url`, `title`, and `artist` are all optional on `RewriteRequest` and `SongCreate`. The frontend sends only `lyrics` + `instruction` + LLM settings.
+- **Auth**: Every data endpoint requires `Depends(get_current_user)`. Profile and Song models have `user_id` FK. Use `get_user_profile()` / `get_user_song()` from `auth/scoping.py` for ownership checks.
+- **Frontend auth**: Access token stored in memory (not localStorage). Refresh token in localStorage. Auto-refresh on 401 with deduplication.

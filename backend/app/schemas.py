@@ -3,6 +3,18 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
+# --- Users ---
+class UserOut(BaseModel):
+    id: int
+    email: str
+    name: str
+    role: str
+    is_active: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # --- Profiles ---
 class ProfileCreate(BaseModel):
     name: str
@@ -18,6 +30,7 @@ class ProfileUpdate(BaseModel):
 
 class ProfileOut(BaseModel):
     id: int
+    user_id: int
     name: str
     description: str | None
     is_default: bool
@@ -98,6 +111,7 @@ class SongCreate(BaseModel):
 
 class SongOut(BaseModel):
     id: int
+    user_id: int
     profile_id: int
     title: str | None
     artist: str | None

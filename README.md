@@ -40,27 +40,116 @@ cd backend
 uv run uvicorn app.main:app --reload
 ```
 
-Open [http://localhost:8000](http://localhost:8000). Configure your LLM API key in Settings (gear icon).
+Open [http://localhost:8000](http://localhost:8000). Configure your LLM API key in Settings.
 
-For frontend development with hot reload, run `npm run dev` in `frontend/` (proxies API calls to the backend).
+By default, porchsongs runs in **zero-config dev mode** — no login required, a local user is auto-created. See [Authentication](#authentication) below for production setups.
+
+For frontend development with hot reload:
+
+```bash
+# Terminal 1: backend
+cd backend && uv run uvicorn app.main:app --reload
+
+# Terminal 2: frontend (proxies /api to backend)
+cd frontend && npm run dev
+```
 
 ## Docker
 
 ```bash
 cp .env.example .env
+# Edit .env — set JWT_SECRET to a long random string
 docker compose up --build
 ```
 
-## Password Protection
+This starts PostgreSQL + runs database migrations + serves the app on port 8000.
 
-You can restrict access to your porchsongs instance with a master password:
+## Authentication
+
+porchsongs supports three auth modes, controlled by environment variables:
+
+### Zero-config dev mode (default)
+
+No env vars needed. The app is open to anyone who can reach it. A local user is auto-created.
+
+### Single-user password protection
+
+Set `APP_SECRET` to gate the app behind a password:
 
 ```bash
-# In your .env file
 APP_SECRET=your-secret-password
+JWT_SECRET=a-long-random-string-at-least-32-chars
 ```
 
-When `APP_SECRET` is set, users see a login page before they can access the app. All API routes are protected behind the same password. Without it, the app is open to anyone who can reach it.
+You can also use a bcrypt hash for `APP_SECRET`:
+
+```bash
+# Generate a hash
+python3 -c "import bcrypt; print(bcrypt.hashpw(b'mypassword', bcrypt.gensalt()).decode())"
+
+# Use it in .env
+APP_SECRET='$2b$12$...'
+```
+
+### Premium plugin
+
+For Google OAuth and other premium features, see the [porchsongs-premium](https://github.com/njbrake/porchsongs-premium) repo.
+
+```bash
+PREMIUM_PLUGIN=porchsongs_premium.plugin
+```
+
+## Database
+
+porchsongs uses **PostgreSQL** in production and **SQLite** for local development/testing.
+
+```bash
+# Production (set in .env or environment)
+DATABASE_URL=postgresql://porchsongs:porchsongs@localhost:5432/porchsongs
+
+# Local dev with SQLite
+DATABASE_URL=sqlite:///dev.db
+
+# Apply migrations
+uv run alembic upgrade head
+```
+
+Docker Compose includes a PostgreSQL service and runs migrations automatically on startup.
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `postgresql://...localhost.../porchsongs` | Database connection string |
+| `JWT_SECRET` | `change-me-in-production` | Secret for signing JWT tokens (use 32+ chars) |
+| `AUTH_BACKEND` | `app_secret` | Auth mode: `app_secret` (premium plugins can add others) |
+| `APP_SECRET` | *(none)* | Password gate (app_secret mode). Supports plaintext or bcrypt hash |
+| `CORS_ORIGINS` | `*` | Allowed CORS origins (comma-separated) |
+| `JWT_EXPIRY_MINUTES` | `15` | Access token lifetime |
+| `REFRESH_TOKEN_DAYS` | `30` | Refresh token lifetime |
+| `PREMIUM_PLUGIN` | *(none)* | Module path for premium auth backend |
+| `OPENAI_API_KEY` | *(none)* | OpenAI API key |
+| `ANTHROPIC_API_KEY` | *(none)* | Anthropic API key |
+
+See `.env.example` for the full list.
+
+## Testing
+
+```bash
+# Backend tests (118 tests)
+uv run pytest
+uv run pytest -v                    # verbose
+uv run pytest tests/test_auth.py    # auth tests only
+
+# Frontend tests (39 tests)
+cd frontend && npx vitest run
+
+# Lint & type check
+uv run ruff check backend/
+uv run ruff format --check backend/
+cd frontend && npx eslint src/
+cd frontend && npm run typecheck
+```
 
 ## LLM Providers
 

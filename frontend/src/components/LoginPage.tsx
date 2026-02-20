@@ -3,15 +3,19 @@ import api from '@/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
+import type { AuthConfig, AuthUser } from '@/types';
 
 interface LoginPageProps {
-  onLogin: () => void;
+  authConfig: AuthConfig | null;
+  onLogin: (user: AuthUser) => void;
 }
 
-export default function LoginPage({ onLogin }: LoginPageProps) {
+export default function LoginPage({ authConfig, onLogin }: LoginPageProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const method = authConfig?.method ?? 'password';
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -19,15 +23,29 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     setError('');
     setLoading(true);
     try {
-      const { token } = await api.login(password);
-      localStorage.setItem('porchsongs_app_secret', token);
-      onLogin();
+      const { user } = await api.login(password);
+      onLogin(user);
     } catch {
       setError('Wrong password. Please try again.');
     } finally {
       setLoading(false);
     }
   };
+
+  if (method === 'oauth_google') {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Card className="p-8 sm:p-10 w-full max-w-[360px] mx-4 text-center flex flex-col items-center gap-3 shadow-md">
+          <img src="/logo.svg" alt="" className="w-16 h-16 mb-1" />
+          <h1 className="text-2xl font-bold text-foreground">porchsongs</h1>
+          <p className="text-sm text-muted-foreground mb-2">Sign in to continue</p>
+          <Button className="w-full mt-1" onClick={() => { window.location.href = '/api/auth/oauth/google'; }}>
+            Sign in with Google
+          </Button>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background">

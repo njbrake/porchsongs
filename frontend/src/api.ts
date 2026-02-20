@@ -7,32 +7,92 @@ import type {
   ProviderConnection,
   Provider,
   ChatResult,
-  AuthRequiredResponse,
-  LoginResponse,
+  AuthConfig,
+  AuthUser,
+  TokenResponse,
   ChatHistoryRow,
   StreamCallbacks,
 } from '@/types';
 
 const BASE = '/api';
 
+// --- Token storage ---
+// Access token in memory (not localStorage) for security
+let _accessToken: string | null = null;
+
+// Refresh token in localStorage for persistence across tabs/refreshes
+function _getRefreshToken(): string | null {
+  return localStorage.getItem('porchsongs_refresh_token');
+}
+function _setRefreshToken(token: string | null): void {
+  if (token) {
+    localStorage.setItem('porchsongs_refresh_token', token);
+  } else {
+    localStorage.removeItem('porchsongs_refresh_token');
+  }
+}
+
 function _getAuthHeaders(): Record<string, string> {
-  const secret = localStorage.getItem('porchsongs_app_secret');
-  if (secret) {
-    return { Authorization: `Bearer ${secret}` };
+  if (_accessToken) {
+    return { Authorization: `Bearer ${_accessToken}` };
   }
   return {};
 }
 
-async function _fetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+// --- Refresh token deduplication ---
+let _refreshPromise: Promise<boolean> | null = null;
+
+async function _doRefresh(): Promise<boolean> {
+  const refreshToken = _getRefreshToken();
+  if (!refreshToken) return false;
+
+  try {
+    const res = await fetch(`${BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!res.ok) {
+      _accessToken = null;
+      _setRefreshToken(null);
+      return false;
+    }
+    const data = (await res.json()) as { access_token: string; refresh_token: string };
+    _accessToken = data.access_token;
+    _setRefreshToken(data.refresh_token);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function _tryRefresh(): Promise<boolean> {
+  if (!_refreshPromise) {
+    _refreshPromise = _doRefresh().finally(() => {
+      _refreshPromise = null;
+    });
+  }
+  return _refreshPromise;
+}
+
+// --- Core fetch with auto-refresh ---
+
+async function _fetch<T>(path: string, options: RequestInit = {}, retry = true): Promise<T> {
   const url = BASE + path;
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json', ..._getAuthHeaders(), ...options.headers },
     ...options,
   });
-  if (res.status === 401) {
+
+  if (res.status === 401 && retry) {
+    const refreshed = await _tryRefresh();
+    if (refreshed) {
+      return _fetch<T>(path, options, false);
+    }
     window.dispatchEvent(new CustomEvent('porchsongs-logout'));
     throw new Error('Authentication required. Please log in.');
   }
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error((body as { detail?: string }).detail || `Request failed: ${res.status}`);
@@ -40,13 +100,15 @@ async function _fetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-async function checkAuthRequired(): Promise<AuthRequiredResponse> {
-  const res = await fetch(`${BASE}/auth-required`);
-  return res.json() as Promise<AuthRequiredResponse>;
+// --- Auth API ---
+
+async function getAuthConfig(): Promise<AuthConfig> {
+  const res = await fetch(`${BASE}/auth/config`);
+  return res.json() as Promise<AuthConfig>;
 }
 
-async function login(password: string): Promise<LoginResponse> {
-  const res = await fetch(`${BASE}/login`, {
+async function login(password: string): Promise<TokenResponse> {
+  const res = await fetch(`${BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ password }),
@@ -55,29 +117,75 @@ async function login(password: string): Promise<LoginResponse> {
     const body = await res.json().catch(() => ({}));
     throw new Error((body as { detail?: string }).detail || 'Login failed');
   }
-  return res.json() as Promise<LoginResponse>;
+  const data = (await res.json()) as TokenResponse;
+  _accessToken = data.access_token;
+  _setRefreshToken(data.refresh_token);
+  return data;
 }
 
-/**
- * Stream a rewrite via SSE. Calls onToken(text) for each chunk,
- * returns the final parsed result object.
- */
-async function rewriteStream(data: Record<string, unknown>, { onToken, onThinking }: StreamCallbacks = {}): Promise<RewriteResult> {
-  const url = `${BASE}/rewrite?stream=true`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
-    body: JSON.stringify(data),
-  });
-  if (res.status === 401) {
-    window.dispatchEvent(new CustomEvent('porchsongs-logout'));
-    throw new Error('Authentication required. Please log in.');
+async function logout(): Promise<void> {
+  const refreshToken = _getRefreshToken();
+  if (refreshToken) {
+    try {
+      await fetch(`${BASE}/auth/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+    } catch {
+      // Best effort
+    }
   }
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error((body as { detail?: string }).detail || `Request failed: ${res.status}`);
-  }
+  _accessToken = null;
+  _setRefreshToken(null);
+}
 
+async function tryRestoreSession(): Promise<AuthUser | null> {
+  const refreshToken = _getRefreshToken();
+  if (!refreshToken) return null;
+
+  const refreshed = await _tryRefresh();
+  if (!refreshed) return null;
+
+  try {
+    return await _fetch<AuthUser>('/auth/me');
+  } catch {
+    return null;
+  }
+}
+
+async function getCurrentUser(): Promise<AuthUser> {
+  return _fetch<AuthUser>('/auth/me');
+}
+
+// --- Streaming rewrite with auth ---
+
+async function rewriteStream(data: Record<string, unknown>, { onToken, onThinking }: StreamCallbacks = {}): Promise<RewriteResult> {
+  const doFetch = async (isRetry: boolean): Promise<Response> => {
+    const url = `${BASE}/rewrite?stream=true`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+      body: JSON.stringify(data),
+    });
+
+    if (res.status === 401 && !isRetry) {
+      const refreshed = await _tryRefresh();
+      if (refreshed) {
+        return doFetch(true);
+      }
+      window.dispatchEvent(new CustomEvent('porchsongs-logout'));
+      throw new Error('Authentication required. Please log in.');
+    }
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as { detail?: string }).detail || `Request failed: ${res.status}`);
+    }
+    return res;
+  };
+
+  const res = await doFetch(false);
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -88,9 +196,7 @@ async function rewriteStream(data: Record<string, unknown>, { onToken, onThinkin
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
 
-    // Process complete SSE lines
     const lines = buffer.split('\n');
-    // Keep the last (possibly incomplete) line in the buffer
     buffer = lines.pop()!;
 
     for (const line of lines) {
@@ -106,7 +212,6 @@ async function rewriteStream(data: Record<string, unknown>, { onToken, onThinkin
     }
   }
 
-  // Process any remaining data in buffer
   if (buffer.startsWith('data: ')) {
     const payload = JSON.parse(buffer.slice(6)) as { done?: boolean; result?: RewriteResult; token?: string; thinking?: boolean };
     if (payload.done) {
@@ -125,8 +230,11 @@ async function rewriteStream(data: Record<string, unknown>, { onToken, onThinkin
 }
 
 const api = {
-  checkAuthRequired,
+  getAuthConfig,
   login,
+  logout,
+  tryRestoreSession,
+  getCurrentUser,
   // Profiles
   listProfiles: () => _fetch<Profile[]>('/profiles'),
   createProfile: (data: Partial<Profile>) => _fetch<Profile>('/profiles', { method: 'POST', body: JSON.stringify(data) }),
@@ -175,6 +283,21 @@ const api = {
   downloadSongPdf: async (id: number, title: string | null, artist: string | null) => {
     const res = await fetch(`${BASE}/songs/${id}/pdf`, { headers: _getAuthHeaders() });
     if (res.status === 401) {
+      const refreshed = await _tryRefresh();
+      if (refreshed) {
+        const retryRes = await fetch(`${BASE}/songs/${id}/pdf`, { headers: _getAuthHeaders() });
+        if (!retryRes.ok) throw new Error(`Download failed: ${retryRes.status}`);
+        const blob = await retryRes.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${title || 'Untitled'} - ${artist || 'Unknown'}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        return;
+      }
       window.dispatchEvent(new CustomEvent('porchsongs-logout'));
       throw new Error('Authentication required. Please log in.');
     }

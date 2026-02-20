@@ -1,13 +1,31 @@
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: porchsongs
+      POSTGRES_PASSWORD: porchsongs
+      POSTGRES_DB: porchsongs
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U porchsongs"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   porchsongs:
     build: .
     ports:
       - "8000:8000"
-    volumes:
-      - db-data:/app/backend/data
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://porchsongs:porchsongs@db:5432/porchsongs
     env_file:
       - .env
     restart: unless-stopped
 
 volumes:
-  db-data:
+  pgdata:

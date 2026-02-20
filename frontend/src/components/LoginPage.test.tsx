@@ -10,6 +10,8 @@ vi.mock('@/api', () => ({
 
 import api from '@/api';
 
+const defaultAuthConfig = { method: 'password' as const, required: true };
+
 describe('LoginPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -17,36 +19,36 @@ describe('LoginPage', () => {
   });
 
   it('renders the login form', () => {
-    render(<LoginPage onLogin={vi.fn()} />);
+    render(<LoginPage authConfig={defaultAuthConfig} onLogin={vi.fn()} />);
     expect(screen.getByText('porchsongs')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Password')).toBeInTheDocument();
     expect(screen.getByText('Log In')).toBeInTheDocument();
   });
 
   it('disables submit button when password is empty', () => {
-    render(<LoginPage onLogin={vi.fn()} />);
+    render(<LoginPage authConfig={defaultAuthConfig} onLogin={vi.fn()} />);
     expect(screen.getByText('Log In')).toBeDisabled();
   });
 
   it('calls api.login and onLogin on successful submit', async () => {
     const user = userEvent.setup();
     const onLogin = vi.fn();
-    (api.login as ReturnType<typeof vi.fn>).mockResolvedValue({ token: 'abc123' });
+    const mockUser = { id: 1, email: 'local@porchsongs.local', name: 'Local User', role: 'admin', is_active: true, created_at: '' };
+    (api.login as ReturnType<typeof vi.fn>).mockResolvedValue({ access_token: 'jwt', refresh_token: 'rt', user: mockUser });
 
-    render(<LoginPage onLogin={onLogin} />);
+    render(<LoginPage authConfig={defaultAuthConfig} onLogin={onLogin} />);
     await user.type(screen.getByPlaceholderText('Password'), 'secret');
     await user.click(screen.getByText('Log In'));
 
     expect(api.login).toHaveBeenCalledWith('secret');
-    expect(onLogin).toHaveBeenCalledOnce();
-    expect(localStorage.getItem('porchsongs_app_secret')).toBe('abc123');
+    expect(onLogin).toHaveBeenCalledWith(mockUser);
   });
 
   it('shows error on failed login', async () => {
     const user = userEvent.setup();
     (api.login as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Bad password'));
 
-    render(<LoginPage onLogin={vi.fn()} />);
+    render(<LoginPage authConfig={defaultAuthConfig} onLogin={vi.fn()} />);
     await user.type(screen.getByPlaceholderText('Password'), 'wrong');
     await user.click(screen.getByText('Log In'));
 

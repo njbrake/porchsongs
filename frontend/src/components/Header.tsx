@@ -1,12 +1,14 @@
 import useWakeLock from '@/hooks/useWakeLock';
+import type { AuthUser } from '@/types';
 
 interface HeaderProps {
   onHomeClick: () => void;
-  authActive: boolean;
+  user: AuthUser | null;
+  authRequired: boolean;
   onLogout: () => void;
 }
 
-export default function Header({ onHomeClick, authActive, onLogout }: HeaderProps) {
+export default function Header({ onHomeClick, user, authRequired, onLogout }: HeaderProps) {
   const wakeLock = useWakeLock();
 
   return (
@@ -36,7 +38,10 @@ export default function Header({ onHomeClick, authActive, onLogout }: HeaderProp
             Stay Awake
           </button>
         )}
-        {authActive && (
+        {user && (
+          <span className="text-xs opacity-70 hidden sm:inline">{user.name}</span>
+        )}
+        {authRequired && (
           <button
             className="bg-white/15 border border-white/25 text-header-text text-xs px-2 sm:px-3 py-1.5 rounded-full cursor-pointer hover:bg-white/25 transition-colors"
             onClick={onLogout}

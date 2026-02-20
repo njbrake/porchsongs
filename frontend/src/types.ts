@@ -2,6 +2,7 @@
 
 export interface Profile {
   id: number;
+  user_id: number;
   name: string;
   description: string | null;
   is_default: boolean;
@@ -10,6 +11,7 @@ export interface Profile {
 
 export interface Song {
   id: number;
+  user_id: number;
   profile_id: number;
   title: string | null;
   artist: string | null;
@@ -84,6 +86,28 @@ export interface Provider {
   local: boolean;
 }
 
+// Auth types
+
+export interface AuthConfig {
+  method: 'password' | 'oauth_google';
+  required: boolean;
+}
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  name: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  refresh_token: string;
+  user: AuthUser;
+}
+
 // API request types
 
 export interface RewriteRequest {
@@ -112,14 +136,6 @@ export interface ChatResult {
   rewritten_lyrics: string;
   changes_summary: string;
   assistant_message: string;
-}
-
-export interface AuthRequiredResponse {
-  required: boolean;
-}
-
-export interface LoginResponse {
-  token: string;
 }
 
 export interface ChatHistoryRow {

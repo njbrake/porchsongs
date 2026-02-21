@@ -154,6 +154,22 @@ async def chat(
     messages = [{"role": m.role, "content": m.content} for m in req.messages]
     api_base = _lookup_api_base(db, song.profile_id, req.provider, req.model)
 
+    # Look up the initial rewrite instruction from saved note messages.
+    # Notes are saved as: [lyrics_preview (user), instruction (user, optional), changes (assistant)].
+    initial_instruction: str | None = None
+    user_notes = (
+        db.query(ChatMessageModel)
+        .filter(
+            ChatMessageModel.song_id == song.id,
+            ChatMessageModel.is_note.is_(True),
+            ChatMessageModel.role == "user",
+        )
+        .order_by(ChatMessageModel.created_at.asc())
+        .all()
+    )
+    if len(user_notes) > 1:
+        initial_instruction = user_notes[1].content
+
     try:
         result = await llm_service.chat_edit_lyrics(
             song=song,
@@ -163,6 +179,7 @@ async def chat(
             model=req.model,
             api_base=api_base,
             reasoning_effort=req.reasoning_effort,
+            initial_instruction=initial_instruction,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {e}") from None

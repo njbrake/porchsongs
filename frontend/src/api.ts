@@ -201,13 +201,15 @@ async function rewriteStream(data: Record<string, unknown>, { onToken, onThinkin
 
     for (const line of lines) {
       if (!line.startsWith('data: ')) continue;
-      const payload = JSON.parse(line.slice(6)) as { done?: boolean; result?: RewriteResult; token?: string; thinking?: boolean; phase?: string };
+      const payload = JSON.parse(line.slice(6)) as { done?: boolean; result?: RewriteResult; token?: string; thinking?: boolean; reasoning_token?: string; phase?: string };
       if (payload.done) {
         finalResult = payload.result!;
       } else if (payload.phase && onPhase) {
         onPhase(payload.phase);
       } else if (payload.thinking && onThinking) {
         onThinking();
+      } else if (payload.reasoning_token != null && onThinking) {
+        onThinking(payload.reasoning_token);
       } else if (payload.token && onToken) {
         onToken(payload.token);
       }
@@ -215,13 +217,15 @@ async function rewriteStream(data: Record<string, unknown>, { onToken, onThinkin
   }
 
   if (buffer.startsWith('data: ')) {
-    const payload = JSON.parse(buffer.slice(6)) as { done?: boolean; result?: RewriteResult; token?: string; thinking?: boolean; phase?: string };
+    const payload = JSON.parse(buffer.slice(6)) as { done?: boolean; result?: RewriteResult; token?: string; thinking?: boolean; reasoning_token?: string; phase?: string };
     if (payload.done) {
       finalResult = payload.result!;
     } else if (payload.phase && onPhase) {
       onPhase(payload.phase);
     } else if (payload.thinking && onThinking) {
       onThinking();
+    } else if (payload.reasoning_token != null && onThinking) {
+      onThinking(payload.reasoning_token);
     } else if (payload.token && onToken) {
       onToken(payload.token);
     }

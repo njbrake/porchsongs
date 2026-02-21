@@ -355,9 +355,11 @@ async def rewrite_lyrics_stream(
         if token:
             accumulated += token
             yield f"data: {json.dumps({'token': token})}\n\n"
-        elif not thinking_started and hasattr(delta, "reasoning") and delta.reasoning:
-            thinking_started = True
-            yield f"data: {json.dumps({'thinking': True})}\n\n"
+        elif hasattr(delta, "reasoning") and delta.reasoning:
+            if not thinking_started:
+                thinking_started = True
+                yield f"data: {json.dumps({'thinking': True})}\n\n"
+            yield f"data: {json.dumps({'reasoning_token': delta.reasoning.content})}\n\n"
 
     # Parse accumulated rewrite response
     rewrite_result = _parse_rewrite_response(accumulated, lyrics_only)
@@ -546,6 +548,7 @@ async def chat_edit_lyrics(
     model: str,
     api_base: str | None = None,
     reasoning_effort: str | None = None,
+    initial_instruction: str | None = None,
 ) -> dict[str, str]:
     """Process a chat-based lyric edit.
 
@@ -556,6 +559,9 @@ async def chat_edit_lyrics(
     system_content = CHAT_SYSTEM_PROMPT
     if profile_description.strip():
         system_content += "\n\nABOUT THE SINGER:\n" + profile_description.strip()
+    if initial_instruction:
+        system_content += "\n\nINITIAL REWRITE INSTRUCTION:\n" + initial_instruction
+    system_content += "\n\nORIGINAL LYRICS:\n" + song.original_lyrics
     system_content += "\n\nCURRENT LYRICS:\n" + song.rewritten_lyrics
 
     llm_messages = [{"role": "system", "content": system_content}]

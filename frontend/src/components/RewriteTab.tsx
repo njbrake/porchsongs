@@ -65,6 +65,7 @@ export default function RewriteTab({
   const [loading, setLoading] = useState(false);
   const [mobilePane, setMobilePane] = useState<'chat' | 'lyrics'>('chat');
   const [streamingText, setStreamingText] = useState('');
+  const [reasoningText, setReasoningText] = useState('');
   const [thinking, setThinking] = useState(false);
   const [phase, setPhase] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -105,6 +106,7 @@ export default function RewriteTab({
     setLoading(true);
     setError(null);
     setStreamingText('');
+    setReasoningText('');
     setPhase('');
     onNewRewrite(null, null);
 
@@ -126,10 +128,17 @@ export default function RewriteTab({
       };
 
       let accumulated = '';
+      let reasoningAccumulated = '';
       setThinking(false);
       const result = await api.rewriteStream(reqData, {
         onPhase: (p) => setPhase(p),
-        onThinking: () => setThinking(true),
+        onThinking: (token?: string) => {
+          setThinking(true);
+          if (token) {
+            reasoningAccumulated += token;
+            setReasoningText(reasoningAccumulated);
+          }
+        },
         onToken: (token) => {
           setThinking(false);
           accumulated += token;
@@ -169,6 +178,7 @@ export default function RewriteTab({
     } catch (err) {
       setError((err as Error).message);
       setStreamingText('');
+      setReasoningText('');
       setThinking(false);
       setPhase('');
     } finally {
@@ -181,6 +191,7 @@ export default function RewriteTab({
     setLyrics('');
     setInstruction('');
     setStreamingText('');
+    setReasoningText('');
     setPhase('');
     setCompletedStatus(null);
     setError(null);
@@ -436,6 +447,16 @@ export default function RewriteTab({
                     onRewrittenChange={handleRewrittenChange}
                     onRewrittenBlur={handleRewrittenBlur}
                   />
+                  {reasoningText && (
+                    <details className="mt-2">
+                      <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                        Show reasoning
+                      </summary>
+                      <pre className="mt-1 p-3 rounded-md bg-muted font-[family-name:var(--font-mono)] text-xs leading-relaxed whitespace-pre-wrap break-words max-h-60 overflow-y-auto text-muted-foreground">
+                        {reasoningText}
+                      </pre>
+                    </details>
+                  )}
                 </div>
               </div>
             </>
@@ -505,6 +526,16 @@ export default function RewriteTab({
                         const match = streamingText.match(/<lyrics>\s*([\s\S]*?)(?:<\/lyrics>|$)/);
                         return match ? match[1]!.trimStart() : streamingText;
                       })()}</pre>
+                    </Card>
+                  ) : reasoningText ? (
+                    <Card className="flex flex-col flex-1 overflow-hidden">
+                      <CardHeader>
+                        <div className="flex items-center gap-2">
+                          <div className="size-4 border-2 border-border border-t-primary rounded-full animate-spin" aria-hidden="true" />
+                          <span>Thinking...</span>
+                        </div>
+                      </CardHeader>
+                      <pre className="p-3 sm:p-4 font-[family-name:var(--font-mono)] text-xs leading-relaxed whitespace-pre-wrap break-words flex-1 overflow-y-auto text-muted-foreground">{reasoningText}</pre>
                     </Card>
                   ) : (
                     <Card className="flex flex-col flex-1 items-center justify-center text-muted-foreground gap-3">

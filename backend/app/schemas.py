@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # --- Users ---
@@ -128,7 +129,7 @@ class SongRevisionOut(BaseModel):
     version: int
     rewritten_content: str
     changes_summary: str | None
-    edit_type: str
+    edit_type: Literal["full", "line", "chat"]
     edit_context: str | None
     created_at: datetime
 
@@ -139,13 +140,13 @@ class SongUpdate(BaseModel):
     title: str | None = None
     artist: str | None = None
     rewritten_content: str | None = None
-    font_size: float | None = None
+    font_size: float | None = Field(default=None, ge=0, le=100)
     folder: str | None = None
 
 
 # --- Song Status ---
 class SongStatusUpdate(BaseModel):
-    status: str  # "draft" or "completed"
+    status: Literal["draft", "completed"]
 
 
 # --- Apply Edit ---

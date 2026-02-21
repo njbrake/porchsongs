@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 
 function useCopyToClipboard() {
   const [copied, setCopied] = useState(false);
@@ -39,8 +40,8 @@ export default function ComparisonView({
             {rewrittenClip.copied ? 'Copied!' : 'Copy'}
           </Button>
         </CardHeader>
-        <textarea
-          className="flex-1 p-3 sm:p-4 font-[family-name:var(--font-mono)] text-xs sm:text-[0.82rem] leading-relaxed whitespace-pre-wrap break-words overflow-y-auto w-full border-0 bg-transparent resize-none cursor-text focus:outline-none focus:bg-[#fdfcfa]"
+        <Textarea
+          className="flex-1 border-0 rounded-none p-3 sm:p-4 text-xs sm:text-code bg-transparent resize-none overflow-y-auto cursor-text focus:bg-focus-bg"
           value={rewritten}
           onChange={e => onRewrittenChange(e.target.value)}
           onBlur={onRewrittenBlur}
@@ -65,7 +66,7 @@ export default function ComparisonView({
               {originalClip.copied ? 'Copied!' : 'Copy'}
             </Button>
           </CardHeader>
-          <pre className="p-3 sm:p-4 font-[family-name:var(--font-mono)] text-xs sm:text-[0.82rem] leading-relaxed whitespace-pre-wrap break-words overflow-x-auto max-h-[600px] overflow-y-auto">{original}</pre>
+          <pre className="p-3 sm:p-4 font-mono text-xs sm:text-code leading-relaxed whitespace-pre-wrap break-words overflow-x-auto max-h-[600px] overflow-y-auto">{original}</pre>
         </Card>
       )}
     </div>

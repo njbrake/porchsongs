@@ -2,6 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, typ
 import { toast } from 'sonner';
 import api from '@/api';
 import { Button } from '@/components/ui/button';
+import Spinner from '@/components/ui/spinner';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -63,7 +64,10 @@ function splitContentForColumns(text: string): { left: string; right: string } |
   };
 }
 
-const PRE_BASE_CLASS = 'font-[family-name:var(--font-mono)] text-[0.75rem] sm:text-[0.82rem] leading-snug whitespace-pre-wrap break-words sm:whitespace-pre sm:break-normal sm:overflow-x-auto text-foreground';
+const PRE_BASE_CLASS = 'font-mono text-xs sm:text-code leading-snug whitespace-pre-wrap break-words sm:whitespace-pre sm:break-normal sm:overflow-x-auto text-foreground';
+
+const FOLDER_PILL_CLASS = 'bg-card border border-border rounded-full px-3 py-1.5 text-xs cursor-pointer transition-all text-muted-foreground font-medium hover:border-primary hover:text-foreground whitespace-nowrap';
+const FOLDER_PILL_ACTIVE = 'bg-primary text-white border-primary';
 
 function PerformanceSheet({ song, onSongUpdated }: { song: Song; onSongUpdated: (song: Song) => void }) {
   const text = song.rewritten_content;
@@ -485,7 +489,7 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
     setDialogState({ kind: 'newFolder', song });
   };
 
-  const handleDragStart = (e: DragEvent, songId: number) => {
+  const handleDragStart = (e: DragEvent<HTMLDivElement>, songId: number) => {
     e.dataTransfer.setData('text/plain', String(songId));
     e.dataTransfer.effectAllowed = 'move';
     setDraggingSongId(songId);
@@ -638,7 +642,7 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
           <div className="mt-4 flex flex-col gap-4">
             <Card>
               <CardHeader>Original</CardHeader>
-              <pre className="p-3 sm:p-4 font-[family-name:var(--font-mono)] text-[0.75rem] sm:text-[0.82rem] leading-relaxed whitespace-pre-wrap break-words overflow-x-auto max-h-[600px] overflow-y-auto">{song.original_content}</pre>
+              <pre className="p-3 sm:p-4 font-mono text-xs sm:text-code leading-relaxed whitespace-pre-wrap break-words overflow-x-auto max-h-[600px] overflow-y-auto">{song.original_content}</pre>
             </Card>
 
             {song.changes_summary && (
@@ -652,7 +656,7 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
               <div className="mt-4 border-t border-border pt-3">
                 <h4 className="text-sm text-muted-foreground mb-2">Revision History ({revisions.length} versions)</h4>
                 {revisions.map(rev => (
-                  <div key={rev.id} className="text-xs py-1 text-muted-foreground border-b border-[#f0ebe3] last:border-b-0">
+                  <div key={rev.id} className="text-xs py-1 text-muted-foreground border-b border-border last:border-b-0">
                     v{rev.version} &mdash; {rev.edit_type === 'line' ? 'Line edit' : rev.edit_type === 'chat' ? 'Chat edit' : 'Full rewrite'} &mdash; {rev.changes_summary || 'No summary'} &mdash; {new Date(rev.created_at).toLocaleString()}
                   </div>
                 ))}
@@ -686,7 +690,7 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
   if (!loaded) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
-        <div className="size-8 border-3 border-border border-t-primary rounded-full animate-spin" aria-hidden="true" />
+        <Spinner />
         <span className="text-sm">Loading songs...</span>
       </div>
     );
@@ -729,6 +733,7 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
             size="sm"
             onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
             title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
+            aria-label={sortDir === 'asc' ? 'Sort ascending' : 'Sort descending'}
           >
             {sortDir === 'asc' ? '\u2191' : '\u2193'}
           </Button>
@@ -737,8 +742,8 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
           {hasFolders && (
             <button
               className={cn(
-                'bg-card border border-border rounded-full px-3 py-1.5 text-xs cursor-pointer transition-all text-muted-foreground font-medium hover:border-primary hover:text-foreground whitespace-nowrap',
-                activeFolder === null && 'bg-primary text-white border-primary'
+                FOLDER_PILL_CLASS,
+                activeFolder === null && FOLDER_PILL_ACTIVE
               )}
               onClick={() => setActiveFolder(null)}
             >
@@ -749,8 +754,8 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
             <button
               key={f}
               className={cn(
-                'bg-card border border-border rounded-full px-3 py-1.5 text-xs cursor-pointer transition-all text-muted-foreground font-medium hover:border-primary hover:text-foreground whitespace-nowrap',
-                activeFolder === f && 'bg-primary text-white border-primary',
+                FOLDER_PILL_CLASS,
+                activeFolder === f && FOLDER_PILL_ACTIVE,
                 dragOverFolder === f && 'bg-primary-light border-primary text-primary shadow-[0_0_0_2px_var(--color-primary-light)]'
               )}
               onClick={() => setActiveFolder(f)}
@@ -764,8 +769,8 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
           {hasFolders && hasUnfiled && (
             <button
               className={cn(
-                'bg-card border border-border rounded-full px-3 py-1.5 text-xs cursor-pointer transition-all text-muted-foreground font-medium hover:border-primary hover:text-foreground whitespace-nowrap',
-                activeFolder === '__unfiled__' && 'bg-primary text-white border-primary',
+                FOLDER_PILL_CLASS,
+                activeFolder === '__unfiled__' && FOLDER_PILL_ACTIVE,
                 dragOverFolder === '__unfiled__' && 'bg-primary-light border-primary text-primary shadow-[0_0_0_2px_var(--color-primary-light)]'
               )}
               onClick={() => setActiveFolder('__unfiled__')}
@@ -788,6 +793,7 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
               if (song) setDialogState({ kind: 'newFolder', song });
             }}
             title="Create new folder"
+            aria-label="Create new folder"
           >
             + New Folder
           </button>
@@ -832,8 +838,8 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
                 isSelected && 'border-primary bg-selected-bg'
               )}
               onClick={() => selectMode ? toggleSelect(song.id) : handleView(song)}
-              draggable={!selectMode ? true : undefined}
-              onDragStart={!selectMode ? (e) => handleDragStart(e as unknown as DragEvent, song.id) : undefined}
+              draggable={!selectMode || undefined}
+              onDragStart={!selectMode ? (e) => handleDragStart(e, song.id) : undefined}
               onDragEnd={!selectMode ? handleDragEnd : undefined}
             >
               <div className="flex justify-between items-center p-4 hover:bg-panel transition-colors">

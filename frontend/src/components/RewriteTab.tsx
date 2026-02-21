@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import api from '@/api';
+import api, { STORAGE_KEYS } from '@/api';
 import ComparisonView from '@/components/ComparisonView';
 import ChatPanel from '@/components/ChatPanel';
 import ModelSelector from '@/components/ModelSelector';
@@ -8,8 +8,11 @@ import ConfirmDialog from '@/components/ui/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
+import { Select } from '@/components/ui/select';
+import Spinner from '@/components/ui/spinner';
 import { Alert } from '@/components/ui/alert';
-import type { Profile, RewriteResult, RewriteMeta, ChatMessage, LlmSettings, SavedModel, ParseResult } from '@/types';
+import { cn } from '@/lib/utils';
+import type { Profile, Song, RewriteResult, RewriteMeta, ChatMessage, LlmSettings, SavedModel, ParseResult } from '@/types';
 
 interface RewriteTabProps {
   profile: Profile | null;
@@ -49,12 +52,12 @@ export default function RewriteTab({
   onOpenSettings,
 }: RewriteTabProps) {
   const [input, setInputRaw] = useState(
-    () => sessionStorage.getItem('porchsongs_draft_input') || ''
+    () => sessionStorage.getItem(STORAGE_KEYS.DRAFT_INPUT) || ''
   );
 
   const setInput = useCallback((val: string) => {
     setInputRaw(val);
-    sessionStorage.setItem('porchsongs_draft_input', val);
+    sessionStorage.setItem(STORAGE_KEYS.DRAFT_INPUT, val);
   }, []);
   const [loading, setLoading] = useState(false);
   const parseAbortRef = useRef<AbortController | null>(null);
@@ -99,6 +102,9 @@ export default function RewriteTab({
   const isInput = !loading && !parseResult && !rewriteResult;
   const isParsed = !!parseResult && !rewriteResult;
   const isWorkshopping = !!rewriteResult;
+
+  // Height for the two-pane layout: account for header + tabs + mobile pane toggle
+  const splitHeight = 'h-[calc(100dvh-11rem)] md:h-[calc(100dvh-7rem)]';
 
   const handleParse = async () => {
     const trimmedInput = input.trim();
@@ -225,7 +231,7 @@ export default function RewriteTab({
 
   const handleMetaBlur = useCallback(() => {
     if (currentSongId) {
-      api.updateSong(currentSongId, { title: songTitle || null, artist: songArtist || null } as Partial<import('@/types').Song>).catch(() => {});
+      api.updateSong(currentSongId, { title: songTitle || null, artist: songArtist || null } as Partial<Song>).catch(() => {});
     }
   }, [currentSongId, songTitle, songArtist]);
 
@@ -235,13 +241,36 @@ export default function RewriteTab({
 
   const handleRewrittenBlur = useCallback(() => {
     if (currentSongId && rewriteResult) {
-      api.updateSong(currentSongId, { rewritten_content: rewriteResult.rewritten_content } as Partial<import('@/types').Song>).catch(() => {});
+      api.updateSong(currentSongId, { rewritten_content: rewriteResult.rewritten_content } as Partial<Song>).catch(() => {});
     }
   }, [currentSongId, rewriteResult]);
 
+  const titleArtistInputs = (withBlur?: boolean) => (
+    <div className="flex flex-col gap-1 mb-2">
+      <input
+        className="text-xl font-bold border-0 border-b border-dashed border-border bg-transparent py-1 text-foreground w-full focus:outline-none focus:border-primary placeholder:text-muted-foreground placeholder:font-normal"
+        type="text"
+        value={songTitle || ''}
+        onChange={e => handleTitleChange(e.target.value)}
+        onBlur={withBlur ? handleMetaBlur : undefined}
+        placeholder="Song title"
+        aria-label="Song title"
+      />
+      <input
+        className="text-base border-0 border-b border-dashed border-border bg-transparent py-0.5 text-muted-foreground w-full focus:outline-none focus:border-primary placeholder:text-muted-foreground"
+        type="text"
+        value={songArtist || ''}
+        onChange={e => handleArtistChange(e.target.value)}
+        onBlur={withBlur ? handleMetaBlur : undefined}
+        placeholder="Artist"
+        aria-label="Artist"
+      />
+    </div>
+  );
+
   // Shared model selector + effort controls
   const modelControls = (disabled?: boolean) => (
-    <div className={`flex items-end gap-3 flex-wrap ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+    <div className={cn('flex items-end gap-3 flex-wrap', disabled && 'opacity-50 pointer-events-none')}>
       <ModelSelector
         provider={llmSettings.provider}
         model={llmSettings.model}
@@ -252,9 +281,9 @@ export default function RewriteTab({
       />
       <div className="flex flex-col gap-1 mb-2">
         <label className="text-xs text-muted-foreground" htmlFor="reasoning-effort">Effort</label>
-        <select
+        <Select
           id="reasoning-effort"
-          className="h-9 rounded-md border border-border bg-card px-2 text-sm text-foreground"
+          className="w-auto py-1.5 px-2 text-sm"
           value={reasoningEffort}
           disabled={disabled}
           onChange={e => onChangeReasoningEffort(e.target.value)}
@@ -262,7 +291,7 @@ export default function RewriteTab({
           <option value="low">Low</option>
           <option value="medium">Medium</option>
           <option value="high">High</option>
-        </select>
+        </Select>
       </div>
     </div>
   );
@@ -271,13 +300,13 @@ export default function RewriteTab({
   const mobilePaneToggle = (
     <div className="flex md:hidden rounded-md border border-border overflow-hidden mb-3">
       <button
-        className={`flex-1 py-2 text-sm font-semibold text-center transition-colors ${mobilePane === 'chat' ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}
+        className={cn('flex-1 py-2 text-sm font-semibold text-center transition-colors', mobilePane === 'chat' ? 'bg-primary text-white' : 'bg-card text-muted-foreground')}
         onClick={() => setMobilePane('chat')}
       >
         Chat Workshop
       </button>
       <button
-        className={`flex-1 py-2 text-sm font-semibold text-center transition-colors ${mobilePane === 'content' ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}
+        className={cn('flex-1 py-2 text-sm font-semibold text-center transition-colors', mobilePane === 'content' ? 'bg-primary text-white' : 'bg-card text-muted-foreground')}
         onClick={() => setMobilePane('content')}
       >
         Your Version
@@ -300,12 +329,9 @@ export default function RewriteTab({
       {error && (
         <Alert variant="error" className="mt-4 mb-4">
           <span>{error}</span>
-          <button
-            className="bg-transparent border-0 text-xl cursor-pointer text-error-text p-0 leading-none opacity-70 hover:opacity-100"
-            onClick={() => setError(null)}
-          >
+          <Button variant="ghost" size="sm" className="text-error-text p-1 leading-none" onClick={() => setError(null)}>
             &times;
-          </button>
+          </Button>
         </Alert>
       )}
 
@@ -346,12 +372,12 @@ export default function RewriteTab({
       {loading && !parseResult && (
         <Card className="flex flex-col text-muted-foreground">
           <div className="flex items-center justify-center gap-3 py-4">
-            <div className="size-6 border-3 border-border border-t-primary rounded-full animate-spin" aria-hidden="true" />
+            <Spinner size="sm" />
             <span className="text-sm">Parsing song...</span>
             <Button variant="danger-outline" size="sm" onClick={handleCancelParse}>Cancel</Button>
           </div>
           {parseStreamText && (
-            <pre className="px-4 pb-4 whitespace-pre-wrap break-words text-xs font-[family-name:var(--font-mono)] text-foreground max-h-[60vh] overflow-y-auto">{parseStreamText}</pre>
+            <pre className="px-4 pb-4 whitespace-pre-wrap break-words text-xs font-mono text-foreground max-h-[60vh] overflow-y-auto">{parseStreamText}</pre>
           )}
         </Card>
       )}
@@ -362,7 +388,7 @@ export default function RewriteTab({
           {mobilePaneToggle}
 
           <ResizableColumns
-            className="h-[calc(100vh-11rem)] md:h-[calc(100vh-7rem)]"
+            className={splitHeight}
             columnClassName="flex-col min-h-0"
             mobilePane={mobilePane === 'chat' ? 'left' : 'right'}
             left={
@@ -388,33 +414,14 @@ export default function RewriteTab({
             }
             right={
               <>
-                <div className="flex flex-col gap-1 mb-2">
-                  <input
-                    className="text-xl font-bold border-0 border-b border-dashed border-border bg-transparent py-1 text-foreground w-full focus:outline-none focus:border-primary placeholder:text-muted-foreground placeholder:font-normal"
-                    type="text"
-                    value={songTitle || ''}
-                    onChange={e => handleTitleChange(e.target.value)}
-                    placeholder="Song title"
-                    aria-label="Song title"
-                  />
-                  <input
-                    className="text-base border-0 border-b border-dashed border-border bg-transparent py-0.5 text-muted-foreground w-full focus:outline-none focus:border-primary placeholder:text-muted-foreground"
-                    type="text"
-                    value={songArtist || ''}
-                    onChange={e => handleArtistChange(e.target.value)}
-                    placeholder="Artist"
-                    aria-label="Artist"
-                  />
-                </div>
+                {titleArtistInputs()}
 
                 <Card className="flex flex-col flex-1 overflow-hidden">
-                  <div className="p-3 sm:p-4 font-[family-name:var(--font-mono)] text-xs sm:text-[0.82rem] leading-relaxed flex-1 overflow-y-auto">
-                    <Textarea
-                      className="w-full h-full min-h-[200px] border-0 p-0 font-[family-name:var(--font-mono)] text-xs sm:text-[0.82rem] leading-relaxed resize-none focus-visible:ring-0"
-                      value={parsedContent}
-                      onChange={e => setParsedContent(e.target.value)}
-                    />
-                  </div>
+                  <Textarea
+                    className="flex-1 min-h-[200px] border-0 p-3 sm:p-4 font-mono text-xs sm:text-code leading-relaxed resize-none focus-visible:ring-0"
+                    value={parsedContent}
+                    onChange={e => setParsedContent(e.target.value)}
+                  />
                 </Card>
               </>
             }
@@ -428,7 +435,7 @@ export default function RewriteTab({
           {mobilePaneToggle}
 
           <ResizableColumns
-            className="h-[calc(100vh-11rem)] md:h-[calc(100vh-7rem)]"
+            className={splitHeight}
             columnClassName="flex-col min-h-0"
             mobilePane={mobilePane === 'chat' ? 'left' : 'right'}
             left={
@@ -469,26 +476,7 @@ export default function RewriteTab({
             }
             right={
               <>
-                <div className="flex flex-col gap-1 mb-2">
-                  <input
-                    className="text-xl font-bold border-0 border-b border-dashed border-border bg-transparent py-1 text-foreground w-full focus:outline-none focus:border-primary placeholder:text-muted-foreground placeholder:font-normal"
-                    type="text"
-                    value={songTitle || ''}
-                    onChange={e => handleTitleChange(e.target.value)}
-                    onBlur={handleMetaBlur}
-                    placeholder="Song title"
-                    aria-label="Song title"
-                  />
-                  <input
-                    className="text-base border-0 border-b border-dashed border-border bg-transparent py-0.5 text-muted-foreground w-full focus:outline-none focus:border-primary placeholder:text-muted-foreground"
-                    type="text"
-                    value={songArtist || ''}
-                    onChange={e => handleArtistChange(e.target.value)}
-                    onBlur={handleMetaBlur}
-                    placeholder="Artist"
-                    aria-label="Artist"
-                  />
-                </div>
+                {titleArtistInputs(true)}
 
                 <ComparisonView
                   original={rewriteResult!.original_content}

@@ -15,19 +15,33 @@ import type {
 
 const BASE = '/api';
 
+// --- Storage keys ---
+const STORAGE_KEYS = {
+  REFRESH_TOKEN: 'porchsongs_refresh_token',
+  CURRENT_SONG_ID: 'porchsongs_current_song_id',
+  DRAFT_INPUT: 'porchsongs_draft_input',
+  SPLIT_PERCENT: 'porchsongs_split_pct',
+  WAKE_LOCK: 'porchsongs_wake_lock',
+  PROVIDER: 'porchsongs_provider',
+  MODEL: 'porchsongs_model',
+  REASONING_EFFORT: 'porchsongs_reasoning_effort',
+} as const;
+
+export { STORAGE_KEYS };
+
 // --- Token storage ---
 // Access token in memory (not localStorage) for security
 let _accessToken: string | null = null;
 
 // Refresh token in localStorage for persistence across tabs/refreshes
 function _getRefreshToken(): string | null {
-  return localStorage.getItem('porchsongs_refresh_token');
+  return localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
 }
 function _setRefreshToken(token: string | null): void {
   if (token) {
-    localStorage.setItem('porchsongs_refresh_token', token);
+    localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, token);
   } else {
-    localStorage.removeItem('porchsongs_refresh_token');
+    localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
   }
 }
 
@@ -74,6 +88,90 @@ async function _tryRefresh(): Promise<boolean> {
   return _refreshPromise;
 }
 
+// --- Shared helpers ---
+
+function _parseApiError(body: unknown, fallback: string): string {
+  return (body as { detail?: string }).detail || fallback;
+}
+
+async function _throwIfNotOk(res: Response): Promise<void> {
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(_parseApiError(body, `Request failed: ${res.status}`));
+  }
+}
+
+function _downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function _streamSse<T>(
+  endpoint: string,
+  data: Record<string, unknown>,
+  onToken: (token: string) => void,
+  signal?: AbortSignal,
+): Promise<T> {
+  const doStream = async (retry: boolean): Promise<T> => {
+    const res = await fetch(`${BASE}${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+      body: JSON.stringify(data),
+      signal,
+    });
+
+    if (res.status === 401 && retry) {
+      const refreshed = await _tryRefresh();
+      if (refreshed) return doStream(false);
+      window.dispatchEvent(new CustomEvent('porchsongs-logout'));
+      throw new Error('Authentication required. Please log in.');
+    }
+    await _throwIfNotOk(res);
+
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error('No response body');
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let eventType = '';
+    let result: T | null = null;
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          eventType = line.slice(7);
+        } else if (line.startsWith('data: ')) {
+          const payload = line.slice(6);
+          if (eventType === 'token') {
+            onToken(JSON.parse(payload) as string);
+          } else if (eventType === 'done') {
+            result = JSON.parse(payload) as T;
+          } else if (eventType === 'error') {
+            const err = JSON.parse(payload) as { detail: string };
+            throw new Error(err.detail);
+          }
+          eventType = '';
+        }
+      }
+    }
+
+    if (!result) throw new Error('Stream ended without result');
+    return result;
+  };
+  return doStream(true);
+}
+
 // --- Core fetch with auto-refresh ---
 
 async function _fetch<T>(path: string, options: RequestInit = {}, retry = true): Promise<T> {
@@ -92,10 +190,7 @@ async function _fetch<T>(path: string, options: RequestInit = {}, retry = true):
     throw new Error('Authentication required. Please log in.');
   }
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error((body as { detail?: string }).detail || `Request failed: ${res.status}`);
-  }
+  await _throwIfNotOk(res);
   return res.json() as Promise<T>;
 }
 
@@ -114,7 +209,7 @@ async function login(password: string): Promise<TokenResponse> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error((body as { detail?: string }).detail || 'Login failed');
+    throw new Error(_parseApiError(body, 'Login failed'));
   }
   const data = (await res.json()) as TokenResponse;
   _accessToken = data.access_token;
@@ -172,67 +267,11 @@ const api = {
 
   // Parse
   parse: (data: Record<string, unknown>, signal?: AbortSignal) => _fetch<ParseResult>('/parse', { method: 'POST', body: JSON.stringify(data), signal }),
-  parseStream: async (
+  parseStream: (
     data: Record<string, unknown>,
     onToken: (token: string) => void,
     signal?: AbortSignal,
-  ): Promise<ParseResult> => {
-    const doStream = async (retry: boolean): Promise<ParseResult> => {
-      const res = await fetch(`${BASE}/parse/stream`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
-        body: JSON.stringify(data),
-        signal,
-      });
-
-      if (res.status === 401 && retry) {
-        const refreshed = await _tryRefresh();
-        if (refreshed) return doStream(false);
-        window.dispatchEvent(new CustomEvent('porchsongs-logout'));
-        throw new Error('Authentication required. Please log in.');
-      }
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error((body as { detail?: string }).detail || `Request failed: ${res.status}`);
-      }
-
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error('No response body');
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let eventType = '';
-      let result: ParseResult | null = null;
-
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            eventType = line.slice(7);
-          } else if (line.startsWith('data: ')) {
-            const payload = line.slice(6);
-            if (eventType === 'token') {
-              onToken(JSON.parse(payload) as string);
-            } else if (eventType === 'done') {
-              result = JSON.parse(payload) as ParseResult;
-            } else if (eventType === 'error') {
-              const err = JSON.parse(payload) as { detail: string };
-              throw new Error(err.detail);
-            }
-            eventType = '';
-          }
-        }
-      }
-
-      if (!result) throw new Error('Stream ended without result');
-      return result;
-    };
-    return doStream(true);
-  },
+  ): Promise<ParseResult> => _streamSse<ParseResult>('/parse/stream', data, onToken, signal),
 
   // Songs
   listSongs: (profileId?: number) => {
@@ -249,68 +288,11 @@ const api = {
 
   // Chat
   chat: (data: Record<string, unknown>, signal?: AbortSignal) => _fetch<ChatResult>('/chat', { method: 'POST', body: JSON.stringify(data), signal }),
-  chatStream: async (
+  chatStream: (
     data: Record<string, unknown>,
     onToken: (token: string) => void,
     signal?: AbortSignal,
-  ): Promise<ChatResult & { version: number }> => {
-    const doStream = async (retry: boolean): Promise<ChatResult & { version: number }> => {
-      const res = await fetch(`${BASE}/chat/stream`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
-        body: JSON.stringify(data),
-        signal,
-      });
-
-      if (res.status === 401 && retry) {
-        const refreshed = await _tryRefresh();
-        if (refreshed) return doStream(false);
-        window.dispatchEvent(new CustomEvent('porchsongs-logout'));
-        throw new Error('Authentication required. Please log in.');
-      }
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error((body as { detail?: string }).detail || `Request failed: ${res.status}`);
-      }
-
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error('No response body');
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let eventType = '';
-      let result: (ChatResult & { version: number }) | null = null;
-
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        // Parse SSE events from buffer
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            eventType = line.slice(7);
-          } else if (line.startsWith('data: ')) {
-            const payload = line.slice(6);
-            if (eventType === 'token') {
-              onToken(JSON.parse(payload) as string);
-            } else if (eventType === 'done') {
-              result = JSON.parse(payload) as ChatResult & { version: number };
-            } else if (eventType === 'error') {
-              const err = JSON.parse(payload) as { detail: string };
-              throw new Error(err.detail);
-            }
-            eventType = '';
-          }
-        }
-      }
-
-      if (!result) throw new Error('Stream ended without result');
-      return result;
-    };
-    return doStream(true);
-  },
+  ): Promise<ChatResult & { version: number }> => _streamSse<ChatResult & { version: number }>('/chat/stream', data, onToken, signal),
   getChatHistory: (songId: number) => _fetch<ChatHistoryRow[]>(`/songs/${songId}/messages`),
   saveChatMessages: (songId: number, messages: { role: string; content: string; is_note: boolean }[]) =>
     _fetch<void>(`/songs/${songId}/messages`, { method: 'POST', body: JSON.stringify(messages) }),
@@ -331,36 +313,19 @@ const api = {
 
   // PDF
   downloadSongPdf: async (id: number, title: string | null, artist: string | null) => {
-    const res = await fetch(`${BASE}/songs/${id}/pdf`, { headers: _getAuthHeaders() });
+    const filename = `${title || 'Untitled'} - ${artist || 'Unknown'}.pdf`;
+    let res = await fetch(`${BASE}/songs/${id}/pdf`, { headers: _getAuthHeaders() });
     if (res.status === 401) {
       const refreshed = await _tryRefresh();
       if (refreshed) {
-        const retryRes = await fetch(`${BASE}/songs/${id}/pdf`, { headers: _getAuthHeaders() });
-        if (!retryRes.ok) throw new Error(`Download failed: ${retryRes.status}`);
-        const blob = await retryRes.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${title || 'Untitled'} - ${artist || 'Unknown'}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-        return;
+        res = await fetch(`${BASE}/songs/${id}/pdf`, { headers: _getAuthHeaders() });
+      } else {
+        window.dispatchEvent(new CustomEvent('porchsongs-logout'));
+        throw new Error('Authentication required. Please log in.');
       }
-      window.dispatchEvent(new CustomEvent('porchsongs-logout'));
-      throw new Error('Authentication required. Please log in.');
     }
     if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${title || 'Untitled'} - ${artist || 'Unknown'}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    _downloadBlob(await res.blob(), filename);
   },
 
   // Providers

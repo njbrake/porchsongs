@@ -86,7 +86,7 @@ class SongRevision(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     rewritten_content: Mapped[str] = mapped_column(Text, nullable=False)
     changes_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    edit_type: Mapped[str] = mapped_column(String, default="full")  # "full" or "line"
+    edit_type: Mapped[str] = mapped_column(String, default="full")  # "full", "line", or "chat"
     edit_context: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 

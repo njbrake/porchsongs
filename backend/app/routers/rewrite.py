@@ -12,8 +12,9 @@ from ..auth.dependencies import get_current_user
 from ..auth.scoping import get_user_profile, get_user_song
 from ..database import get_db
 from ..models import ChatMessage as ChatMessageModel
-from ..models import ProfileModel, ProviderConnection, User
+from ..models import ProfileModel, ProviderConnection, Song, SongRevision, User
 from ..schemas import (
+    ChatMessage,
     ChatRequest,
     ChatResponse,
     ParseRequest,
@@ -22,6 +23,7 @@ from ..schemas import (
 from ..services import llm_service
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
@@ -153,6 +155,62 @@ async def parse_stream(
     )
 
 
+def _load_chat_messages(
+    db: Session,
+    song_id: int,
+    req_messages: list[ChatMessage],
+) -> list[dict[str, str]]:
+    """Load persisted chat history and append new request messages."""
+    history_rows = (
+        db.query(ChatMessageModel)
+        .filter(ChatMessageModel.song_id == song_id, ChatMessageModel.is_note.is_(False))
+        .order_by(ChatMessageModel.created_at)
+        .all()
+    )
+    history: list[dict[str, str]] = [
+        {"role": row.role, "content": row.content} for row in history_rows
+    ]
+    return history + [{"role": m.role, "content": m.content} for m in req_messages]
+
+
+def _persist_chat_result(
+    db: Session,
+    song: Song,
+    rewritten_content: str | None,
+    changes_summary: str,
+    assistant_content: str,
+    req_messages: list[ChatMessage],
+) -> None:
+    """Update song, create revision, and save chat messages (does not commit)."""
+    if rewritten_content is not None:
+        song.rewritten_content = rewritten_content
+        song.changes_summary = changes_summary
+        song.current_version += 1
+
+        db.add(
+            SongRevision(
+                song_id=song.id,
+                version=song.current_version,
+                rewritten_content=rewritten_content,
+                changes_summary=changes_summary,
+                edit_type="chat",
+            )
+        )
+
+    last_user_msg = req_messages[-1] if req_messages else None
+    if last_user_msg and last_user_msg.role == "user":
+        db.add(
+            ChatMessageModel(
+                song_id=song.id, role="user", content=last_user_msg.content, is_note=False
+            )
+        )
+    db.add(
+        ChatMessageModel(
+            song_id=song.id, role="assistant", content=assistant_content, is_note=False
+        )
+    )
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     req: ChatRequest,
@@ -160,20 +218,8 @@ async def chat(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ChatResponse:
-    from ..models import SongRevision
-
     song = get_user_song(db, current_user, req.song_id)
-
-    # Load prior chat messages (non-note) from DB as conversation history
-    history_rows = (
-        db.query(ChatMessageModel)
-        .filter(ChatMessageModel.song_id == song.id, ChatMessageModel.is_note.is_(False))
-        .order_by(ChatMessageModel.created_at)
-        .all()
-    )
-    history = [{"role": row.role, "content": row.content} for row in history_rows]
-
-    messages = history + [{"role": m.role, "content": m.content} for m in req.messages]
+    messages = _load_chat_messages(db, song.id, req.messages)
     api_base = _lookup_api_base(db, song.profile_id, req.provider, req.model)
 
     try:
@@ -193,38 +239,14 @@ async def chat(
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {e}") from None
 
-    # Only persist content / create revision when the LLM actually changed the song
-    if result["rewritten_content"] is not None:
-        song.rewritten_content = result["rewritten_content"]
-        song.changes_summary = result["changes_summary"]
-        song.current_version += 1
-
-        revision = SongRevision(
-            song_id=song.id,
-            version=song.current_version,
-            rewritten_content=result["rewritten_content"],
-            changes_summary=result["changes_summary"],
-            edit_type="chat",
-        )
-        db.add(revision)
-
-    # Persist the user and assistant chat messages (full raw response for context)
-    last_user_msg = req.messages[-1] if req.messages else None
-    if last_user_msg and last_user_msg.role == "user":
-        db.add(
-            ChatMessageModel(
-                song_id=song.id, role="user", content=last_user_msg.content, is_note=False
-            )
-        )
-    db.add(
-        ChatMessageModel(
-            song_id=song.id,
-            role="assistant",
-            content=result["assistant_message"],
-            is_note=False,
-        )
+    _persist_chat_result(
+        db,
+        song,
+        rewritten_content=result["rewritten_content"],
+        changes_summary=result["changes_summary"],
+        assistant_content=result["assistant_message"],
+        req_messages=req.messages,
     )
-
     db.commit()
 
     return ChatResponse(
@@ -235,9 +257,6 @@ async def chat(
     )
 
 
-logger = logging.getLogger(__name__)
-
-
 @router.post("/chat/stream")
 async def chat_stream(
     req: ChatRequest,
@@ -245,19 +264,8 @@ async def chat_stream(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
-    from ..models import SongRevision
-
     song = get_user_song(db, current_user, req.song_id)
-
-    # Load prior chat messages (non-note) from DB as conversation history
-    history_rows = (
-        db.query(ChatMessageModel)
-        .filter(ChatMessageModel.song_id == song.id, ChatMessageModel.is_note.is_(False))
-        .order_by(ChatMessageModel.created_at)
-        .all()
-    )
-    history = [{"role": row.role, "content": row.content} for row in history_rows]
-    messages = history + [{"role": m.role, "content": m.content} for m in req.messages]
+    messages = _load_chat_messages(db, song.id, req.messages)
     api_base = _lookup_api_base(db, song.profile_id, req.provider, req.model)
 
     async def event_generator() -> AsyncIterator[str]:
@@ -287,38 +295,13 @@ async def chat_stream(
 
         # Persist to DB (wrapped so a DB error doesn't lose the result)
         try:
-            # Only update content / create revision when the LLM actually changed the song
-            if parsed["content"] is not None:
-                song.rewritten_content = parsed["content"]
-                song.changes_summary = changes_summary
-                song.current_version += 1
-
-                revision = SongRevision(
-                    song_id=song.id,
-                    version=song.current_version,
-                    rewritten_content=parsed["content"],
-                    changes_summary=changes_summary,
-                    edit_type="chat",
-                )
-                db.add(revision)
-
-            last_user_msg = req.messages[-1] if req.messages else None
-            if last_user_msg and last_user_msg.role == "user":
-                db.add(
-                    ChatMessageModel(
-                        song_id=song.id,
-                        role="user",
-                        content=last_user_msg.content,
-                        is_note=False,
-                    )
-                )
-            db.add(
-                ChatMessageModel(
-                    song_id=song.id,
-                    role="assistant",
-                    content=accumulated,
-                    is_note=False,
-                )
+            _persist_chat_result(
+                db,
+                song,
+                rewritten_content=parsed["content"],
+                changes_summary=changes_summary,
+                assistant_content=accumulated,
+                req_messages=req.messages,
             )
             db.commit()
         except Exception:

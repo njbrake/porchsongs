@@ -24,8 +24,14 @@
   --color-header-bg-from: #4a3728;
   --color-header-bg-to: #6b4c35;
   --color-header-text: #f5f0e8;
+  --color-secondary-hover: #e8cbb8;
+  --color-danger-hover: #eecccc;
   --color-selected-bg: #fdf8f4;
   --color-selected-line: #dbeafe;
+  --color-focus-bg: #fdfcfa;
+
+  --text-code: 0.82rem;
+  --text-badge: 0.7rem;
 
   --font-ui: 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
@@ -38,24 +44,22 @@
   --shadow-sm: 0 2px 8px rgba(58, 46, 31, 0.08);
   --shadow-md: 0 4px 24px rgba(58, 46, 31, 0.12);
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.2);
+
+  --animate-spin: spin 0.8s linear infinite;
 }
 
 @layer base {
+  html {
+    overflow-x: hidden;
+  }
+
   body {
     font-family: var(--font-ui);
     background: var(--color-background);
     color: var(--color-foreground);
     min-height: 100vh;
     line-height: 1.5;
-  }
-
-  /* Animations */
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  .animate-spin {
-    animation: spin 0.8s linear infinite;
+    overflow-x: hidden;
   }
 
   /* Chord coloring in lyrics */

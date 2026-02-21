@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
+import { cn } from '@/lib/utils';
 import api from '@/api';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import Spinner from '@/components/ui/spinner';
 import { StreamParser } from '@/lib/streamParser';
 import type { ChatMessage, LlmSettings } from '@/types';
 
@@ -19,11 +21,11 @@ function ChatMessageBubble({ msg, isStreaming }: { msg: ChatMessage; isStreaming
       : 'bg-panel text-foreground self-start rounded-bl-sm';
 
   return (
-    <div className={`px-3 py-2 rounded-md text-sm leading-normal max-w-[95%] sm:max-w-[85%] break-words ${bubbleClass}`}>
+    <div className={cn('px-3 py-2 rounded-md text-sm leading-normal max-w-[95%] sm:max-w-[85%] break-words', bubbleClass)}>
       {isStreaming ? (
-        <pre className="whitespace-pre-wrap break-words text-xs m-0 font-[family-name:var(--font-mono)]">{msg.content}</pre>
+        <pre className="whitespace-pre-wrap break-words text-xs m-0 font-mono">{msg.content}</pre>
       ) : expanded ? (
-        <pre className="whitespace-pre-wrap break-words text-xs m-0 font-[family-name:var(--font-mono)] max-h-80 overflow-y-auto">{msg.rawContent}</pre>
+        <pre className="whitespace-pre-wrap break-words text-xs m-0 font-mono max-h-80 overflow-y-auto">{msg.rawContent}</pre>
       ) : (
         msg.content
       )}
@@ -60,6 +62,11 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Abort any in-flight request on unmount
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
 
   const handleCancel = () => {
     abortRef.current?.abort();
@@ -201,13 +208,13 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
         ))}
         {initialLoading && (
           <div className="flex items-center gap-2 py-2 text-muted-foreground text-sm">
-            <div className="size-6 border-3 border-border border-t-primary rounded-full animate-spin" aria-hidden="true" />
+            <Spinner size="sm" />
             <span>Parsing song...</span>
           </div>
         )}
         {sending && !streaming && (
           <div className="flex items-center gap-2 py-2 text-muted-foreground text-sm">
-            <div className="size-6 border-3 border-border border-t-primary rounded-full animate-spin" aria-hidden="true" />
+            <Spinner size="sm" />
             <span>Thinking...</span>
           </div>
         )}

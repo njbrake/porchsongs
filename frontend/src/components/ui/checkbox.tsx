@@ -7,7 +7,7 @@ const Checkbox = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputEleme
       type="checkbox"
       ref={ref}
       className={cn(
-        'size-4.5 cursor-pointer accent-primary',
+        'size-5 cursor-pointer accent-primary',
         className
       )}
       {...props}

@@ -1,9 +1,9 @@
-import type { HTMLAttributes } from 'react';
+import { forwardRef, type HTMLAttributes } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
-  'inline-block text-[0.7rem] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full',
+  'inline-block text-badge font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full',
   {
     variants: {
       variant: {
@@ -23,11 +23,12 @@ interface BadgeProps
   extends HTMLAttributes<HTMLSpanElement>,
     VariantProps<typeof badgeVariants> {}
 
-function Badge({ className, variant, ...props }: BadgeProps) {
-  return (
-    <span className={cn(badgeVariants({ variant }), className)} {...props} />
-  );
-}
+const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
+  ({ className, variant, ...props }, ref) => (
+    <span ref={ref} className={cn(badgeVariants({ variant }), className)} {...props} />
+  )
+);
+Badge.displayName = 'Badge';
 
 export { Badge, badgeVariants };
 export type { BadgeProps };

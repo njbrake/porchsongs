@@ -1,5 +1,4 @@
 import json
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
@@ -26,6 +25,7 @@ from ..schemas import (
     SongUpdate,
 )
 from ..services.chord_parser import replace_line_with_chords
+from ..services.pdf_service import generate_song_pdf
 
 router = APIRouter()
 
@@ -37,7 +37,7 @@ async def list_songs(
     folder: str | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[Any]:
+) -> list[Song]:
     query = db.query(Song).filter(Song.user_id == current_user.id)
     if profile_id is not None:
         query = query.filter(Song.profile_id == profile_id)
@@ -82,9 +82,6 @@ async def download_song_pdf(
     db: Session = Depends(get_db),
 ) -> Response:
     song = get_user_song(db, current_user, song_id)
-
-    from ..services.pdf_service import generate_song_pdf
-
     pdf_bytes = generate_song_pdf(song.title or "Untitled", song.artist, song.rewritten_content)
 
     title = song.title or "Untitled"
@@ -166,7 +163,7 @@ async def list_revisions(
     song_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[Any]:
+) -> list[SongRevision]:
     get_user_song(db, current_user, song_id)
     revisions = (
         db.query(SongRevision)
@@ -182,7 +179,7 @@ async def list_messages(
     song_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[Any]:
+) -> list[ChatMessage]:
     get_user_song(db, current_user, song_id)
     return (
         db.query(ChatMessage)
@@ -198,7 +195,7 @@ async def save_messages(
     messages: list[ChatMessageCreate],
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[Any]:
+) -> list[ChatMessage]:
     get_user_song(db, current_user, song_id)
     rows = []
     for msg in messages:
@@ -219,10 +216,6 @@ async def update_song_status(
     db: Session = Depends(get_db),
 ) -> Song:
     song = get_user_song(db, current_user, song_id)
-
-    if data.status not in ("draft", "completed"):
-        raise HTTPException(status_code=400, detail="Status must be 'draft' or 'completed'")
-
     song.status = data.status
     db.commit()
     db.refresh(song)
@@ -235,7 +228,7 @@ async def apply_edit(
     data: ApplyEditRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> dict[str, str | int]:
+) -> ApplyEditResponse:
     song = get_user_song(db, current_user, data.song_id)
 
     # Replace the line in the full chord text
@@ -270,4 +263,4 @@ async def apply_edit(
     db.commit()
     db.refresh(song)
 
-    return {"rewritten_content": song.rewritten_content, "version": new_version}
+    return ApplyEditResponse(rewritten_content=song.rewritten_content, version=new_version)

@@ -1,16 +1,5 @@
 import re
 
-# Common chord patterns
-CHORD_PATTERN = re.compile(
-    r"^[\s]*"
-    r"("
-    r"[A-G][#b]?"
-    r"(m|maj|min|dim|aug|sus[24]?|add[0-9]*|[0-9]*|/[A-G][#b]?)*"
-    r"[\s]*"
-    r")+"
-    r"$"
-)
-
 
 def is_chord_line(line: str) -> bool:
     """Detect whether a line consists only of chord symbols."""
@@ -28,7 +17,7 @@ def is_chord_line(line: str) -> bool:
     return True
 
 
-def separate_chords_and_text(text: str) -> list[dict]:
+def separate_chords_and_text(text: str) -> list[dict[str, str | None]]:
     """Separate chord lines from text lines.
 
     Returns a list of dicts with structure:

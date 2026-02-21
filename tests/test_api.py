@@ -168,7 +168,7 @@ def test_update_song_status_invalid(client):
     }).json()
 
     resp = client.put(f"/api/songs/{song['id']}/status", json={"status": "invalid"})
-    assert resp.status_code == 400
+    assert resp.status_code == 422
 
 
 # --- Song Revisions ---

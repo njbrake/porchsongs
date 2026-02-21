@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import NoSleep from 'nosleep.js';
+import { STORAGE_KEYS } from '@/api';
 
 const hasNativeWakeLock = 'wakeLock' in navigator;
 
 export default function useWakeLock() {
-  const [enabled, setEnabled] = useState(() => localStorage.getItem('porchsongs_wake_lock') === 'true');
+  const [enabled, setEnabled] = useState(() => localStorage.getItem(STORAGE_KEYS.WAKE_LOCK) === 'true');
   const [active, setActive] = useState(false);
   const sentinelRef = useRef<WakeLockSentinel | null>(null);
   const noSleepRef = useRef<NoSleep | null>(null);
@@ -72,7 +73,7 @@ export default function useWakeLock() {
   const toggle = useCallback(() => {
     setEnabled(prev => {
       const next = !prev;
-      localStorage.setItem('porchsongs_wake_lock', String(next));
+      localStorage.setItem(STORAGE_KEYS.WAKE_LOCK, String(next));
       return next;
     });
   }, []);

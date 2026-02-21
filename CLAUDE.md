@@ -49,7 +49,7 @@ Authentication uses a plugin architecture defined in `backend/app/auth/`:
 - **`app_secret.py`** — OSS single-user backend: gates behind `APP_SECRET` env var, auto-creates a local user
 - **`loader.py`** — Plugin loading: uses `PREMIUM_PLUGIN` env var to load external auth backends, falls back to `AppSecretBackend`
 - **`tokens.py`** — JWT access tokens (15min) + refresh tokens (30 days), HS256
-- **`dependencies.py`** — FastAPI `Depends()` for `get_current_user` and `get_current_admin`. Zero-config dev mode: if `APP_SECRET` not set, auto-returns local user
+- **`dependencies.py`** — FastAPI `Depends()` for `get_current_user`. Zero-config dev mode: if `APP_SECRET` not set, auto-returns local user
 - **`scoping.py`** — `get_user_profile()` and `get_user_song()` helpers for data isolation
 
 Auth endpoints live in `backend/app/routers/auth.py` (`/api/auth/config`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout`, `/api/auth/me`).
@@ -109,6 +109,48 @@ cd frontend && npm run typecheck              # TypeScript type check
 DATABASE_URL="sqlite:///:memory:" uv run pytest  # backend tests (~120)
 cd frontend && npx vitest run                 # frontend tests (~37)
 ```
+
+## Frontend Design System & Code Style
+
+The frontend uses Tailwind CSS v4 with a custom `@theme` block in `src/index.css`. Follow these conventions to keep the design simple and avoid duplication:
+
+### Use design tokens, not arbitrary values
+- **Colors**: All colors are defined as `--color-*` tokens in `@theme`. Never hardcode hex values — add a new token if needed.
+- **Font sizes**: Custom sizes use `--text-*` tokens (e.g. `--text-code: 0.82rem`, `--text-badge: 0.7rem`). Use `text-code`, `text-badge`, etc. instead of `text-[0.82rem]`.
+- **Fonts**: `--font-mono` and `--font-ui` are in `@theme`, so use `font-mono` / `font-ui` directly — never `font-[family-name:var(--font-mono)]`.
+- **Shadows, radii, animations**: All defined in `@theme`. Use `shadow-sm`, `rounded-md`, `animate-spin`, etc.
+- If a value appears more than once and isn't a standard Tailwind utility, make it a `@theme` token.
+
+### Use UI primitives from `src/components/ui/`
+- **Always use** `Button`, `Input`, `Select`, `Textarea`, `Card`, `Checkbox`, `Badge`, `Spinner`, `Alert`, `Dialog`, `DropdownMenu`, `Label` instead of raw HTML elements.
+- All UI primitives use `forwardRef`, accept `className`, and merge classes via `cn()`.
+- Use existing `Button` variants (`default`, `secondary`, `danger`, `danger-outline`, `ghost`, `link`, `link-inline`, `icon`) and sizes (`default`, `sm`, `lg`, `icon`) rather than styling raw `<button>` elements.
+
+### Class names: use `cn()`, not template literals
+- Import `cn` from `@/lib/utils` for all conditional or composed class strings.
+- Write `cn('base classes', condition && 'conditional-class')` instead of `` `base classes ${condition ? 'x' : ''}` ``.
+
+### Extract repeated patterns
+- If a className string or JSX block appears 2+ times, extract it as a constant (e.g. `FOLDER_PILL_CLASS`) or a helper function (e.g. `titleArtistInputs()`).
+- Shared class patterns for preformatted text use `PRE_BASE_CLASS` in LibraryTab — follow this pattern for similar repeated styling.
+
+### Storage keys
+- All `localStorage` keys are centralized in `STORAGE_KEYS` (exported from `src/api.ts`). Never use raw `'porchsongs_*'` strings — import and reference `STORAGE_KEYS.KEY_NAME`.
+
+### API layer (`src/api.ts`)
+- JSON endpoints use `_fetch<T>()` which handles auth refresh, error extraction, and retries automatically.
+- SSE streaming endpoints use `_streamSse<T>()` — a generic helper that handles auth, SSE parsing, and token dispatch. Do not duplicate SSE logic.
+- Use `_parseApiError()` and `_throwIfNotOk()` for error handling in any new fetch calls.
+- Use `_downloadBlob()` for any file download patterns.
+
+### Accessibility
+- All icon-only or symbol-only buttons must have `aria-label`.
+- Form inputs should have `aria-label` or an associated `<Label>`.
+
+### Responsive design
+- Use `dvh` (not `vh`) for viewport height calculations to account for mobile address bars.
+- Use `overflow-x: hidden` on containers that might overflow on mobile.
+- The `ResizableColumns` component handles desktop split / mobile single-pane automatically via `useIsDesktop()` hook.
 
 ## Key Constraints
 

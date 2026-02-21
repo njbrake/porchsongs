@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Toaster } from 'sonner';
-import api from '@/api';
+import api, { STORAGE_KEYS } from '@/api';
 import useLocalStorage from '@/hooks/useLocalStorage';
 import useProviderConnections from '@/hooks/useProviderConnections';
 import useSavedModels from '@/hooks/useSavedModels';
+import Spinner from '@/components/ui/spinner';
 import Header from '@/components/Header';
 import Tabs from '@/components/Tabs';
 import RewriteTab from '@/components/RewriteTab';
@@ -118,9 +119,9 @@ export default function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
 
   // LLM settings (persisted in localStorage)
-  const [provider, setProvider] = useLocalStorage('porchsongs_provider', '');
-  const [model, setModel] = useLocalStorage('porchsongs_model', '');
-  const [reasoningEffort, setReasoningEffort] = useLocalStorage('porchsongs_reasoning_effort', 'high');
+  const [provider, setProvider] = useLocalStorage(STORAGE_KEYS.PROVIDER, '');
+  const [model, setModel] = useLocalStorage(STORAGE_KEYS.MODEL, '');
+  const [reasoningEffort, setReasoningEffort] = useLocalStorage(STORAGE_KEYS.REASONING_EFFORT, 'high');
 
   // Provider connections and saved models for current profile
   const { connections, addConnection, removeConnection } = useProviderConnections(profile?.id);
@@ -133,7 +134,7 @@ export default function App() {
 
   // Persist currentSongId to localStorage so it survives page refresh
   const [currentSongId, setCurrentSongIdRaw] = useState<number | null>(() => {
-    const stored = localStorage.getItem('porchsongs_current_song_id');
+    const stored = localStorage.getItem(STORAGE_KEYS.CURRENT_SONG_ID);
     if (stored) {
       const id = parseInt(stored, 10);
       return Number.isFinite(id) ? id : null;
@@ -143,9 +144,9 @@ export default function App() {
   const setCurrentSongId = useCallback((id: number | null) => {
     setCurrentSongIdRaw(id);
     if (id != null) {
-      localStorage.setItem('porchsongs_current_song_id', String(id));
+      localStorage.setItem(STORAGE_KEYS.CURRENT_SONG_ID, String(id));
     } else {
-      localStorage.removeItem('porchsongs_current_song_id');
+      localStorage.removeItem(STORAGE_KEYS.CURRENT_SONG_ID);
     }
   }, []);
 
@@ -265,7 +266,7 @@ export default function App() {
   if (authState === 'loading') {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-3 text-muted-foreground">
-        <div className="size-8 border-3 border-border border-t-primary rounded-full animate-spin" aria-hidden="true" />
+        <Spinner />
         <span className="text-sm">Loading...</span>
       </div>
     );

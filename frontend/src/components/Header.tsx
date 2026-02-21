@@ -1,4 +1,5 @@
 import useWakeLock from '@/hooks/useWakeLock';
+import { cn } from '@/lib/utils';
 import type { AuthUser } from '@/types';
 
 interface HeaderProps {
@@ -27,11 +28,12 @@ export default function Header({ onHomeClick, user, authRequired, onLogout }: He
       <div className="flex items-center gap-2 shrink-0">
         {wakeLock.supported && (
           <button
-            className={`border text-xs px-2 sm:px-3 py-1.5 rounded-full cursor-pointer transition-colors ${
+            className={cn(
+              'border text-xs px-2 sm:px-3 py-1.5 rounded-full cursor-pointer transition-colors text-header-text hover:bg-white/25',
               wakeLock.active
-                ? 'bg-white/25 border-white/40 text-header-text'
-                : 'bg-white/15 border-white/25 text-header-text opacity-70 hover:opacity-100'
-            } hover:bg-white/25`}
+                ? 'bg-white/25 border-white/40'
+                : 'bg-white/15 border-white/25 opacity-70 hover:opacity-100'
+            )}
             onClick={wakeLock.toggle}
             title={wakeLock.active ? 'Screen staying awake — click to disable' : 'Keep screen awake while viewing song'}
           >

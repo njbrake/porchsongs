@@ -1,4 +1,6 @@
 import { useState, useRef, useCallback, useEffect, type ReactNode } from 'react';
+import { STORAGE_KEYS } from '@/api';
+import { cn } from '@/lib/utils';
 
 interface ResizableColumnsProps {
   left: ReactNode;
@@ -17,7 +19,23 @@ interface ResizableColumnsProps {
   mobilePane?: 'left' | 'right';
 }
 
-const STORAGE_KEY = 'porchsongs_split_pct';
+const STORAGE_KEY = STORAGE_KEYS.SPLIT_PERCENT;
+const MD_BREAKPOINT = 768;
+
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth >= MD_BREAKPOINT
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${MD_BREAKPOINT}px)`);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  return isDesktop;
+}
 
 export default function ResizableColumns({
   left,
@@ -38,6 +56,7 @@ export default function ResizableColumns({
     return defaultLeftPercent;
   });
 
+  const isDesktop = useIsDesktop();
   const containerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
 
@@ -69,12 +88,16 @@ export default function ResizableColumns({
     setLeftPercent(defaultLeftPercent);
   }, [defaultLeftPercent]);
 
+  // On mobile: full width, no inline style. On desktop: split widths.
+  const leftStyle = isDesktop ? { width: `calc(${leftPercent}% - 4px)` } : undefined;
+  const rightStyle = isDesktop ? { width: `calc(${100 - leftPercent}% - 4px)` } : undefined;
+
   return (
-    <div ref={containerRef} className={`flex ${className}`}>
+    <div ref={containerRef} className={cn('flex overflow-hidden', className)}>
       {/* Left column */}
       <div
-        className={`${columnClassName} ${mobilePane === 'left' ? 'flex' : 'hidden'} md:flex grow md:grow-0`}
-        style={{ width: `calc(${leftPercent}% - 4px)` }}
+        className={cn('w-full min-w-0 md:flex md:grow-0', columnClassName, mobilePane === 'left' ? 'flex' : 'hidden')}
+        style={leftStyle}
       >
         {left}
       </div>
@@ -95,8 +118,8 @@ export default function ResizableColumns({
 
       {/* Right column */}
       <div
-        className={`${columnClassName} ${mobilePane === 'right' ? 'flex' : 'hidden'} md:flex grow md:grow-0`}
-        style={{ width: `calc(${100 - leftPercent}% - 4px)` }}
+        className={cn('w-full min-w-0 md:flex md:grow-0', columnClassName, mobilePane === 'right' ? 'flex' : 'hidden')}
+        style={rightStyle}
       >
         {right}
       </div>

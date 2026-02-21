@@ -1,7 +1,6 @@
 from datetime import UTC, datetime
-from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..auth.dependencies import get_current_user
@@ -25,7 +24,7 @@ router = APIRouter()
 async def list_profiles(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[Any]:
+) -> list[Profile]:
     return (
         db.query(Profile)
         .filter(Profile.user_id == current_user.id)
@@ -47,7 +46,7 @@ async def create_profile(
         ).update({"is_default": False})
 
     # If no profiles exist for this user, make this one the default
-    if db.query(Profile).filter(Profile.user_id == current_user.id).count() == 0:
+    if not db.query(Profile).filter(Profile.user_id == current_user.id).first():
         data.is_default = True
 
     profile = Profile(**data.model_dump(), user_id=current_user.id)
@@ -113,7 +112,7 @@ async def list_profile_models(
     profile_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[Any]:
+) -> list[ProfileModel]:
     get_user_profile(db, current_user, profile_id)
     return (
         db.query(ProfileModel)
@@ -168,8 +167,6 @@ async def delete_profile_model(
         .first()
     )
     if not pm:
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=404, detail="Saved model not found")
     db.delete(pm)
     db.commit()
@@ -184,7 +181,7 @@ async def list_connections(
     profile_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[Any]:
+) -> list[ProviderConnection]:
     get_user_profile(db, current_user, profile_id)
     return (
         db.query(ProviderConnection)
@@ -240,8 +237,6 @@ async def delete_connection(
         .first()
     )
     if not conn:
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=404, detail="Connection not found")
     # Cascade-delete all ProfileModel rows for this provider
     db.query(ProfileModel).filter(

@@ -9,12 +9,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 def test_create_profile(client):
     resp = client.post("/api/profiles", json={
         "name": "Nathan",
-        "description": "Suburban dad, Subaru driver, guitar player",
     })
     assert resp.status_code == 201
     data = resp.json()
     assert data["name"] == "Nathan"
-    assert data["description"] == "Suburban dad, Subaru driver, guitar player"
     assert data["is_default"] is True  # first profile becomes default
 
 
@@ -44,11 +42,9 @@ def test_update_profile(client):
 
     resp = client.put(f"/api/profiles/{pid}", json={
         "name": "New Name",
-        "description": "Updated description",
     })
     assert resp.status_code == 200
     assert resp.json()["name"] == "New Name"
-    assert resp.json()["description"] == "Updated description"
 
 
 def test_delete_profile(client):
@@ -430,8 +426,8 @@ def test_list_profile_models_multiple(client):
     assert len(models) == 2
 
 
-def test_rewrite_uses_env_credentials(client):
-    """POST /rewrite should call acompletion without api_key (uses env vars)."""
+def test_parse_uses_env_credentials(client):
+    """POST /parse should call acompletion without api_key (uses env vars)."""
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
 
     def _make_resp(content):
@@ -441,31 +437,24 @@ def test_rewrite_uses_env_credentials(client):
         return r
 
     with patch("app.services.llm_service.acompletion", new_callable=AsyncMock) as mock_ac:
-        mock_ac.side_effect = [
-            _make_resp(
-                "<meta>\nTitle: Hello Song\nArtist: Test Artist\n</meta>\n"
-                "<original>\nHello world\n</original>"
-            ),
-            _make_resp(
-                "<lyrics>\nHi world\n</lyrics>\n"
-                "<changes>\nChanged hello to hi\n</changes>"
-            ),
-        ]
-        resp = client.post("/api/rewrite", json={
+        mock_ac.return_value = _make_resp(
+            "<meta>\nTitle: Hello Song\nArtist: Test Artist\n</meta>\n"
+            "<original>\nHello world\n</original>"
+        )
+        resp = client.post("/api/parse", json={
             "profile_id": profile["id"],
             "lyrics": "Hello world",
             "provider": "openai",
             "model": "gpt-4",
         })
         assert resp.status_code == 200
-        # Verify acompletion was called without api_key (both calls)
-        assert mock_ac.call_count == 2
-        for call in mock_ac.call_args_list:
-            assert "api_key" not in call.kwargs
+        # Verify acompletion was called without api_key
+        assert mock_ac.call_count == 1
+        assert "api_key" not in mock_ac.call_args.kwargs
 
 
-def test_rewrite_returns_title_artist(client):
-    """POST /rewrite with META section should return title and artist."""
+def test_parse_returns_title_artist(client):
+    """POST /parse with META section should return title and artist."""
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
 
     def _make_resp(content):
@@ -475,17 +464,11 @@ def test_rewrite_returns_title_artist(client):
         return r
 
     with patch("app.services.llm_service.acompletion", new_callable=AsyncMock) as mock_ac:
-        mock_ac.side_effect = [
-            _make_resp(
-                "<meta>\nTitle: Wagon Wheel\nArtist: Old Crow Medicine Show\n</meta>\n"
-                "<original>\nRock me mama\n</original>"
-            ),
-            _make_resp(
-                "<lyrics>\nRoll me papa\n</lyrics>\n"
-                "<changes>\nChanged perspective\n</changes>"
-            ),
-        ]
-        resp = client.post("/api/rewrite", json={
+        mock_ac.return_value = _make_resp(
+            "<meta>\nTitle: Wagon Wheel\nArtist: Old Crow Medicine Show\n</meta>\n"
+            "<original>\nRock me mama\n</original>"
+        )
+        resp = client.post("/api/parse", json={
             "profile_id": profile["id"],
             "lyrics": "Rock me mama",
             "provider": "openai",
@@ -495,11 +478,11 @@ def test_rewrite_returns_title_artist(client):
         data = resp.json()
         assert data["title"] == "Wagon Wheel"
         assert data["artist"] == "Old Crow Medicine Show"
-        assert "Roll me papa" in data["rewritten_lyrics"]
+        assert "Rock me mama" in data["original_lyrics"]
 
 
-def test_rewrite_unknown_title_artist(client):
-    """POST /rewrite with UNKNOWN in META should return null title/artist."""
+def test_parse_unknown_title_artist(client):
+    """POST /parse with UNKNOWN in META should return null title/artist."""
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
 
     def _make_resp(content):
@@ -509,17 +492,11 @@ def test_rewrite_unknown_title_artist(client):
         return r
 
     with patch("app.services.llm_service.acompletion", new_callable=AsyncMock) as mock_ac:
-        mock_ac.side_effect = [
-            _make_resp(
-                "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
-                "<original>\nSome lyrics\n</original>"
-            ),
-            _make_resp(
-                "<lyrics>\nSome new lyrics\n</lyrics>\n"
-                "<changes>\nChanged words\n</changes>"
-            ),
-        ]
-        resp = client.post("/api/rewrite", json={
+        mock_ac.return_value = _make_resp(
+            "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
+            "<original>\nSome lyrics\n</original>"
+        )
+        resp = client.post("/api/parse", json={
             "profile_id": profile["id"],
             "lyrics": "Some lyrics",
             "provider": "openai",
@@ -539,8 +516,8 @@ def test_health(client):
     assert "version" in data
 
 
-def test_rewrite_fallback_title_from_request(client):
-    """When LLM returns UNKNOWN but request has title/artist, use request values."""
+def test_parse_missing_tags_fallback(client):
+    """When LLM returns no XML tags, original_lyrics should fall back to raw input."""
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
 
     def _make_resp(content):
@@ -550,28 +527,18 @@ def test_rewrite_fallback_title_from_request(client):
         return r
 
     with patch("app.services.llm_service.acompletion", new_callable=AsyncMock) as mock_ac:
-        mock_ac.side_effect = [
-            _make_resp(
-                "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
-                "<original>\nSome lyrics\n</original>"
-            ),
-            _make_resp(
-                "<lyrics>\nSome new lyrics\n</lyrics>\n"
-                "<changes>\nChanged words\n</changes>"
-            ),
-        ]
-        resp = client.post("/api/rewrite", json={
+        mock_ac.return_value = _make_resp("Just some text without XML tags")
+        resp = client.post("/api/parse", json={
             "profile_id": profile["id"],
-            "lyrics": "Some lyrics",
-            "title": "My Song",
-            "artist": "My Artist",
+            "lyrics": "My raw lyrics",
             "provider": "openai",
             "model": "gpt-4",
         })
         assert resp.status_code == 200
         data = resp.json()
-        assert data["title"] == "My Song"
-        assert data["artist"] == "My Artist"
+        assert data["original_lyrics"] == "My raw lyrics"
+        assert data["title"] is None
+        assert data["artist"] is None
 
 
 # --- Provider Connections ---
@@ -688,7 +655,7 @@ def test_delete_profile_cascades_connections(client):
 
 
 def test_lookup_api_base_prefers_connection(client):
-    """Rewrite should use api_base from ProviderConnection over ProfileModel."""
+    """Parse should use api_base from ProviderConnection over ProfileModel."""
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
     pid = profile["id"]
 
@@ -708,13 +675,11 @@ def test_lookup_api_base_prefers_connection(client):
     mock_response.choices = [MagicMock()]
     mock_response.choices[0].message.content = (
         "<meta>\nTitle: T\nArtist: A\n</meta>\n"
-        "<original>\nHello\n</original>\n"
-        "<rewritten>\nHi\n</rewritten>\n"
-        "<changes>\nChanged\n</changes>"
+        "<original>\nHello\n</original>"
     )
 
     with patch("app.services.llm_service.acompletion", new_callable=AsyncMock, return_value=mock_response) as mock_ac:
-        resp = client.post("/api/rewrite", json={
+        resp = client.post("/api/parse", json={
             "profile_id": pid,
             "lyrics": "Hello",
             "provider": "openai",

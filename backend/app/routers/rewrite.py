@@ -1,4 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+import asyncio
+import json
+import logging
+from collections.abc import AsyncIterator
+from typing import TypeVar
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -10,14 +16,34 @@ from ..models import ProfileModel, ProviderConnection, User
 from ..schemas import (
     ChatRequest,
     ChatResponse,
-    RewriteRequest,
-    RewriteResponse,
-    WorkshopLineRequest,
-    WorkshopLineResponse,
+    ParseRequest,
+    ParseResponse,
 )
 from ..services import llm_service
 
 router = APIRouter()
+
+T = TypeVar("T")
+
+
+async def _cancellable(request: Request, coro: asyncio.Future[T]) -> T:
+    """Run *coro* but cancel it if the client disconnects."""
+    task = asyncio.ensure_future(coro)
+
+    async def _watch_disconnect() -> None:
+        while not task.done():
+            if await request.is_disconnected():
+                task.cancel()
+                return
+            await asyncio.sleep(0.5)
+
+    watcher = asyncio.ensure_future(_watch_disconnect())
+    try:
+        return await task
+    except asyncio.CancelledError:
+        raise HTTPException(status_code=499, detail="Client disconnected") from None
+    finally:
+        watcher.cancel()
 
 
 def _lookup_api_base(
@@ -52,135 +78,118 @@ def _lookup_api_base(
     return None
 
 
-@router.post("/rewrite", response_model=RewriteResponse)
-async def rewrite(
-    req: RewriteRequest,
+@router.post("/parse", response_model=ParseResponse)
+async def parse(
+    req: ParseRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    stream: bool = Query(default=False),
-) -> dict[str, str | None] | StreamingResponse:
-    profile = get_user_profile(db, current_user, req.profile_id)
-    profile_description = profile.description or ""
-    lyrics = req.lyrics
+) -> dict[str, str | None]:
+    get_user_profile(db, current_user, req.profile_id)
     api_base = _lookup_api_base(db, req.profile_id, req.provider, req.model)
 
-    if stream:
-        generator = llm_service.rewrite_lyrics_stream(
-            profile_description=profile_description,
-            title=req.title,
-            artist=req.artist,
-            lyrics_with_chords=lyrics,
-            provider=req.provider,
-            model=req.model,
-            instruction=req.instruction,
-            api_base=api_base,
-            reasoning_effort=req.reasoning_effort,
-        )
-        return StreamingResponse(
-            generator,
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no",
-            },
-        )
-
     try:
-        result = await llm_service.rewrite_lyrics(
-            profile_description=profile_description,
-            title=req.title,
-            artist=req.artist,
-            lyrics_with_chords=lyrics,
-            provider=req.provider,
-            model=req.model,
-            instruction=req.instruction,
-            api_base=api_base,
-            reasoning_effort=req.reasoning_effort,
+        result = await _cancellable(
+            request,
+            llm_service.parse_lyrics(
+                lyrics_with_chords=req.lyrics,
+                provider=req.provider,
+                model=req.model,
+                api_base=api_base,
+                reasoning_effort=req.reasoning_effort,
+            ),
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {e}") from None
-
-    # Merge fallback: if LLM didn't extract title/artist, use request values
-    if result.get("title") is None and req.title:
-        result["title"] = req.title
-    if result.get("artist") is None and req.artist:
-        result["artist"] = req.artist
 
     return result
 
 
-@router.post("/workshop-line", response_model=WorkshopLineResponse)
-async def workshop_line(
-    req: WorkshopLineRequest,
+@router.post("/parse/stream")
+async def parse_stream(
+    req: ParseRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> dict[str, object]:
-    song = get_user_song(db, current_user, req.song_id)
+) -> StreamingResponse:
+    get_user_profile(db, current_user, req.profile_id)
+    api_base = _lookup_api_base(db, req.profile_id, req.provider, req.model)
 
-    api_base = _lookup_api_base(db, song.profile_id, req.provider, req.model)
+    async def event_generator() -> AsyncIterator[str]:
+        accumulated = ""
+        try:
+            stream = llm_service.parse_lyrics_stream(
+                lyrics_with_chords=req.lyrics,
+                provider=req.provider,
+                model=req.model,
+                api_base=api_base,
+                reasoning_effort=req.reasoning_effort,
+            )
+            async for token in stream:
+                if await request.is_disconnected():
+                    return
+                accumulated += token
+                yield f"event: token\ndata: {json.dumps(token)}\n\n"
+        except Exception:
+            logger.exception("Parse stream LLM error")
+            yield f"event: error\ndata: {json.dumps({'detail': 'LLM streaming error'})}\n\n"
+            return
 
-    try:
-        result = await llm_service.workshop_line(
-            original_lyrics=song.original_lyrics,
-            rewritten_lyrics=song.rewritten_lyrics,
-            line_index=req.line_index,
-            instruction=req.instruction,
-            provider=req.provider,
-            model=req.model,
-            api_base=api_base,
-            reasoning_effort=req.reasoning_effort,
-        )
-    except IndexError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from None
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"LLM error: {e}") from None
+        # Parse the accumulated response
+        parsed = llm_service._parse_clean_response(accumulated, req.lyrics)
+        done_data = {
+            "original_lyrics": parsed["original"],
+            "title": parsed["title"],
+            "artist": parsed["artist"],
+        }
+        yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
 
-    return result
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     req: ChatRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ChatResponse:
-    from ..models import Profile, SongRevision
+    from ..models import SongRevision
 
     song = get_user_song(db, current_user, req.song_id)
 
-    profile = db.query(Profile).filter(Profile.id == song.profile_id).first()
-    profile_description = profile.description if profile else ""
-
-    messages = [{"role": m.role, "content": m.content} for m in req.messages]
-    api_base = _lookup_api_base(db, song.profile_id, req.provider, req.model)
-
-    # Look up the initial rewrite instruction from saved note messages.
-    # Notes are saved as: [lyrics_preview (user), instruction (user, optional), changes (assistant)].
-    initial_instruction: str | None = None
-    user_notes = (
+    # Load prior chat messages (non-note) from DB as conversation history
+    history_rows = (
         db.query(ChatMessageModel)
-        .filter(
-            ChatMessageModel.song_id == song.id,
-            ChatMessageModel.is_note.is_(True),
-            ChatMessageModel.role == "user",
-        )
-        .order_by(ChatMessageModel.created_at.asc())
+        .filter(ChatMessageModel.song_id == song.id, ChatMessageModel.is_note.is_(False))
+        .order_by(ChatMessageModel.created_at)
         .all()
     )
-    if len(user_notes) > 1:
-        initial_instruction = user_notes[1].content
+    history = [{"role": row.role, "content": row.content} for row in history_rows]
+
+    messages = history + [{"role": m.role, "content": m.content} for m in req.messages]
+    api_base = _lookup_api_base(db, song.profile_id, req.provider, req.model)
 
     try:
-        result = await llm_service.chat_edit_lyrics(
-            song=song,
-            profile_description=profile_description or "",
-            messages=messages,
-            provider=req.provider,
-            model=req.model,
-            api_base=api_base,
-            reasoning_effort=req.reasoning_effort,
-            initial_instruction=initial_instruction,
+        result = await _cancellable(
+            request,
+            llm_service.chat_edit_lyrics(
+                song=song,
+                messages=messages,
+                provider=req.provider,
+                model=req.model,
+                api_base=api_base,
+                reasoning_effort=req.reasoning_effort,
+            ),
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {e}") from None
 
@@ -219,6 +228,107 @@ async def chat(
         assistant_message=result["assistant_message"],
         changes_summary=result["changes_summary"],
         version=song.current_version,
+    )
+
+
+logger = logging.getLogger(__name__)
+
+
+@router.post("/chat/stream")
+async def chat_stream(
+    req: ChatRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    from ..models import SongRevision
+
+    song = get_user_song(db, current_user, req.song_id)
+
+    # Load prior chat messages (non-note) from DB as conversation history
+    history_rows = (
+        db.query(ChatMessageModel)
+        .filter(ChatMessageModel.song_id == song.id, ChatMessageModel.is_note.is_(False))
+        .order_by(ChatMessageModel.created_at)
+        .all()
+    )
+    history = [{"role": row.role, "content": row.content} for row in history_rows]
+    messages = history + [{"role": m.role, "content": m.content} for m in req.messages]
+    api_base = _lookup_api_base(db, song.profile_id, req.provider, req.model)
+
+    async def event_generator() -> AsyncIterator[str]:
+        accumulated = ""
+        try:
+            stream = llm_service.chat_edit_lyrics_stream(
+                song=song,
+                messages=messages,
+                provider=req.provider,
+                model=req.model,
+                api_base=api_base,
+                reasoning_effort=req.reasoning_effort,
+            )
+            async for token in stream:
+                if await request.is_disconnected():
+                    return
+                accumulated += token
+                yield f"event: token\ndata: {json.dumps(token)}\n\n"
+        except Exception:
+            logger.exception("Chat stream LLM error")
+            yield f"event: error\ndata: {json.dumps({'detail': 'LLM streaming error'})}\n\n"
+            return
+
+        # Parse the accumulated response
+        parsed = llm_service._parse_chat_response(accumulated)
+        changes_summary = parsed["explanation"] or "Chat edit applied."
+
+        # Persist to DB (wrapped so a DB error doesn't lose the result)
+        try:
+            song.rewritten_lyrics = parsed["lyrics"]
+            song.changes_summary = changes_summary
+            song.current_version += 1
+
+            revision = SongRevision(
+                song_id=song.id,
+                version=song.current_version,
+                rewritten_lyrics=parsed["lyrics"],
+                changes_summary=changes_summary,
+                edit_type="chat",
+            )
+            db.add(revision)
+
+            last_user_msg = req.messages[-1] if req.messages else None
+            if last_user_msg and last_user_msg.role == "user":
+                db.add(
+                    ChatMessageModel(
+                        song_id=song.id,
+                        role="user",
+                        content=last_user_msg.content,
+                        is_note=False,
+                    )
+                )
+            db.add(
+                ChatMessageModel(
+                    song_id=song.id, role="assistant", content=changes_summary, is_note=False
+                )
+            )
+            db.commit()
+        except Exception:
+            logger.exception("Chat stream DB persist error")
+            db.rollback()
+
+        # Send final result
+        done_data = {
+            "rewritten_lyrics": parsed["lyrics"],
+            "assistant_message": accumulated,
+            "changes_summary": changes_summary,
+            "version": song.current_version,
+        }
+        yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

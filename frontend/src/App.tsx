@@ -126,7 +126,7 @@ export default function App() {
   const { connections, addConnection, removeConnection } = useProviderConnections(profile?.id);
   const { savedModels, addModel, removeModel, refresh: refreshModels } = useSavedModels(profile?.id);
 
-  // Rewrite state (shared between RewriteTab, comparison, workshop, chat)
+  // Rewrite state (shared between RewriteTab, comparison, chat)
   const [rewriteResult, setRewriteResult] = useState<RewriteResult | null>(null);
   const [rewriteMeta, setRewriteMeta] = useState<RewriteMeta | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -193,7 +193,7 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authState]);
 
-  const handleSaveProfile = useCallback(async (data: { name: string; description: string | null; is_default: boolean }) => {
+  const handleSaveProfile = useCallback(async (data: { name: string; is_default: boolean }) => {
     let saved: Profile;
     if (profile?.id) {
       saved = await api.updateProfile(profile.id, data);
@@ -207,8 +207,10 @@ export default function App() {
   const handleNewRewrite = useCallback((result: RewriteResult | null, meta: RewriteMeta | null) => {
     setRewriteResult(result);
     setRewriteMeta(meta);
-    setChatMessages([]);
-    setCurrentSongId(null);
+    if (!result) {
+      setChatMessages([]);
+      setCurrentSongId(null);
+    }
   }, [setCurrentSongId]);
 
   const handleSongSaved = useCallback((songId: number) => {

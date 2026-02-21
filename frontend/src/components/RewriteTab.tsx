@@ -1,14 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '@/api';
 import ComparisonView from '@/components/ComparisonView';
 import ChatPanel from '@/components/ChatPanel';
 import ModelSelector from '@/components/ModelSelector';
+import ResizableColumns from '@/components/ui/resizable-columns';
 import ConfirmDialog from '@/components/ui/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Alert } from '@/components/ui/alert';
-import type { Profile, RewriteResult, RewriteMeta, ChatMessage, LlmSettings, SavedModel } from '@/types';
+import type { Profile, RewriteResult, RewriteMeta, ChatMessage, LlmSettings, SavedModel, ParseResult } from '@/types';
 
 interface RewriteTabProps {
   profile: Profile | null;
@@ -50,29 +51,24 @@ export default function RewriteTab({
   const [lyrics, setLyricsRaw] = useState(
     () => sessionStorage.getItem('porchsongs_draft_lyrics') || ''
   );
-  const [instruction, setInstructionRaw] = useState(
-    () => sessionStorage.getItem('porchsongs_draft_instruction') || ''
-  );
 
   const setLyrics = useCallback((val: string) => {
     setLyricsRaw(val);
     sessionStorage.setItem('porchsongs_draft_lyrics', val);
   }, []);
-  const setInstruction = useCallback((val: string) => {
-    setInstructionRaw(val);
-    sessionStorage.setItem('porchsongs_draft_instruction', val);
-  }, []);
   const [loading, setLoading] = useState(false);
+  const parseAbortRef = useRef<AbortController | null>(null);
   const [mobilePane, setMobilePane] = useState<'chat' | 'lyrics'>('chat');
-  const [streamingText, setStreamingText] = useState('');
-  const [reasoningText, setReasoningText] = useState('');
-  const [thinking, setThinking] = useState(false);
-  const [phase, setPhase] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [completedStatus, setCompletedStatus] = useState<'saving' | 'completed' | null>(null);
   const [songTitle, setSongTitle] = useState('');
   const [songArtist, setSongArtist] = useState('');
   const [scrapDialogOpen, setScrapDialogOpen] = useState(false);
+
+  // Parse state
+  const [parseResult, setParseResult] = useState<ParseResult | null>(null);
+  const [parsedLyrics, setParsedLyrics] = useState('');
+  const [parseStreamText, setParseStreamText] = useState('');
 
   useEffect(() => {
     if (rewriteMeta) {
@@ -86,9 +82,9 @@ export default function RewriteTab({
   }, [currentSongId]);
 
   const needsProfile = !profile?.id;
-  const canRewrite = !needsProfile && llmSettings.provider && llmSettings.model && !loading && lyrics.trim().length > 0;
+  const canParse = !needsProfile && llmSettings.provider && llmSettings.model && !loading && lyrics.trim().length > 0;
 
-  const rewriteBlocker = needsProfile
+  const parseBlocker = needsProfile
     ? 'Create a profile first'
     : !llmSettings.provider || !llmSettings.model
       ? 'Select a model'
@@ -97,106 +93,104 @@ export default function RewriteTab({
         : null;
 
   const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
-  const shortcutHint = `${isMac ? '\u2318' : 'Ctrl'}+Enter to rewrite`;
+  const shortcutHint = `${isMac ? '\u2318' : 'Ctrl'}+Enter to parse`;
 
-  const handleRewrite = async () => {
+  // State derivation
+  const isInput = !loading && !parseResult && !rewriteResult;
+  const isParsed = !!parseResult && !rewriteResult;
+  const isWorkshopping = !!rewriteResult;
+
+  const handleParse = async () => {
     const trimmedLyrics = lyrics.trim();
     if (!trimmedLyrics) return;
 
+    const controller = new AbortController();
+    parseAbortRef.current = controller;
     setLoading(true);
     setError(null);
-    setStreamingText('');
-    setReasoningText('');
-    setPhase('');
+    setParseStreamText('');
     onNewRewrite(null, null);
-
-    const preview = trimmedLyrics.length > 300
-      ? trimmedLyrics.slice(0, 300) + '\n...'
-      : trimmedLyrics;
-    const seedMessages: ChatMessage[] = [{ role: 'user', content: preview, isNote: true }];
-    if (instruction.trim()) {
-      seedMessages.push({ role: 'user', content: instruction.trim(), isNote: true });
-    }
-    setChatMessages(seedMessages);
+    setParseResult(null);
 
     try {
-      const reqData = {
-        profile_id: profile!.id,
-        lyrics: trimmedLyrics,
-        instruction: instruction.trim() || null,
-        ...llmSettings,
-      };
-
-      let accumulated = '';
-      let reasoningAccumulated = '';
-      setThinking(false);
-      const result = await api.rewriteStream(reqData, {
-        onPhase: (p) => setPhase(p),
-        onThinking: (token?: string) => {
-          setThinking(true);
-          if (token) {
-            reasoningAccumulated += token;
-            setReasoningText(reasoningAccumulated);
-          }
+      const result = await api.parseStream(
+        {
+          profile_id: profile!.id,
+          lyrics: trimmedLyrics,
+          ...llmSettings,
         },
-        onToken: (token) => {
-          setThinking(false);
-          accumulated += token;
-          setStreamingText(accumulated);
+        (token: string) => {
+          setParseStreamText(prev => prev + token);
         },
-      });
+        controller.signal,
+      );
 
+      setParseResult(result);
+      setParsedLyrics(result.original_lyrics);
       setSongTitle(result.title || '');
       setSongArtist(result.artist || '');
-      setStreamingText('');
-      onNewRewrite(result, { profile_id: profile!.id, title: result.title, artist: result.artist });
-
-      const song = await api.saveSong({
-        profile_id: profile!.id,
-        title: result.title || null,
-        artist: result.artist || null,
-        original_lyrics: result.original_lyrics,
-        rewritten_lyrics: result.rewritten_lyrics,
-        changes_summary: result.changes_summary,
-        llm_provider: llmSettings.provider,
-        llm_model: llmSettings.model,
-      });
-      onSongSaved(song.id);
-      setCompletedStatus(null);
-
-      const allSeedMessages: ChatMessage[] = [
-        ...seedMessages,
-        { role: 'assistant', content: result.changes_summary, isNote: true },
-      ];
-      setChatMessages(allSeedMessages);
-
-      api.saveChatMessages(song.id, allSeedMessages.map(m => ({
-        role: m.role,
-        content: m.content,
-        is_note: m.isNote ?? false,
-      }))).catch(() => {});
     } catch (err) {
-      setError((err as Error).message);
-      setStreamingText('');
-      setReasoningText('');
-      setThinking(false);
-      setPhase('');
+      if ((err as Error).name !== 'AbortError') {
+        setError((err as Error).message);
+      }
     } finally {
+      parseAbortRef.current = null;
       setLoading(false);
+      setParseStreamText('');
     }
   };
+
+  const handleCancelParse = () => {
+    parseAbortRef.current?.abort();
+  };
+
+  const handleBeforeSend = useCallback(async (): Promise<number> => {
+    const song = await api.saveSong({
+      profile_id: profile!.id,
+      title: songTitle || null,
+      artist: songArtist || null,
+      original_lyrics: parsedLyrics,
+      rewritten_lyrics: parsedLyrics,
+      llm_provider: llmSettings.provider,
+      llm_model: llmSettings.model,
+    });
+    onSongSaved(song.id);
+    return song.id;
+  }, [profile, songTitle, songArtist, parsedLyrics, llmSettings, onSongSaved]);
+
+  const handleChatUpdate = useCallback((newLyrics: string) => {
+    if (!rewriteResult && parseResult) {
+      // First chat edit — transition to WORKSHOPPING
+      onNewRewrite(
+        {
+          original_lyrics: parsedLyrics,
+          rewritten_lyrics: newLyrics,
+          changes_summary: 'Chat edit applied.',
+        },
+        {
+          profile_id: profile?.id,
+          title: songTitle || undefined,
+          artist: songArtist || undefined,
+          llm_provider: llmSettings.provider,
+          llm_model: llmSettings.model,
+        },
+      );
+    } else {
+      onLyricsUpdated(newLyrics);
+    }
+  }, [rewriteResult, parseResult, parsedLyrics, profile, songTitle, songArtist, llmSettings, onNewRewrite, onLyricsUpdated]);
 
   const handleNewSong = () => {
     onNewRewrite(null, null);
     setLyrics('');
-    setInstruction('');
-    setStreamingText('');
-    setReasoningText('');
-    setPhase('');
+    setParseResult(null);
+    setParsedLyrics('');
+    setParseStreamText('');
     setCompletedStatus(null);
     setError(null);
     setSongTitle('');
     setSongArtist('');
+    setChatMessages([]);
   };
 
   const handleScrap = async () => {
@@ -245,9 +239,51 @@ export default function RewriteTab({
     }
   }, [currentSongId, rewriteResult]);
 
-  const handleChatUpdate = useCallback((newLyrics: string) => {
-    onLyricsUpdated(newLyrics);
-  }, [onLyricsUpdated]);
+  // Shared model selector + effort controls
+  const modelControls = (disabled?: boolean) => (
+    <div className={`flex items-end gap-3 flex-wrap ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+      <ModelSelector
+        provider={llmSettings.provider}
+        model={llmSettings.model}
+        savedModels={savedModels}
+        onChangeProvider={onChangeProvider}
+        onChangeModel={onChangeModel}
+        onOpenSettings={onOpenSettings}
+      />
+      <div className="flex flex-col gap-1 mb-2">
+        <label className="text-xs text-muted-foreground" htmlFor="reasoning-effort">Effort</label>
+        <select
+          id="reasoning-effort"
+          className="h-9 rounded-md border border-border bg-card px-2 text-sm text-foreground"
+          value={reasoningEffort}
+          disabled={disabled}
+          onChange={e => onChangeReasoningEffort(e.target.value)}
+        >
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+        </select>
+      </div>
+    </div>
+  );
+
+  // Mobile pane toggle
+  const mobilePaneToggle = (
+    <div className="flex md:hidden rounded-md border border-border overflow-hidden mb-3">
+      <button
+        className={`flex-1 py-2 text-sm font-semibold text-center transition-colors ${mobilePane === 'chat' ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}
+        onClick={() => setMobilePane('chat')}
+      >
+        Chat Workshop
+      </button>
+      <button
+        className={`flex-1 py-2 text-sm font-semibold text-center transition-colors ${mobilePane === 'lyrics' ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}
+        onClick={() => setMobilePane('lyrics')}
+      >
+        Your Version
+      </button>
+    </div>
+  );
 
   return (
     <div>
@@ -273,31 +309,10 @@ export default function RewriteTab({
         </Alert>
       )}
 
-      {!rewriteResult && !loading && (
+      {/* INPUT state */}
+      {isInput && !loading && (
         <>
-          <div className="flex items-end gap-3 flex-wrap">
-            <ModelSelector
-              provider={llmSettings.provider}
-              model={llmSettings.model}
-              savedModels={savedModels}
-              onChangeProvider={onChangeProvider}
-              onChangeModel={onChangeModel}
-              onOpenSettings={onOpenSettings}
-            />
-            <div className="flex flex-col gap-1 mb-2">
-              <label className="text-xs text-muted-foreground" htmlFor="reasoning-effort">Effort</label>
-              <select
-                id="reasoning-effort"
-                className="h-9 rounded-md border border-border bg-card px-2 text-sm text-foreground"
-                value={reasoningEffort}
-                onChange={e => onChangeReasoningEffort(e.target.value)}
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select>
-            </div>
-          </div>
+          {modelControls()}
 
           <Card>
             <CardContent className="pt-6">
@@ -307,33 +322,19 @@ export default function RewriteTab({
                 onChange={e => setLyrics(e.target.value)}
                 placeholder="Paste lyrics, chords, or a copy from a tab site — any format works"
                 onKeyDown={e => {
-                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canRewrite) {
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canParse) {
                     e.preventDefault();
-                    handleRewrite();
-                  }
-                }}
-              />
-
-              <Textarea
-                className="mt-3 font-[family-name:var(--font-ui)]"
-                rows={2}
-                value={instruction}
-                onChange={e => setInstruction(e.target.value)}
-                placeholder="Optional: e.g., 'change truck references to cycling, keep the fatherhood theme'"
-                onKeyDown={e => {
-                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canRewrite) {
-                    e.preventDefault();
-                    handleRewrite();
+                    handleParse();
                   }
                 }}
               />
 
               <div className="flex items-center gap-3 mt-3">
-                <Button onClick={handleRewrite} disabled={!canRewrite}>
-                  Rewrite
+                <Button onClick={handleParse} disabled={!canParse}>
+                  Parse
                 </Button>
                 <span className="text-xs text-muted-foreground">
-                  {rewriteBlocker ?? shortcutHint}
+                  {parseBlocker ?? shortcutHint}
                 </span>
               </div>
             </CardContent>
@@ -341,217 +342,162 @@ export default function RewriteTab({
         </>
       )}
 
-      {(rewriteResult || loading) && (
+      {/* PARSING state (loading, no parse result yet) */}
+      {loading && !parseResult && (
+        <Card className="flex flex-col text-muted-foreground">
+          <div className="flex items-center justify-center gap-3 py-4">
+            <div className="size-6 border-3 border-border border-t-primary rounded-full animate-spin" aria-hidden="true" />
+            <span className="text-sm">Parsing lyrics...</span>
+            <Button variant="danger-outline" size="sm" onClick={handleCancelParse}>Cancel</Button>
+          </div>
+          {parseStreamText && (
+            <pre className="px-4 pb-4 whitespace-pre-wrap break-words text-xs font-[family-name:var(--font-mono)] text-foreground max-h-[60vh] overflow-y-auto">{parseStreamText}</pre>
+          )}
+        </Card>
+      )}
+
+      {/* PARSED state */}
+      {isParsed && (
         <div className="mt-2">
-          {rewriteResult && (
-            <>
-              {/* Mobile pane toggle — hidden on md+ */}
-              <div className="flex md:hidden rounded-md border border-border overflow-hidden mb-3">
-                <button
-                  className={`flex-1 py-2 text-sm font-semibold text-center transition-colors ${mobilePane === 'chat' ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}
-                  onClick={() => setMobilePane('chat')}
-                >
-                  Chat Workshop
-                </button>
-                <button
-                  className={`flex-1 py-2 text-sm font-semibold text-center transition-colors ${mobilePane === 'lyrics' ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}
-                  onClick={() => setMobilePane('lyrics')}
-                >
-                  Your Version
-                </button>
-              </div>
+          {mobilePaneToggle}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-2 items-stretch h-[calc(100vh-11rem)] md:h-[calc(100vh-7rem)] transition-all duration-300">
-                <div className={`flex-col min-h-0 ${mobilePane === 'chat' ? 'flex' : 'hidden'} md:flex`}>
-                  <div className="flex items-end gap-3 flex-wrap">
-                    <ModelSelector
-                      provider={llmSettings.provider}
-                      model={llmSettings.model}
-                      savedModels={savedModels}
-                      onChangeProvider={onChangeProvider}
-                      onChangeModel={onChangeModel}
-                      onOpenSettings={onOpenSettings}
-                    />
-                    <div className="flex flex-col gap-1 mb-2">
-                      <label className="text-xs text-muted-foreground" htmlFor="reasoning-effort-active">Effort</label>
-                      <select
-                        id="reasoning-effort-active"
-                        className="h-9 rounded-md border border-border bg-card px-2 text-sm text-foreground"
-                        value={reasoningEffort}
-                        onChange={e => onChangeReasoningEffort(e.target.value)}
-                      >
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                      </select>
-                    </div>
-                  </div>
+          <ResizableColumns
+            className="h-[calc(100vh-11rem)] md:h-[calc(100vh-7rem)]"
+            columnClassName="flex-col min-h-0"
+            mobilePane={mobilePane === 'chat' ? 'left' : 'right'}
+            left={
+              <>
+                {modelControls()}
 
-                  <div className="flex gap-2 mb-2 flex-wrap">
-                    <Button variant="secondary" onClick={handleNewSong}>
-                      New Song
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={handleMarkComplete}
-                      disabled={completedStatus === 'completed' || completedStatus === 'saving' || !currentSongId}
-                    >
-                      {completedStatus === 'completed' ? 'Completed!' :
-                       completedStatus === 'saving' ? 'Saving...' : 'Mark as Complete'}
-                    </Button>
-                    <Button
-                      variant="danger-outline"
-                      onClick={() => setScrapDialogOpen(true)}
-                      disabled={!currentSongId}
-                    >
-                      Scrap This
-                    </Button>
-                  </div>
+                <div className="flex gap-2 mb-2 flex-wrap">
+                  <Button variant="secondary" onClick={handleNewSong}>
+                    New Song
+                  </Button>
+                </div>
 
-                  <ChatPanel
-                    songId={currentSongId}
-                    messages={chatMessages}
-                    setMessages={setChatMessages}
-                    llmSettings={llmSettings}
-                    originalLyrics={rewriteResult?.original_lyrics || ''}
-                    onLyricsUpdated={handleChatUpdate}
-                    initialLoading={loading}
+                <ChatPanel
+                  songId={currentSongId}
+                  messages={chatMessages}
+                  setMessages={setChatMessages}
+                  llmSettings={llmSettings}
+                  onLyricsUpdated={handleChatUpdate}
+                  initialLoading={false}
+                  onBeforeSend={handleBeforeSend}
+                />
+              </>
+            }
+            right={
+              <>
+                <div className="flex flex-col gap-1 mb-2">
+                  <input
+                    className="text-xl font-bold border-0 border-b border-dashed border-border bg-transparent py-1 text-foreground w-full focus:outline-none focus:border-primary placeholder:text-muted-foreground placeholder:font-normal"
+                    type="text"
+                    value={songTitle || ''}
+                    onChange={e => handleTitleChange(e.target.value)}
+                    placeholder="Song title"
+                    aria-label="Song title"
+                  />
+                  <input
+                    className="text-base border-0 border-b border-dashed border-border bg-transparent py-0.5 text-muted-foreground w-full focus:outline-none focus:border-primary placeholder:text-muted-foreground"
+                    type="text"
+                    value={songArtist || ''}
+                    onChange={e => handleArtistChange(e.target.value)}
+                    placeholder="Artist"
+                    aria-label="Artist"
                   />
                 </div>
 
-                <div className={`flex-col min-h-0 overflow-hidden ${mobilePane === 'lyrics' ? 'flex' : 'hidden'} md:flex`}>
-                  <div className="flex flex-col gap-1 mb-2">
-                    <input
-                      className="text-xl font-bold border-0 border-b border-dashed border-border bg-transparent py-1 text-foreground w-full focus:outline-none focus:border-primary placeholder:text-muted-foreground placeholder:font-normal"
-                      type="text"
-                      value={songTitle || ''}
-                      onChange={e => handleTitleChange(e.target.value)}
-                      onBlur={handleMetaBlur}
-                      placeholder="Song title"
-                      aria-label="Song title"
-                    />
-                    <input
-                      className="text-base border-0 border-b border-dashed border-border bg-transparent py-0.5 text-muted-foreground w-full focus:outline-none focus:border-primary placeholder:text-muted-foreground"
-                      type="text"
-                      value={songArtist || ''}
-                      onChange={e => handleArtistChange(e.target.value)}
-                      onBlur={handleMetaBlur}
-                      placeholder="Artist"
-                      aria-label="Artist"
+                <Card className="flex flex-col flex-1 overflow-hidden">
+                  <div className="p-3 sm:p-4 font-[family-name:var(--font-mono)] text-xs sm:text-[0.82rem] leading-relaxed flex-1 overflow-y-auto">
+                    <Textarea
+                      className="w-full h-full min-h-[200px] border-0 p-0 font-[family-name:var(--font-mono)] text-xs sm:text-[0.82rem] leading-relaxed resize-none focus-visible:ring-0"
+                      value={parsedLyrics}
+                      onChange={e => setParsedLyrics(e.target.value)}
                     />
                   </div>
+                </Card>
+              </>
+            }
+          />
+        </div>
+      )}
 
-                  <ComparisonView
-                    original={rewriteResult.original_lyrics}
-                    rewritten={rewriteResult.rewritten_lyrics}
-                    onRewrittenChange={handleRewrittenChange}
-                    onRewrittenBlur={handleRewrittenBlur}
-                  />
-                  {reasoningText && (
-                    <details className="mt-2">
-                      <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                        Show reasoning
-                      </summary>
-                      <pre className="mt-1 p-3 rounded-md bg-muted font-[family-name:var(--font-mono)] text-xs leading-relaxed whitespace-pre-wrap break-words max-h-60 overflow-y-auto text-muted-foreground">
-                        {reasoningText}
-                      </pre>
-                    </details>
-                  )}
+      {/* WORKSHOPPING state */}
+      {isWorkshopping && (
+        <div className="mt-2">
+          {mobilePaneToggle}
+
+          <ResizableColumns
+            className="h-[calc(100vh-11rem)] md:h-[calc(100vh-7rem)]"
+            columnClassName="flex-col min-h-0"
+            mobilePane={mobilePane === 'chat' ? 'left' : 'right'}
+            left={
+              <>
+                {modelControls()}
+
+                <div className="flex gap-2 mb-2 flex-wrap">
+                  <Button variant="secondary" onClick={handleNewSong}>
+                    New Song
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={handleMarkComplete}
+                    disabled={completedStatus === 'completed' || completedStatus === 'saving' || !currentSongId}
+                  >
+                    {completedStatus === 'completed' ? 'Completed!' :
+                     completedStatus === 'saving' ? 'Saving...' : 'Mark as Complete'}
+                  </Button>
+                  <Button
+                    variant="danger-outline"
+                    onClick={() => setScrapDialogOpen(true)}
+                    disabled={!currentSongId}
+                  >
+                    Scrap This
+                  </Button>
                 </div>
-              </div>
-            </>
-          )}
 
-          {!rewriteResult && loading && (
-            <>
-              {/* Mobile pane toggle — hidden on md+ */}
-              <div className="flex md:hidden rounded-md border border-border overflow-hidden mb-3">
-                <button
-                  className={`flex-1 py-2 text-sm font-semibold text-center transition-colors ${mobilePane === 'chat' ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}
-                  onClick={() => setMobilePane('chat')}
-                >
-                  Chat Workshop
-                </button>
-                <button
-                  className={`flex-1 py-2 text-sm font-semibold text-center transition-colors ${mobilePane === 'lyrics' ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}
-                  onClick={() => setMobilePane('lyrics')}
-                >
-                  Your Version
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-2 items-stretch h-[calc(100vh-11rem)] md:h-[calc(100vh-7rem)] transition-all duration-300">
-                <div className={`flex-col min-h-0 ${mobilePane === 'chat' ? 'flex' : 'hidden'} md:flex`}>
-                  <div className="flex items-end gap-3 flex-wrap opacity-50 pointer-events-none">
-                    <ModelSelector
-                      provider={llmSettings.provider}
-                      model={llmSettings.model}
-                      savedModels={savedModels}
-                      onChangeProvider={onChangeProvider}
-                      onChangeModel={onChangeModel}
-                      onOpenSettings={onOpenSettings}
-                    />
-                    <div className="flex flex-col gap-1 mb-2">
-                      <label className="text-xs text-muted-foreground" htmlFor="reasoning-effort-loading">Effort</label>
-                      <select
-                        id="reasoning-effort-loading"
-                        className="h-9 rounded-md border border-border bg-card px-2 text-sm text-foreground"
-                        value={reasoningEffort}
-                        disabled
-                        onChange={e => onChangeReasoningEffort(e.target.value)}
-                      >
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <ChatPanel
-                    songId={currentSongId}
-                    messages={chatMessages}
-                    setMessages={setChatMessages}
-                    llmSettings={llmSettings}
-                    originalLyrics={''}
-                    onLyricsUpdated={handleChatUpdate}
-                    initialLoading={loading}
+                <ChatPanel
+                  songId={currentSongId}
+                  messages={chatMessages}
+                  setMessages={setChatMessages}
+                  llmSettings={llmSettings}
+                  onLyricsUpdated={handleChatUpdate}
+                  initialLoading={false}
+                />
+              </>
+            }
+            right={
+              <>
+                <div className="flex flex-col gap-1 mb-2">
+                  <input
+                    className="text-xl font-bold border-0 border-b border-dashed border-border bg-transparent py-1 text-foreground w-full focus:outline-none focus:border-primary placeholder:text-muted-foreground placeholder:font-normal"
+                    type="text"
+                    value={songTitle || ''}
+                    onChange={e => handleTitleChange(e.target.value)}
+                    onBlur={handleMetaBlur}
+                    placeholder="Song title"
+                    aria-label="Song title"
+                  />
+                  <input
+                    className="text-base border-0 border-b border-dashed border-border bg-transparent py-0.5 text-muted-foreground w-full focus:outline-none focus:border-primary placeholder:text-muted-foreground"
+                    type="text"
+                    value={songArtist || ''}
+                    onChange={e => handleArtistChange(e.target.value)}
+                    onBlur={handleMetaBlur}
+                    placeholder="Artist"
+                    aria-label="Artist"
                   />
                 </div>
 
-                <div className={`flex-col min-h-0 overflow-hidden ${mobilePane === 'lyrics' ? 'flex' : 'hidden'} md:flex`}>
-                  {streamingText ? (
-                    <Card className="flex flex-col flex-1 overflow-hidden">
-                      <CardHeader>Your Version</CardHeader>
-                      <pre className="p-3 sm:p-4 font-[family-name:var(--font-mono)] text-xs sm:text-[0.82rem] leading-relaxed whitespace-pre-wrap break-words flex-1 overflow-y-auto">{(() => {
-                        const match = streamingText.match(/<lyrics>\s*([\s\S]*?)(?:<\/lyrics>|$)/);
-                        return match ? match[1]!.trimStart() : streamingText;
-                      })()}</pre>
-                    </Card>
-                  ) : reasoningText ? (
-                    <Card className="flex flex-col flex-1 overflow-hidden">
-                      <CardHeader>
-                        <div className="flex items-center gap-2">
-                          <div className="size-4 border-2 border-border border-t-primary rounded-full animate-spin" aria-hidden="true" />
-                          <span>Thinking...</span>
-                        </div>
-                      </CardHeader>
-                      <pre className="p-3 sm:p-4 font-[family-name:var(--font-mono)] text-xs leading-relaxed whitespace-pre-wrap break-words flex-1 overflow-y-auto text-muted-foreground">{reasoningText}</pre>
-                    </Card>
-                  ) : (
-                    <Card className="flex flex-col flex-1 items-center justify-center text-muted-foreground gap-3">
-                      <div className="size-8 border-3 border-border border-t-primary rounded-full animate-spin" aria-hidden="true" />
-                      <span className="text-sm">{
-                        phase === 'cleaning' ? 'Cleaning up...' :
-                        phase === 'rewriting' ? 'Rewriting lyrics...' :
-                        thinking ? 'Thinking...' :
-                        'Starting...'
-                      }</span>
-                    </Card>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
+                <ComparisonView
+                  original={rewriteResult!.original_lyrics}
+                  rewritten={rewriteResult!.rewritten_lyrics}
+                  onRewrittenChange={handleRewrittenChange}
+                  onRewrittenBlur={handleRewrittenBlur}
+                />
+              </>
+            }
+          />
         </div>
       )}
 

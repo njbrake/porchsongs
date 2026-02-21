@@ -18,7 +18,6 @@ def _make_profile_and_song(client):
     """Helper: create a profile and a song, return (profile, song)."""
     profile = client.post("/api/profiles", json={
         "name": "Test",
-        "description": "Suburban dad, Subaru driver",
     }).json()
     song = client.post("/api/songs", json={
         "profile_id": profile["id"],
@@ -37,82 +36,63 @@ LLM_SETTINGS = {
 }
 
 
-# --- POST /api/rewrite ---
+# --- POST /api/parse ---
 
 
 @patch("app.services.llm_service.acompletion")
-def test_rewrite_endpoint(mock_acompletion, client):
+def test_parse_endpoint(mock_acompletion, client):
     profile = client.post("/api/profiles", json={
         "name": "Nathan",
-        "description": "Dad in Austin, drives a Subaru",
     }).json()
 
-    # Call 1: cleanup response, Call 2: rewrite response
-    mock_acompletion.side_effect = [
-        _fake_completion_response(
-            "<meta>\nTitle: Test Song\nArtist: Test Artist\n</meta>\n"
-            "<original>\nG  Am\nHello world\nDm  G\nGoodbye moon\n</original>"
-        ),
-        _fake_completion_response(
-            "<lyrics>\nHi there world\nSee ya moon\n</lyrics>\n"
-            "<changes>\nChanged hello->hi, goodbye->see ya\n</changes>"
-        ),
-    ]
+    mock_acompletion.return_value = _fake_completion_response(
+        "<meta>\nTitle: Test Song\nArtist: Test Artist\n</meta>\n"
+        "<original>\nG  Am\nHello world\nDm  G\nGoodbye moon\n</original>"
+    )
 
-    resp = client.post("/api/rewrite", json={
+    resp = client.post("/api/parse", json={
         "profile_id": profile["id"],
         "lyrics": "G  Am\nHello world\nDm  G\nGoodbye moon",
-        "instruction": "Make it casual",
         **LLM_SETTINGS,
     })
     assert resp.status_code == 200
     data = resp.json()
-    assert "Hi there world" in data["rewritten_lyrics"]
     assert "Hello world" in data["original_lyrics"]
-    assert "changes_summary" in data
+    assert data["title"] == "Test Song"
+    assert data["artist"] == "Test Artist"
 
-    # Verify 2 LLM calls were made
-    assert mock_acompletion.call_count == 2
-    # Call 1 should NOT contain the profile description (cleanup only)
-    call1_kwargs = mock_acompletion.call_args_list[0]
-    messages1 = call1_kwargs.kwargs.get("messages") or call1_kwargs[1].get("messages")
-    assert not any("Dad in Austin" in m["content"] for m in messages1)
-    # Call 2 SHOULD contain the profile description and instruction
-    call2_kwargs = mock_acompletion.call_args_list[1]
-    messages2 = call2_kwargs.kwargs.get("messages") or call2_kwargs[1].get("messages")
-    assert any("Dad in Austin" in m["content"] for m in messages2)
-    assert any("Make it casual" in m["content"] for m in messages2)
+    # Verify only 1 LLM call (cleanup only, no rewrite)
+    assert mock_acompletion.call_count == 1
+    # The call should NOT contain any profile description
+    call_kwargs = mock_acompletion.call_args_list[0]
+    messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
+    assert not any("Dad in Austin" in m["content"] for m in messages)
 
 
 @patch("app.services.llm_service.acompletion")
-def test_rewrite_no_changes_separator(mock_acompletion, client):
-    """Call 1 returns clean XML, Call 2 returns no tags — should still work."""
+def test_parse_unknown_title_artist(mock_acompletion, client):
+    """Parse with UNKNOWN title/artist should return null."""
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
 
-    mock_acompletion.side_effect = [
-        _fake_completion_response(
-            "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
-            "<original>\nOriginal line one\nOriginal line two\n</original>"
-        ),
-        _fake_completion_response(
-            "Rewritten line one\nRewritten line two"
-        ),
-    ]
+    mock_acompletion.return_value = _fake_completion_response(
+        "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
+        "<original>\nOriginal line one\nOriginal line two\n</original>"
+    )
 
-    resp = client.post("/api/rewrite", json={
+    resp = client.post("/api/parse", json={
         "profile_id": profile["id"],
         "lyrics": "Original line one\nOriginal line two",
         **LLM_SETTINGS,
     })
     assert resp.status_code == 200
     data = resp.json()
-    assert "Rewritten line" in data["rewritten_lyrics"]
+    assert data["title"] is None
+    assert data["artist"] is None
     assert "Original line one" in data["original_lyrics"]
-    assert data["changes_summary"] == "No change summary provided by the model."
 
 
-def test_rewrite_profile_not_found(client):
-    resp = client.post("/api/rewrite", json={
+def test_parse_profile_not_found(client):
+    resp = client.post("/api/parse", json={
         "profile_id": 9999,
         "lyrics": "Hello",
         **LLM_SETTINGS,
@@ -121,85 +101,18 @@ def test_rewrite_profile_not_found(client):
 
 
 @patch("app.services.llm_service.acompletion")
-def test_rewrite_llm_error(mock_acompletion, client):
-    """LLM throwing an exception on Call 1 should return 502."""
+def test_parse_llm_error(mock_acompletion, client):
+    """LLM throwing an exception should return 502."""
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
     mock_acompletion.side_effect = RuntimeError("API rate limit exceeded")
 
-    resp = client.post("/api/rewrite", json={
+    resp = client.post("/api/parse", json={
         "profile_id": profile["id"],
         "lyrics": "Hello world",
         **LLM_SETTINGS,
     })
     assert resp.status_code == 502
     assert "LLM error" in resp.json()["detail"]
-
-
-# --- POST /api/workshop-line ---
-
-
-@patch("app.services.llm_service.acompletion")
-def test_workshop_line(mock_acompletion, client):
-    _, song = _make_profile_and_song(client)
-
-    mock_acompletion.return_value = _fake_completion_response(
-        "1. Hey there world | More casual greeting\n"
-        "2. Yo what's up world | Very informal\n"
-        "3. Howdy there world | Southern vibe"
-    )
-
-    resp = client.post("/api/workshop-line", json={
-        "song_id": song["id"],
-        "line_index": 0,
-        **LLM_SETTINGS,
-    })
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "original_line" in data
-    assert "current_line" in data
-    assert len(data["alternatives"]) == 3
-    assert data["alternatives"][0]["text"] == "Hey there world"
-    assert "casual" in data["alternatives"][0]["reasoning"].lower()
-
-
-@patch("app.services.llm_service.acompletion")
-def test_workshop_line_with_instruction(mock_acompletion, client):
-    _, song = _make_profile_and_song(client)
-
-    mock_acompletion.return_value = _fake_completion_response(
-        "1. Cycling world | bike theme\n2. Pedaling world | bike theme\n3. Rolling world | bike theme"
-    )
-
-    resp = client.post("/api/workshop-line", json={
-        "song_id": song["id"],
-        "line_index": 0,
-        "instruction": "Make it about bikes",
-        **LLM_SETTINGS,
-    })
-    assert resp.status_code == 200
-    assert len(resp.json()["alternatives"]) == 3
-
-
-def test_workshop_line_song_not_found(client):
-    resp = client.post("/api/workshop-line", json={
-        "song_id": 9999,
-        "line_index": 0,
-        **LLM_SETTINGS,
-    })
-    assert resp.status_code == 404
-
-
-@patch("app.services.llm_service.acompletion")
-def test_workshop_line_index_out_of_range(mock_acompletion, client):
-    _, song = _make_profile_and_song(client)
-
-    resp = client.post("/api/workshop-line", json={
-        "song_id": song["id"],
-        "line_index": 999,
-        **LLM_SETTINGS,
-    })
-    assert resp.status_code == 400
-
 
 
 # --- POST /api/chat ---
@@ -210,7 +123,7 @@ def test_chat_endpoint(mock_acompletion, client):
     _, song = _make_profile_and_song(client)
 
     mock_acompletion.return_value = _fake_completion_response(
-        "---LYRICS---\nHi there world\nCatch ya moon\n---END---\nI changed 'see ya' to 'catch ya'."
+        "<lyrics>\nHi there world\nCatch ya moon\n</lyrics>\nI changed 'see ya' to 'catch ya'."
     )
 
     resp = client.post("/api/chat", json={
@@ -233,7 +146,7 @@ def test_chat_persists_changes(mock_acompletion, client):
     _, song = _make_profile_and_song(client)
 
     mock_acompletion.return_value = _fake_completion_response(
-        "---LYRICS---\nUpdated line one\nUpdated line two\n---END---\nChanged everything."
+        "<lyrics>\nUpdated line one\nUpdated line two\n</lyrics>\nChanged everything."
     )
 
     client.post("/api/chat", json={
@@ -258,7 +171,7 @@ def test_chat_persists_messages(mock_acompletion, client):
     _, song = _make_profile_and_song(client)
 
     mock_acompletion.return_value = _fake_completion_response(
-        "---LYRICS---\nUpdated line one\nUpdated line two\n---END---\nChanged everything."
+        "<lyrics>\nUpdated line one\nUpdated line two\n</lyrics>\nChanged everything."
     )
 
     client.post("/api/chat", json={
@@ -314,11 +227,10 @@ def test_list_provider_models_failure(mock_list_models, client):
 
 
 @patch("app.services.llm_service.acompletion")
-def test_rewrite_passes_api_base(mock_acompletion, client):
-    """When a ProfileModel has api_base set, both calls should pass it to acompletion."""
+def test_parse_passes_api_base(mock_acompletion, client):
+    """When a ProfileModel has api_base set, the parse call should pass it to acompletion."""
     profile = client.post("/api/profiles", json={
         "name": "Local LLM User",
-        "description": "Testing local LLM",
     }).json()
 
     # Save a ProfileModel with api_base
@@ -328,18 +240,12 @@ def test_rewrite_passes_api_base(mock_acompletion, client):
         "api_base": "http://localhost:11434",
     })
 
-    mock_acompletion.side_effect = [
-        _fake_completion_response(
-            "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
-            "<original>\nHello world\n</original>"
-        ),
-        _fake_completion_response(
-            "<lyrics>\nHi there world\n</lyrics>\n"
-            "<changes>\nChanged hello\n</changes>"
-        ),
-    ]
+    mock_acompletion.return_value = _fake_completion_response(
+        "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
+        "<original>\nHello world\n</original>"
+    )
 
-    resp = client.post("/api/rewrite", json={
+    resp = client.post("/api/parse", json={
         "profile_id": profile["id"],
         "lyrics": "Hello world",
         "provider": "ollama",
@@ -347,40 +253,31 @@ def test_rewrite_passes_api_base(mock_acompletion, client):
     })
     assert resp.status_code == 200
 
-    assert mock_acompletion.call_count == 2
-    for call in mock_acompletion.call_args_list:
-        assert call.kwargs.get("api_base") == "http://localhost:11434"
+    assert mock_acompletion.call_count == 1
+    assert mock_acompletion.call_args.kwargs.get("api_base") == "http://localhost:11434"
 
 
 @patch("app.services.llm_service.acompletion")
-def test_rewrite_no_api_base_when_no_profile_model(mock_acompletion, client):
-    """When no ProfileModel exists, api_base should not be passed to either call."""
+def test_parse_no_api_base_when_no_profile_model(mock_acompletion, client):
+    """When no ProfileModel exists, api_base should not be passed."""
     profile = client.post("/api/profiles", json={
         "name": "Cloud User",
-        "description": "Uses cloud API",
     }).json()
 
-    mock_acompletion.side_effect = [
-        _fake_completion_response(
-            "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
-            "<original>\nHello world\n</original>"
-        ),
-        _fake_completion_response(
-            "<lyrics>\nHi there world\n</lyrics>\n"
-            "<changes>\nChanged hello\n</changes>"
-        ),
-    ]
+    mock_acompletion.return_value = _fake_completion_response(
+        "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
+        "<original>\nHello world\n</original>"
+    )
 
-    resp = client.post("/api/rewrite", json={
+    resp = client.post("/api/parse", json={
         "profile_id": profile["id"],
         "lyrics": "Hello world",
         **LLM_SETTINGS,
     })
     assert resp.status_code == 200
 
-    assert mock_acompletion.call_count == 2
-    for call in mock_acompletion.call_args_list:
-        assert "api_base" not in call.kwargs
+    assert mock_acompletion.call_count == 1
+    assert "api_base" not in mock_acompletion.call_args.kwargs
 
 
 @patch("app.services.llm_service.alist_models")
@@ -397,37 +294,3 @@ def test_list_models_with_api_base(mock_list_models, client):
     mock_list_models.assert_called_once()
     call_kwargs = mock_list_models.call_args.kwargs
     assert call_kwargs.get("api_base") == "http://localhost:11434"
-
-
-@patch("app.services.llm_service.acompletion")
-def test_rewrite_realigns_chords(mock_acompletion, client):
-    """Chords from the original should be realigned above the rewritten lyrics."""
-    profile = client.post("/api/profiles", json={
-        "name": "Test",
-        "description": "Test singer",
-    }).json()
-
-    mock_acompletion.side_effect = [
-        _fake_completion_response(
-            "<meta>\nTitle: Test\nArtist: Test\n</meta>\n"
-            "<original>\nG   Am\nHello world\nDm  G\nGoodbye moon\n</original>"
-        ),
-        _fake_completion_response(
-            "<lyrics>\nHi there world\nSee ya moon\n</lyrics>\n"
-            "<changes>\nChanged greetings\n</changes>"
-        ),
-    ]
-
-    resp = client.post("/api/rewrite", json={
-        "profile_id": profile["id"],
-        "lyrics": "G   Am\nHello world\nDm  G\nGoodbye moon",
-        **LLM_SETTINGS,
-    })
-    assert resp.status_code == 200
-    data = resp.json()
-    # The rewritten lyrics should contain chord lines (from realign_chords)
-    lines = data["rewritten_lyrics"].split("\n")
-    # Should have chord lines above lyric lines
-    assert any("G" in line and "Am" not in line.lower().replace("am", "") or "Am" in line for line in lines)
-    assert "Hi there world" in data["rewritten_lyrics"]
-    assert "See ya moon" in data["rewritten_lyrics"]

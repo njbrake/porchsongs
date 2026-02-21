@@ -2,7 +2,6 @@ import type {
   Profile,
   Song,
   SongRevision,
-  RewriteResult,
   SavedModel,
   ProviderConnection,
   Provider,
@@ -11,7 +10,7 @@ import type {
   AuthUser,
   TokenResponse,
   ChatHistoryRow,
-  StreamCallbacks,
+  ParseResult,
 } from '@/types';
 
 const BASE = '/api';
@@ -158,85 +157,6 @@ async function getCurrentUser(): Promise<AuthUser> {
   return _fetch<AuthUser>('/auth/me');
 }
 
-// --- Streaming rewrite with auth ---
-
-async function rewriteStream(data: Record<string, unknown>, { onToken, onThinking, onPhase }: StreamCallbacks = {}): Promise<RewriteResult> {
-  const doFetch = async (isRetry: boolean): Promise<Response> => {
-    const url = `${BASE}/rewrite?stream=true`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
-      body: JSON.stringify(data),
-    });
-
-    if (res.status === 401 && !isRetry) {
-      const refreshed = await _tryRefresh();
-      if (refreshed) {
-        return doFetch(true);
-      }
-      window.dispatchEvent(new CustomEvent('porchsongs-logout'));
-      throw new Error('Authentication required. Please log in.');
-    }
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error((body as { detail?: string }).detail || `Request failed: ${res.status}`);
-    }
-    return res;
-  };
-
-  const res = await doFetch(false);
-  const reader = res.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let finalResult: RewriteResult | null = null;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    const lines = buffer.split('\n');
-    buffer = lines.pop()!;
-
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      const payload = JSON.parse(line.slice(6)) as { done?: boolean; result?: RewriteResult; token?: string; thinking?: boolean; reasoning_token?: string; phase?: string };
-      if (payload.done) {
-        finalResult = payload.result!;
-      } else if (payload.phase && onPhase) {
-        onPhase(payload.phase);
-      } else if (payload.thinking && onThinking) {
-        onThinking();
-      } else if (payload.reasoning_token != null && onThinking) {
-        onThinking(payload.reasoning_token);
-      } else if (payload.token && onToken) {
-        onToken(payload.token);
-      }
-    }
-  }
-
-  if (buffer.startsWith('data: ')) {
-    const payload = JSON.parse(buffer.slice(6)) as { done?: boolean; result?: RewriteResult; token?: string; thinking?: boolean; reasoning_token?: string; phase?: string };
-    if (payload.done) {
-      finalResult = payload.result!;
-    } else if (payload.phase && onPhase) {
-      onPhase(payload.phase);
-    } else if (payload.thinking && onThinking) {
-      onThinking();
-    } else if (payload.reasoning_token != null && onThinking) {
-      onThinking(payload.reasoning_token);
-    } else if (payload.token && onToken) {
-      onToken(payload.token);
-    }
-  }
-
-  if (!finalResult) {
-    throw new Error('Stream ended without a final result');
-  }
-  return finalResult;
-}
-
 const api = {
   getAuthConfig,
   login,
@@ -250,9 +170,69 @@ const api = {
   updateProfile: (id: number, data: Partial<Profile>) => _fetch<Profile>(`/profiles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteProfile: (id: number) => _fetch<void>(`/profiles/${id}`, { method: 'DELETE' }),
 
-  // Rewrite
-  rewrite: (data: Record<string, unknown>) => _fetch<RewriteResult>('/rewrite', { method: 'POST', body: JSON.stringify(data) }),
-  rewriteStream,
+  // Parse
+  parse: (data: Record<string, unknown>, signal?: AbortSignal) => _fetch<ParseResult>('/parse', { method: 'POST', body: JSON.stringify(data), signal }),
+  parseStream: async (
+    data: Record<string, unknown>,
+    onToken: (token: string) => void,
+    signal?: AbortSignal,
+  ): Promise<ParseResult> => {
+    const doStream = async (retry: boolean): Promise<ParseResult> => {
+      const res = await fetch(`${BASE}/parse/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+        body: JSON.stringify(data),
+        signal,
+      });
+
+      if (res.status === 401 && retry) {
+        const refreshed = await _tryRefresh();
+        if (refreshed) return doStream(false);
+        window.dispatchEvent(new CustomEvent('porchsongs-logout'));
+        throw new Error('Authentication required. Please log in.');
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { detail?: string }).detail || `Request failed: ${res.status}`);
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No response body');
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let eventType = '';
+      let result: ParseResult | null = null;
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            eventType = line.slice(7);
+          } else if (line.startsWith('data: ')) {
+            const payload = line.slice(6);
+            if (eventType === 'token') {
+              onToken(JSON.parse(payload) as string);
+            } else if (eventType === 'done') {
+              result = JSON.parse(payload) as ParseResult;
+            } else if (eventType === 'error') {
+              const err = JSON.parse(payload) as { detail: string };
+              throw new Error(err.detail);
+            }
+            eventType = '';
+          }
+        }
+      }
+
+      if (!result) throw new Error('Stream ended without result');
+      return result;
+    };
+    return doStream(true);
+  },
 
   // Songs
   listSongs: (profileId?: number) => {
@@ -269,6 +249,68 @@ const api = {
 
   // Chat
   chat: (data: Record<string, unknown>, signal?: AbortSignal) => _fetch<ChatResult>('/chat', { method: 'POST', body: JSON.stringify(data), signal }),
+  chatStream: async (
+    data: Record<string, unknown>,
+    onToken: (token: string) => void,
+    signal?: AbortSignal,
+  ): Promise<ChatResult & { version: number }> => {
+    const doStream = async (retry: boolean): Promise<ChatResult & { version: number }> => {
+      const res = await fetch(`${BASE}/chat/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+        body: JSON.stringify(data),
+        signal,
+      });
+
+      if (res.status === 401 && retry) {
+        const refreshed = await _tryRefresh();
+        if (refreshed) return doStream(false);
+        window.dispatchEvent(new CustomEvent('porchsongs-logout'));
+        throw new Error('Authentication required. Please log in.');
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { detail?: string }).detail || `Request failed: ${res.status}`);
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No response body');
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let eventType = '';
+      let result: (ChatResult & { version: number }) | null = null;
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse SSE events from buffer
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            eventType = line.slice(7);
+          } else if (line.startsWith('data: ')) {
+            const payload = line.slice(6);
+            if (eventType === 'token') {
+              onToken(JSON.parse(payload) as string);
+            } else if (eventType === 'done') {
+              result = JSON.parse(payload) as ChatResult & { version: number };
+            } else if (eventType === 'error') {
+              const err = JSON.parse(payload) as { detail: string };
+              throw new Error(err.detail);
+            }
+            eventType = '';
+          }
+        }
+      }
+
+      if (!result) throw new Error('Stream ended without result');
+      return result;
+    };
+    return doStream(true);
+  },
   getChatHistory: (songId: number) => _fetch<ChatHistoryRow[]>(`/songs/${songId}/messages`),
   saveChatMessages: (songId: number, messages: { role: string; content: string; is_note: boolean }[]) =>
     _fetch<void>(`/songs/${songId}/messages`, { method: 'POST', body: JSON.stringify(messages) }),

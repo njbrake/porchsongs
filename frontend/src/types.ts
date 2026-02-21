@@ -4,7 +4,6 @@ export interface Profile {
   id: number;
   user_id: number;
   name: string;
-  description: string | null;
   is_default: boolean;
   created_at: string;
 }
@@ -111,18 +110,6 @@ export interface TokenResponse {
 
 // API request types
 
-export interface RewriteRequest {
-  profile_id: number;
-  lyrics: string;
-  instruction?: string | null;
-  provider: string;
-  model: string;
-  reasoning_effort?: string | null;
-  source_url?: string | null;
-  title?: string | null;
-  artist?: string | null;
-}
-
 export interface ChatRequest {
   song_id: number;
   messages: { role: string; content: string }[];
@@ -145,8 +132,8 @@ export interface ChatHistoryRow {
   is_note: boolean;
 }
 
-export interface StreamCallbacks {
-  onToken?: (token: string) => void;
-  onThinking?: (token?: string) => void;
-  onPhase?: (phase: string) => void;
+export interface ParseResult {
+  original_lyrics: string;
+  title?: string;
+  artist?: string;
 }

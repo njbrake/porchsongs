@@ -18,13 +18,11 @@ class UserOut(BaseModel):
 # --- Profiles ---
 class ProfileCreate(BaseModel):
     name: str
-    description: str | None = None
     is_default: bool = False
 
 
 class ProfileUpdate(BaseModel):
     name: str | None = None
-    description: str | None = None
     is_default: bool | None = None
 
 
@@ -32,7 +30,6 @@ class ProfileOut(BaseModel):
     id: int
     user_id: int
     name: str
-    description: str | None
     is_default: bool
     created_at: datetime
     updated_at: datetime
@@ -74,23 +71,17 @@ class ProviderConnectionOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# --- Rewrite ---
-class RewriteRequest(BaseModel):
+# --- Parse ---
+class ParseRequest(BaseModel):
     profile_id: int
-    title: str | None = None
-    artist: str | None = None
     lyrics: str
-    source_url: str | None = None
-    instruction: str | None = None
     provider: str
     model: str
     reasoning_effort: str | None = None
 
 
-class RewriteResponse(BaseModel):
+class ParseResponse(BaseModel):
     original_lyrics: str
-    rewritten_lyrics: str
-    changes_summary: str
     title: str | None = None
     artist: str | None = None
 
@@ -155,27 +146,6 @@ class SongUpdate(BaseModel):
 # --- Song Status ---
 class SongStatusUpdate(BaseModel):
     status: str  # "draft" or "completed"
-
-
-# --- Workshop ---
-class WorkshopLineRequest(BaseModel):
-    song_id: int
-    line_index: int  # index of the lyrics-only line to workshop
-    instruction: str | None = None  # optional user instruction
-    provider: str
-    model: str
-    reasoning_effort: str | None = None
-
-
-class WorkshopAlternative(BaseModel):
-    text: str
-    reasoning: str
-
-
-class WorkshopLineResponse(BaseModel):
-    original_line: str
-    current_line: str
-    alternatives: list[WorkshopAlternative]
 
 
 # --- Apply Edit ---

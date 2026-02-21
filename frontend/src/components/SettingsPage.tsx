@@ -2,7 +2,6 @@ import { useState, useEffect, type FormEvent, type ChangeEvent } from 'react';
 import api from '@/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -266,20 +265,18 @@ function LLMProvidersTab({ provider, model, savedModels, onSave, onAddModel, onR
 
 interface ProfileSubTabProps {
   profile: Profile | null;
-  onSave: (data: { name: string; description: string | null; is_default: boolean }) => Promise<Profile>;
+  onSave: (data: { name: string; is_default: boolean }) => Promise<Profile>;
   reasoningEffort: string;
   onChangeReasoningEffort: (value: string) => void;
 }
 
 function ProfileSubTab({ profile, onSave, reasoningEffort, onChangeReasoningEffort }: ProfileSubTabProps) {
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
   const [status, setStatus] = useState('');
 
   useEffect(() => {
     if (profile) {
       setName(profile.name || '');
-      setDescription(profile.description || '');
     }
   }, [profile]);
 
@@ -289,7 +286,6 @@ function ProfileSubTab({ profile, onSave, reasoningEffort, onChangeReasoningEffo
     try {
       await onSave({
         name: name.trim(),
-        description: description.trim() || null,
         is_default: true,
       });
       setStatus('Saved!');
@@ -302,8 +298,8 @@ function ProfileSubTab({ profile, onSave, reasoningEffort, onChangeReasoningEffo
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-1">Your Rewriting Preferences</h2>
-        <p className="text-muted-foreground">Describe yourself and your life — every song rewrite will use this to personalize the lyrics for you.</p>
+        <h2 className="text-xl font-semibold mb-1">Profile</h2>
+        <p className="text-muted-foreground">Your profile name.</p>
       </div>
       <Card>
         <CardContent className="pt-6">
@@ -316,16 +312,6 @@ function ProfileSubTab({ profile, onSave, reasoningEffort, onChangeReasoningEffo
                 onChange={e => setName(e.target.value)}
                 required
                 placeholder="Your name"
-              />
-            </div>
-            <div className="mb-4">
-              <Label htmlFor="profile-desc">About you (used in every rewrite)</Label>
-              <Textarea
-                id="profile-desc"
-                rows={8}
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder={"Anything the LLM should know when rewriting lyrics for you.\n\ne.g., I live in a quiet suburb outside Austin with my wife and two kids (8 and 5). I drive a Subaru Outback, work in software, play acoustic guitar on the porch most evenings. I like cycling, grilling, and coaching Little League. My dog Max is a golden retriever."}
               />
             </div>
             <div className="flex items-center gap-4 mt-2">
@@ -367,7 +353,7 @@ interface SettingsPageProps {
   onAddConnection: (provider: string, apiBase?: string | null) => Promise<ProviderConnection | null>;
   onRemoveConnection: (id: number) => void;
   profile: Profile | null;
-  onSaveProfile: (data: { name: string; description: string | null; is_default: boolean }) => Promise<Profile>;
+  onSaveProfile: (data: { name: string; is_default: boolean }) => Promise<Profile>;
   activeTab: string;
   onChangeTab: (tab: string) => void;
   reasoningEffort: string;

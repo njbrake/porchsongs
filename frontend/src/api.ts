@@ -20,6 +20,7 @@ const STORAGE_KEYS = {
   REFRESH_TOKEN: 'porchsongs_refresh_token',
   CURRENT_SONG_ID: 'porchsongs_current_song_id',
   DRAFT_INPUT: 'porchsongs_draft_input',
+  DRAFT_INSTRUCTION: 'porchsongs_draft_instruction',
   SPLIT_PERCENT: 'porchsongs_split_pct',
   WAKE_LOCK: 'porchsongs_wake_lock',
   PROVIDER: 'porchsongs_provider',

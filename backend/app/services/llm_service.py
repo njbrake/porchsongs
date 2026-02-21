@@ -107,17 +107,20 @@ def _build_parse_kwargs(
     model: str,
     api_base: str | None = None,
     reasoning_effort: str | None = None,
+    instruction: str | None = None,
 ) -> dict[str, object]:
     """Build the common kwargs dict for parse LLM calls."""
+    user_text = "Clean up this pasted input. Identify the title and artist."
+    if instruction:
+        user_text += f"\n\nUSER INSTRUCTIONS:\n{instruction}"
+    user_text += f"\n\nPASTED INPUT:\n{content}"
+
     kwargs: dict[str, object] = {
         "model": model,
         "provider": provider,
         "messages": [
             {"role": "system", "content": CLEAN_SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": f"Clean up this pasted input. Identify the title and artist.\n\nPASTED INPUT:\n{content}",
-            },
+            {"role": "user", "content": user_text},
         ],
     }
     if api_base:
@@ -133,12 +136,13 @@ async def parse_content(
     model: str,
     api_base: str | None = None,
     reasoning_effort: str | None = None,
+    instruction: str | None = None,
 ) -> dict[str, str | None]:
     """Clean up raw pasted content and identify title/artist (non-streaming).
 
     Returns dict with: original_content, title, artist
     """
-    kwargs = _build_parse_kwargs(content, provider, model, api_base, reasoning_effort)
+    kwargs = _build_parse_kwargs(content, provider, model, api_base, reasoning_effort, instruction)
     clean_response = await acompletion(**kwargs)
     clean_result = _parse_clean_response(_get_content(clean_response), content)
 
@@ -155,9 +159,10 @@ async def parse_content_stream(
     model: str,
     api_base: str | None = None,
     reasoning_effort: str | None = None,
+    instruction: str | None = None,
 ) -> AsyncIterator[str]:
     """Stream parse tokens. Caller accumulates and parses the final result."""
-    kwargs = _build_parse_kwargs(content, provider, model, api_base, reasoning_effort)
+    kwargs = _build_parse_kwargs(content, provider, model, api_base, reasoning_effort, instruction)
     response = await acompletion(stream=True, **kwargs)
 
     async for chunk in response:

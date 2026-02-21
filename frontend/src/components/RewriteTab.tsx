@@ -59,6 +59,14 @@ export default function RewriteTab({
     setInputRaw(val);
     sessionStorage.setItem(STORAGE_KEYS.DRAFT_INPUT, val);
   }, []);
+
+  const [instruction, setInstructionRaw] = useState(
+    () => sessionStorage.getItem(STORAGE_KEYS.DRAFT_INSTRUCTION) || ''
+  );
+  const setInstruction = useCallback((val: string) => {
+    setInstructionRaw(val);
+    sessionStorage.setItem(STORAGE_KEYS.DRAFT_INSTRUCTION, val);
+  }, []);
   const [loading, setLoading] = useState(false);
   const parseAbortRef = useRef<AbortController | null>(null);
   const [mobilePane, setMobilePane] = useState<'chat' | 'content'>('chat');
@@ -124,6 +132,7 @@ export default function RewriteTab({
           profile_id: profile!.id,
           content: trimmedInput,
           ...llmSettings,
+          ...(instruction.trim() && { instruction: instruction.trim() }),
         },
         (token: string) => {
           setParseStreamText(prev => prev + token);
@@ -135,6 +144,7 @@ export default function RewriteTab({
       setParsedContent(result.original_content);
       setSongTitle(result.title || '');
       setSongArtist(result.artist || '');
+      setInstruction('');
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         setError((err as Error).message);
@@ -347,6 +357,20 @@ export default function RewriteTab({
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 placeholder="Paste lyrics, chords, or a copy from a tab site — any format works"
+                onKeyDown={e => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canParse) {
+                    e.preventDefault();
+                    handleParse();
+                  }
+                }}
+              />
+
+              <Textarea
+                rows={2}
+                value={instruction}
+                onChange={e => setInstruction(e.target.value)}
+                placeholder="Optional instructions — e.g. &quot;only grab the first song&quot; or &quot;skip the intro&quot;"
+                className="mt-3"
                 onKeyDown={e => {
                   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canParse) {
                     e.preventDefault();

@@ -99,6 +99,7 @@ async def parse(
                 model=req.model,
                 api_base=api_base,
                 reasoning_effort=req.reasoning_effort,
+                instruction=req.instruction,
             ),
         )
     except HTTPException:
@@ -128,6 +129,7 @@ async def parse_stream(
                 model=req.model,
                 api_base=api_base,
                 reasoning_effort=req.reasoning_effort,
+                instruction=req.instruction,
             )
             async for token in stream:
                 if await request.is_disconnected():

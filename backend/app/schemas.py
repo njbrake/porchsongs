@@ -79,6 +79,7 @@ class ParseRequest(BaseModel):
     provider: str
     model: str
     reasoning_effort: str | None = None
+    instruction: str | None = None
 
 
 class ParseResponse(BaseModel):

@@ -71,8 +71,8 @@ def test_create_and_list_songs(client):
         "profile_id": profile["id"],
         "title": "Test Song",
         "artist": "Test Artist",
-        "original_lyrics": "Original line one\nOriginal line two",
-        "rewritten_lyrics": "Rewritten line one\nRewritten line two",
+        "original_content": "Original line one\nOriginal line two",
+        "rewritten_content": "Rewritten line one\nRewritten line two",
         "changes_summary": "Changed some words",
     }
     resp = client.post("/api/songs", json=song_data)
@@ -94,13 +94,13 @@ def test_get_song(client):
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
     song = client.post("/api/songs", json={
         "profile_id": profile["id"],
-        "original_lyrics": "Hello",
-        "rewritten_lyrics": "Hi",
+        "original_content": "Hello",
+        "rewritten_content": "Hi",
     }).json()
 
     resp = client.get(f"/api/songs/{song['id']}")
     assert resp.status_code == 200
-    assert resp.json()["original_lyrics"] == "Hello"
+    assert resp.json()["original_content"] == "Hello"
 
 
 def test_get_song_404(client):
@@ -112,8 +112,8 @@ def test_update_song_title(client):
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
     song = client.post("/api/songs", json={
         "profile_id": profile["id"],
-        "original_lyrics": "Hello",
-        "rewritten_lyrics": "Hi",
+        "original_content": "Hello",
+        "rewritten_content": "Hi",
     }).json()
     assert song["title"] is None
 
@@ -135,8 +135,8 @@ def test_delete_song(client):
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
     song = client.post("/api/songs", json={
         "profile_id": profile["id"],
-        "original_lyrics": "Hello",
-        "rewritten_lyrics": "Hi",
+        "original_content": "Hello",
+        "rewritten_content": "Hi",
     }).json()
 
     resp = client.delete(f"/api/songs/{song['id']}")
@@ -150,8 +150,8 @@ def test_update_song_status(client):
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
     song = client.post("/api/songs", json={
         "profile_id": profile["id"],
-        "original_lyrics": "Hello",
-        "rewritten_lyrics": "Hi",
+        "original_content": "Hello",
+        "rewritten_content": "Hi",
     }).json()
 
     resp = client.put(f"/api/songs/{song['id']}/status", json={"status": "completed"})
@@ -163,8 +163,8 @@ def test_update_song_status_invalid(client):
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
     song = client.post("/api/songs", json={
         "profile_id": profile["id"],
-        "original_lyrics": "Hello",
-        "rewritten_lyrics": "Hi",
+        "original_content": "Hello",
+        "rewritten_content": "Hi",
     }).json()
 
     resp = client.put(f"/api/songs/{song['id']}/status", json={"status": "invalid"})
@@ -178,8 +178,8 @@ def test_song_revisions(client):
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
     song = client.post("/api/songs", json={
         "profile_id": profile["id"],
-        "original_lyrics": "Hello",
-        "rewritten_lyrics": "Hi",
+        "original_content": "Hello",
+        "rewritten_content": "Hi",
         "changes_summary": "Initial",
     }).json()
 
@@ -198,8 +198,8 @@ def test_apply_edit(client):
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
     song = client.post("/api/songs", json={
         "profile_id": profile["id"],
-        "original_lyrics": "G  Am\nHello world\nDm  G\nGoodbye moon",
-        "rewritten_lyrics": "G  Am\nHello world\nDm  G\nGoodbye moon",
+        "original_content": "G  Am\nHello world\nDm  G\nGoodbye moon",
+        "rewritten_content": "G  Am\nHello world\nDm  G\nGoodbye moon",
     }).json()
 
     resp = client.post("/api/apply-edit", json={
@@ -209,7 +209,7 @@ def test_apply_edit(client):
     })
     assert resp.status_code == 200
     data = resp.json()
-    assert "Hi there" in data["rewritten_lyrics"]
+    assert "Hi there" in data["rewritten_content"]
     assert data["version"] == 2
 
 
@@ -218,8 +218,8 @@ def test_apply_edit_invalid_line(client):
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
     song = client.post("/api/songs", json={
         "profile_id": profile["id"],
-        "original_lyrics": "Hello",
-        "rewritten_lyrics": "Hello",
+        "original_content": "Hello",
+        "rewritten_content": "Hello",
     }).json()
 
     resp = client.post("/api/apply-edit", json={
@@ -259,8 +259,8 @@ def _make_song(client):
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
     song = client.post("/api/songs", json={
         "profile_id": profile["id"],
-        "original_lyrics": "Hello world",
-        "rewritten_lyrics": "Hi world",
+        "original_content": "Hello world",
+        "rewritten_content": "Hi world",
         "changes_summary": "Changed hello to hi",
     }).json()
     return song
@@ -443,7 +443,7 @@ def test_parse_uses_env_credentials(client):
         )
         resp = client.post("/api/parse", json={
             "profile_id": profile["id"],
-            "lyrics": "Hello world",
+            "content": "Hello world",
             "provider": "openai",
             "model": "gpt-4",
         })
@@ -470,7 +470,7 @@ def test_parse_returns_title_artist(client):
         )
         resp = client.post("/api/parse", json={
             "profile_id": profile["id"],
-            "lyrics": "Rock me mama",
+            "content": "Rock me mama",
             "provider": "openai",
             "model": "gpt-4",
         })
@@ -478,7 +478,7 @@ def test_parse_returns_title_artist(client):
         data = resp.json()
         assert data["title"] == "Wagon Wheel"
         assert data["artist"] == "Old Crow Medicine Show"
-        assert "Rock me mama" in data["original_lyrics"]
+        assert "Rock me mama" in data["original_content"]
 
 
 def test_parse_unknown_title_artist(client):
@@ -498,7 +498,7 @@ def test_parse_unknown_title_artist(client):
         )
         resp = client.post("/api/parse", json={
             "profile_id": profile["id"],
-            "lyrics": "Some lyrics",
+            "content": "Some lyrics",
             "provider": "openai",
             "model": "gpt-4",
         })
@@ -517,7 +517,7 @@ def test_health(client):
 
 
 def test_parse_missing_tags_fallback(client):
-    """When LLM returns no XML tags, original_lyrics should fall back to raw input."""
+    """When LLM returns no XML tags, original_content should fall back to raw input."""
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
 
     def _make_resp(content):
@@ -530,13 +530,13 @@ def test_parse_missing_tags_fallback(client):
         mock_ac.return_value = _make_resp("Just some text without XML tags")
         resp = client.post("/api/parse", json={
             "profile_id": profile["id"],
-            "lyrics": "My raw lyrics",
+            "content": "My raw lyrics",
             "provider": "openai",
             "model": "gpt-4",
         })
         assert resp.status_code == 200
         data = resp.json()
-        assert data["original_lyrics"] == "My raw lyrics"
+        assert data["original_content"] == "My raw lyrics"
         assert data["title"] is None
         assert data["artist"] is None
 
@@ -681,7 +681,7 @@ def test_lookup_api_base_prefers_connection(client):
     with patch("app.services.llm_service.acompletion", new_callable=AsyncMock, return_value=mock_response) as mock_ac:
         resp = client.post("/api/parse", json={
             "profile_id": pid,
-            "lyrics": "Hello",
+            "content": "Hello",
             "provider": "openai",
             "model": "gpt-4",
         })

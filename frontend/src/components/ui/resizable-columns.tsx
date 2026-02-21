@@ -73,7 +73,7 @@ export default function ResizableColumns({
     <div ref={containerRef} className={`flex ${className}`}>
       {/* Left column */}
       <div
-        className={`${columnClassName} ${mobilePane === 'left' ? 'flex' : 'hidden'} md:flex`}
+        className={`${columnClassName} ${mobilePane === 'left' ? 'flex' : 'hidden'} md:flex grow md:grow-0`}
         style={{ width: `calc(${leftPercent}% - 4px)` }}
       >
         {left}
@@ -95,7 +95,7 @@ export default function ResizableColumns({
 
       {/* Right column */}
       <div
-        className={`${columnClassName} ${mobilePane === 'right' ? 'flex' : 'hidden'} md:flex`}
+        className={`${columnClassName} ${mobilePane === 'right' ? 'flex' : 'hidden'} md:flex grow md:grow-0`}
         style={{ width: `calc(${100 - leftPercent}% - 4px)` }}
       >
         {right}

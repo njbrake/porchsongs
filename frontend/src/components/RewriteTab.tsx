@@ -21,7 +21,7 @@ interface RewriteTabProps {
   setChatMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   onNewRewrite: (result: RewriteResult | null, meta: RewriteMeta | null) => void;
   onSongSaved: (songId: number) => void;
-  onLyricsUpdated: (lyrics: string) => void;
+  onContentUpdated: (content: string) => void;
   onChangeProvider: (provider: string) => void;
   onChangeModel: (model: string) => void;
   reasoningEffort: string;
@@ -40,7 +40,7 @@ export default function RewriteTab({
   setChatMessages,
   onNewRewrite,
   onSongSaved,
-  onLyricsUpdated,
+  onContentUpdated,
   onChangeProvider,
   onChangeModel,
   reasoningEffort,
@@ -48,17 +48,17 @@ export default function RewriteTab({
   savedModels,
   onOpenSettings,
 }: RewriteTabProps) {
-  const [lyrics, setLyricsRaw] = useState(
-    () => sessionStorage.getItem('porchsongs_draft_lyrics') || ''
+  const [input, setInputRaw] = useState(
+    () => sessionStorage.getItem('porchsongs_draft_input') || ''
   );
 
-  const setLyrics = useCallback((val: string) => {
-    setLyricsRaw(val);
-    sessionStorage.setItem('porchsongs_draft_lyrics', val);
+  const setInput = useCallback((val: string) => {
+    setInputRaw(val);
+    sessionStorage.setItem('porchsongs_draft_input', val);
   }, []);
   const [loading, setLoading] = useState(false);
   const parseAbortRef = useRef<AbortController | null>(null);
-  const [mobilePane, setMobilePane] = useState<'chat' | 'lyrics'>('chat');
+  const [mobilePane, setMobilePane] = useState<'chat' | 'content'>('chat');
   const [error, setError] = useState<string | null>(null);
   const [completedStatus, setCompletedStatus] = useState<'saving' | 'completed' | null>(null);
   const [songTitle, setSongTitle] = useState('');
@@ -67,7 +67,7 @@ export default function RewriteTab({
 
   // Parse state
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
-  const [parsedLyrics, setParsedLyrics] = useState('');
+  const [parsedContent, setParsedContent] = useState('');
   const [parseStreamText, setParseStreamText] = useState('');
 
   useEffect(() => {
@@ -82,14 +82,14 @@ export default function RewriteTab({
   }, [currentSongId]);
 
   const needsProfile = !profile?.id;
-  const canParse = !needsProfile && llmSettings.provider && llmSettings.model && !loading && lyrics.trim().length > 0;
+  const canParse = !needsProfile && llmSettings.provider && llmSettings.model && !loading && input.trim().length > 0;
 
   const parseBlocker = needsProfile
     ? 'Create a profile first'
     : !llmSettings.provider || !llmSettings.model
       ? 'Select a model'
-      : lyrics.trim().length === 0
-        ? 'Paste some lyrics above'
+      : input.trim().length === 0
+        ? 'Paste some content above'
         : null;
 
   const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
@@ -101,8 +101,8 @@ export default function RewriteTab({
   const isWorkshopping = !!rewriteResult;
 
   const handleParse = async () => {
-    const trimmedLyrics = lyrics.trim();
-    if (!trimmedLyrics) return;
+    const trimmedInput = input.trim();
+    if (!trimmedInput) return;
 
     const controller = new AbortController();
     parseAbortRef.current = controller;
@@ -116,7 +116,7 @@ export default function RewriteTab({
       const result = await api.parseStream(
         {
           profile_id: profile!.id,
-          lyrics: trimmedLyrics,
+          content: trimmedInput,
           ...llmSettings,
         },
         (token: string) => {
@@ -126,7 +126,7 @@ export default function RewriteTab({
       );
 
       setParseResult(result);
-      setParsedLyrics(result.original_lyrics);
+      setParsedContent(result.original_content);
       setSongTitle(result.title || '');
       setSongArtist(result.artist || '');
     } catch (err) {
@@ -149,22 +149,22 @@ export default function RewriteTab({
       profile_id: profile!.id,
       title: songTitle || null,
       artist: songArtist || null,
-      original_lyrics: parsedLyrics,
-      rewritten_lyrics: parsedLyrics,
+      original_content: parsedContent,
+      rewritten_content: parsedContent,
       llm_provider: llmSettings.provider,
       llm_model: llmSettings.model,
     });
     onSongSaved(song.id);
     return song.id;
-  }, [profile, songTitle, songArtist, parsedLyrics, llmSettings, onSongSaved]);
+  }, [profile, songTitle, songArtist, parsedContent, llmSettings, onSongSaved]);
 
-  const handleChatUpdate = useCallback((newLyrics: string) => {
+  const handleChatUpdate = useCallback((newContent: string) => {
     if (!rewriteResult && parseResult) {
       // First chat edit — transition to WORKSHOPPING
       onNewRewrite(
         {
-          original_lyrics: parsedLyrics,
-          rewritten_lyrics: newLyrics,
+          original_content: parsedContent,
+          rewritten_content: newContent,
           changes_summary: 'Chat edit applied.',
         },
         {
@@ -176,15 +176,15 @@ export default function RewriteTab({
         },
       );
     } else {
-      onLyricsUpdated(newLyrics);
+      onContentUpdated(newContent);
     }
-  }, [rewriteResult, parseResult, parsedLyrics, profile, songTitle, songArtist, llmSettings, onNewRewrite, onLyricsUpdated]);
+  }, [rewriteResult, parseResult, parsedContent, profile, songTitle, songArtist, llmSettings, onNewRewrite, onContentUpdated]);
 
   const handleNewSong = () => {
     onNewRewrite(null, null);
-    setLyrics('');
+    setInput('');
     setParseResult(null);
-    setParsedLyrics('');
+    setParsedContent('');
     setParseStreamText('');
     setCompletedStatus(null);
     setError(null);
@@ -230,12 +230,12 @@ export default function RewriteTab({
   }, [currentSongId, songTitle, songArtist]);
 
   const handleRewrittenChange = useCallback((newText: string) => {
-    onLyricsUpdated(newText);
-  }, [onLyricsUpdated]);
+    onContentUpdated(newText);
+  }, [onContentUpdated]);
 
   const handleRewrittenBlur = useCallback(() => {
     if (currentSongId && rewriteResult) {
-      api.updateSong(currentSongId, { rewritten_lyrics: rewriteResult.rewritten_lyrics } as Partial<import('@/types').Song>).catch(() => {});
+      api.updateSong(currentSongId, { rewritten_content: rewriteResult.rewritten_content } as Partial<import('@/types').Song>).catch(() => {});
     }
   }, [currentSongId, rewriteResult]);
 
@@ -277,8 +277,8 @@ export default function RewriteTab({
         Chat Workshop
       </button>
       <button
-        className={`flex-1 py-2 text-sm font-semibold text-center transition-colors ${mobilePane === 'lyrics' ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}
-        onClick={() => setMobilePane('lyrics')}
+        className={`flex-1 py-2 text-sm font-semibold text-center transition-colors ${mobilePane === 'content' ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}
+        onClick={() => setMobilePane('content')}
       >
         Your Version
       </button>
@@ -318,8 +318,8 @@ export default function RewriteTab({
             <CardContent className="pt-6">
               <Textarea
                 rows={10}
-                value={lyrics}
-                onChange={e => setLyrics(e.target.value)}
+                value={input}
+                onChange={e => setInput(e.target.value)}
                 placeholder="Paste lyrics, chords, or a copy from a tab site — any format works"
                 onKeyDown={e => {
                   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canParse) {
@@ -347,7 +347,7 @@ export default function RewriteTab({
         <Card className="flex flex-col text-muted-foreground">
           <div className="flex items-center justify-center gap-3 py-4">
             <div className="size-6 border-3 border-border border-t-primary rounded-full animate-spin" aria-hidden="true" />
-            <span className="text-sm">Parsing lyrics...</span>
+            <span className="text-sm">Parsing song...</span>
             <Button variant="danger-outline" size="sm" onClick={handleCancelParse}>Cancel</Button>
           </div>
           {parseStreamText && (
@@ -380,7 +380,7 @@ export default function RewriteTab({
                   messages={chatMessages}
                   setMessages={setChatMessages}
                   llmSettings={llmSettings}
-                  onLyricsUpdated={handleChatUpdate}
+                  onContentUpdated={handleChatUpdate}
                   initialLoading={false}
                   onBeforeSend={handleBeforeSend}
                 />
@@ -411,8 +411,8 @@ export default function RewriteTab({
                   <div className="p-3 sm:p-4 font-[family-name:var(--font-mono)] text-xs sm:text-[0.82rem] leading-relaxed flex-1 overflow-y-auto">
                     <Textarea
                       className="w-full h-full min-h-[200px] border-0 p-0 font-[family-name:var(--font-mono)] text-xs sm:text-[0.82rem] leading-relaxed resize-none focus-visible:ring-0"
-                      value={parsedLyrics}
-                      onChange={e => setParsedLyrics(e.target.value)}
+                      value={parsedContent}
+                      onChange={e => setParsedContent(e.target.value)}
                     />
                   </div>
                 </Card>
@@ -461,8 +461,9 @@ export default function RewriteTab({
                   messages={chatMessages}
                   setMessages={setChatMessages}
                   llmSettings={llmSettings}
-                  onLyricsUpdated={handleChatUpdate}
+                  onContentUpdated={handleChatUpdate}
                   initialLoading={false}
+                  onContentStreaming={handleChatUpdate}
                 />
               </>
             }
@@ -490,8 +491,8 @@ export default function RewriteTab({
                 </div>
 
                 <ComparisonView
-                  original={rewriteResult!.original_lyrics}
-                  rewritten={rewriteResult!.rewritten_lyrics}
+                  original={rewriteResult!.original_content}
+                  rewritten={rewriteResult!.rewritten_content}
                   onRewrittenChange={handleRewrittenChange}
                   onRewrittenBlur={handleRewrittenBlur}
                 />

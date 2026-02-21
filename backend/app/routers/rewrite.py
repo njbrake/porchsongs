@@ -91,8 +91,8 @@ async def parse(
     try:
         result = await _cancellable(
             request,
-            llm_service.parse_lyrics(
-                lyrics_with_chords=req.lyrics,
+            llm_service.parse_content(
+                content=req.content,
                 provider=req.provider,
                 model=req.model,
                 api_base=api_base,
@@ -120,8 +120,8 @@ async def parse_stream(
     async def event_generator() -> AsyncIterator[str]:
         accumulated = ""
         try:
-            stream = llm_service.parse_lyrics_stream(
-                lyrics_with_chords=req.lyrics,
+            stream = llm_service.parse_content_stream(
+                content=req.content,
                 provider=req.provider,
                 model=req.model,
                 api_base=api_base,
@@ -138,9 +138,9 @@ async def parse_stream(
             return
 
         # Parse the accumulated response
-        parsed = llm_service._parse_clean_response(accumulated, req.lyrics)
+        parsed = llm_service._parse_clean_response(accumulated, req.content)
         done_data = {
-            "original_lyrics": parsed["original"],
+            "original_content": parsed["original"],
             "title": parsed["title"],
             "artist": parsed["artist"],
         }
@@ -179,7 +179,7 @@ async def chat(
     try:
         result = await _cancellable(
             request,
-            llm_service.chat_edit_lyrics(
+            llm_service.chat_edit_content(
                 song=song,
                 messages=messages,
                 provider=req.provider,
@@ -193,21 +193,22 @@ async def chat(
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {e}") from None
 
-    # Persist the updated lyrics
-    song.rewritten_lyrics = result["rewritten_lyrics"]
-    song.changes_summary = result["changes_summary"]
-    song.current_version += 1
+    # Only persist content / create revision when the LLM actually changed the song
+    if result["rewritten_content"] is not None:
+        song.rewritten_content = result["rewritten_content"]
+        song.changes_summary = result["changes_summary"]
+        song.current_version += 1
 
-    revision = SongRevision(
-        song_id=song.id,
-        version=song.current_version,
-        rewritten_lyrics=result["rewritten_lyrics"],
-        changes_summary=result["changes_summary"],
-        edit_type="chat",
-    )
-    db.add(revision)
+        revision = SongRevision(
+            song_id=song.id,
+            version=song.current_version,
+            rewritten_content=result["rewritten_content"],
+            changes_summary=result["changes_summary"],
+            edit_type="chat",
+        )
+        db.add(revision)
 
-    # Persist the user and assistant chat messages
+    # Persist the user and assistant chat messages (full raw response for context)
     last_user_msg = req.messages[-1] if req.messages else None
     if last_user_msg and last_user_msg.role == "user":
         db.add(
@@ -217,14 +218,17 @@ async def chat(
         )
     db.add(
         ChatMessageModel(
-            song_id=song.id, role="assistant", content=result["changes_summary"], is_note=False
+            song_id=song.id,
+            role="assistant",
+            content=result["assistant_message"],
+            is_note=False,
         )
     )
 
     db.commit()
 
     return ChatResponse(
-        rewritten_lyrics=result["rewritten_lyrics"],
+        rewritten_content=result["rewritten_content"],
         assistant_message=result["assistant_message"],
         changes_summary=result["changes_summary"],
         version=song.current_version,
@@ -259,7 +263,7 @@ async def chat_stream(
     async def event_generator() -> AsyncIterator[str]:
         accumulated = ""
         try:
-            stream = llm_service.chat_edit_lyrics_stream(
+            stream = llm_service.chat_edit_content_stream(
                 song=song,
                 messages=messages,
                 provider=req.provider,
@@ -283,18 +287,20 @@ async def chat_stream(
 
         # Persist to DB (wrapped so a DB error doesn't lose the result)
         try:
-            song.rewritten_lyrics = parsed["lyrics"]
-            song.changes_summary = changes_summary
-            song.current_version += 1
+            # Only update content / create revision when the LLM actually changed the song
+            if parsed["content"] is not None:
+                song.rewritten_content = parsed["content"]
+                song.changes_summary = changes_summary
+                song.current_version += 1
 
-            revision = SongRevision(
-                song_id=song.id,
-                version=song.current_version,
-                rewritten_lyrics=parsed["lyrics"],
-                changes_summary=changes_summary,
-                edit_type="chat",
-            )
-            db.add(revision)
+                revision = SongRevision(
+                    song_id=song.id,
+                    version=song.current_version,
+                    rewritten_content=parsed["content"],
+                    changes_summary=changes_summary,
+                    edit_type="chat",
+                )
+                db.add(revision)
 
             last_user_msg = req.messages[-1] if req.messages else None
             if last_user_msg and last_user_msg.role == "user":
@@ -308,7 +314,10 @@ async def chat_stream(
                 )
             db.add(
                 ChatMessageModel(
-                    song_id=song.id, role="assistant", content=changes_summary, is_note=False
+                    song_id=song.id,
+                    role="assistant",
+                    content=accumulated,
+                    is_note=False,
                 )
             )
             db.commit()
@@ -318,7 +327,7 @@ async def chat_stream(
 
         # Send final result
         done_data = {
-            "rewritten_lyrics": parsed["lyrics"],
+            "rewritten_content": parsed["content"],
             "assistant_message": accumulated,
             "changes_summary": changes_summary,
             "version": song.current_version,

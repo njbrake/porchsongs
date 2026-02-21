@@ -26,7 +26,7 @@ import type { Song, SongRevision } from '@/types';
  */
 const MIN_LINES_FOR_SPLIT = 20;
 
-function splitLyricsForColumns(text: string): { left: string; right: string } | null {
+function splitContentForColumns(text: string): { left: string; right: string } | null {
   const lines = text.split('\n');
   if (lines.length < MIN_LINES_FOR_SPLIT) return null;
 
@@ -65,9 +65,9 @@ function splitLyricsForColumns(text: string): { left: string; right: string } | 
 
 const PRE_BASE_CLASS = 'font-[family-name:var(--font-mono)] text-[0.75rem] sm:text-[0.82rem] leading-snug whitespace-pre-wrap break-words sm:whitespace-pre sm:break-normal sm:overflow-x-auto text-foreground';
 
-function PerformanceLyrics({ song, onSongUpdated }: { song: Song; onSongUpdated: (song: Song) => void }) {
-  const text = song.rewritten_lyrics;
-  const columns = useMemo(() => splitLyricsForColumns(text), [text]);
+function PerformanceSheet({ song, onSongUpdated }: { song: Song; onSongUpdated: (song: Song) => void }) {
+  const text = song.rewritten_content;
+  const columns = useMemo(() => splitContentForColumns(text), [text]);
   const cardRef = useRef<HTMLDivElement>(null);
   const [autoOneCol, setAutoOneCol] = useState(false);
   const [userOverride, setUserOverride] = useState<number | null>(null);
@@ -628,7 +628,7 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
           {song.artist && <div className="text-sm text-muted-foreground mt-0.5">{song.artist}</div>}
         </div>
 
-        <PerformanceLyrics song={song} onSongUpdated={handleSongUpdated} />
+        <PerformanceSheet song={song} onSongUpdated={handleSongUpdated} />
 
         <Button variant="secondary" className="mt-6" onClick={handleShowDetails}>
           {showDetails ? 'Hide Details' : 'Show Original & History'}
@@ -638,7 +638,7 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
           <div className="mt-4 flex flex-col gap-4">
             <Card>
               <CardHeader>Original</CardHeader>
-              <pre className="p-3 sm:p-4 font-[family-name:var(--font-mono)] text-[0.75rem] sm:text-[0.82rem] leading-relaxed whitespace-pre-wrap break-words overflow-x-auto max-h-[600px] overflow-y-auto">{song.original_lyrics}</pre>
+              <pre className="p-3 sm:p-4 font-[family-name:var(--font-mono)] text-[0.75rem] sm:text-[0.82rem] leading-relaxed whitespace-pre-wrap break-words overflow-x-auto max-h-[600px] overflow-y-auto">{song.original_content}</pre>
             </Card>
 
             {song.changes_summary && (

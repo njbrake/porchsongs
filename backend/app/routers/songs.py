@@ -85,7 +85,7 @@ async def download_song_pdf(
 
     from ..services.pdf_service import generate_song_pdf
 
-    pdf_bytes = generate_song_pdf(song.title or "Untitled", song.artist, song.rewritten_lyrics)
+    pdf_bytes = generate_song_pdf(song.title or "Untitled", song.artist, song.rewritten_content)
 
     title = song.title or "Untitled"
     artist = song.artist or "Unknown"
@@ -113,7 +113,7 @@ async def create_song(
     revision = SongRevision(
         song_id=song.id,
         version=1,
-        rewritten_lyrics=song.rewritten_lyrics,
+        rewritten_content=song.rewritten_content,
         changes_summary=song.changes_summary,
         edit_type="full",
     )
@@ -135,8 +135,8 @@ async def update_song(
         song.title = data.title
     if data.artist is not None:
         song.artist = data.artist
-    if data.rewritten_lyrics is not None:
-        song.rewritten_lyrics = data.rewritten_lyrics
+    if data.rewritten_content is not None:
+        song.rewritten_content = data.rewritten_content
     if data.font_size is not None:
         song.font_size = data.font_size if data.font_size > 0 else None
     if data.folder is not None:
@@ -241,14 +241,14 @@ async def apply_edit(
     # Replace the line in the full chord text
     try:
         new_full_text = replace_line_with_chords(
-            song.rewritten_lyrics, data.line_index, data.new_line_text
+            song.rewritten_content, data.line_index, data.new_line_text
         )
     except (IndexError, ValueError) as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
 
     # Bump version
     new_version = song.current_version + 1
-    song.rewritten_lyrics = new_full_text
+    song.rewritten_content = new_full_text
     song.current_version = new_version
 
     # Save revision
@@ -256,7 +256,7 @@ async def apply_edit(
     revision = SongRevision(
         song_id=song.id,
         version=new_version,
-        rewritten_lyrics=new_full_text,
+        rewritten_content=new_full_text,
         changes_summary=summary,
         edit_type="line",
         edit_context=json.dumps(
@@ -270,4 +270,4 @@ async def apply_edit(
     db.commit()
     db.refresh(song)
 
-    return {"rewritten_lyrics": song.rewritten_lyrics, "version": new_version}
+    return {"rewritten_content": song.rewritten_content, "version": new_version}

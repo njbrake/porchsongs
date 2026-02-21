@@ -363,8 +363,8 @@ def test_data_isolation_songs():
         profile = client_a.post("/api/profiles", json={"name": "A's Profile"}).json()
         resp = client_a.post("/api/songs", json={
             "profile_id": profile["id"],
-            "original_lyrics": "Hello",
-            "rewritten_lyrics": "Hi",
+            "original_content": "Hello",
+            "rewritten_content": "Hi",
         })
         assert resp.status_code == 201
         song_a_id = resp.json()["id"]

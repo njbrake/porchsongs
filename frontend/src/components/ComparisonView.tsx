@@ -44,7 +44,7 @@ export default function ComparisonView({
           value={rewritten}
           onChange={e => onRewrittenChange(e.target.value)}
           onBlur={onRewrittenBlur}
-          aria-label="Rewritten lyrics editor"
+          aria-label="Rewritten content editor"
         />
       </Card>
 

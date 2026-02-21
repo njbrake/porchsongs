@@ -22,7 +22,7 @@ def _get_content(response: ChatCompletion | Iterator[ChatCompletionChunk]) -> st
 
 
 CLEAN_SYSTEM_PROMPT = """You are a songwriter's assistant. Your ONLY job is to clean up raw pasted \
-song input. Do NOT rewrite or change the lyrics in any way.
+song input. Do NOT rewrite or change the content in any way.
 
 STEP 1 — IDENTIFY:
 - Determine the song's title and artist from the input
@@ -32,7 +32,7 @@ STEP 2 — CLEAN UP:
 - Strip any ads, site navigation, duplicate headers, or non-song text
 - Keep section headers like [Verse], [Chorus], etc.
 - Preserve blank lines between sections
-- Do NOT change any lyrics
+- Do NOT change any content
 
 CHORD PRESERVATION (critical):
 - Chords appear on their own line directly ABOVE the lyric line they belong to
@@ -57,7 +57,9 @@ Artist: <artist name or UNKNOWN>
 
 
 CHAT_SYSTEM_PROMPT = """You are a songwriter's assistant helping adapt a song.
-The user will ask you to make specific changes. Apply the requested changes while:
+You can have a normal conversation — answer questions, discuss options, brainstorm ideas.
+
+When the user asks you to MAKE CHANGES to the song, apply the requested changes while:
 1. Preserving syllable counts per line
 2. Maintaining rhyme scheme
 3. Keeping the song singable and natural
@@ -66,13 +68,16 @@ The user will ask you to make specific changes. Apply the requested changes whil
    Keep each chord above the same word/syllable. If a word moves, reposition the chord to stay aligned.
 6. Preserving all non-lyric content (capo notes, section headers, tuning info, etc.)
 
-Return your response in this exact format:
+IMPORTANT — only include <content> tags when you are actually changing the song:
 
-<lyrics>
+<content>
 (the complete updated song, every line, preserving blank lines, structure, chord lines, and all non-lyric content)
-</lyrics>
+</content>
 
-(A friendly explanation of what you changed and why)"""
+(A friendly explanation of what you changed and why)
+
+If the user is just asking a question, discussing ideas, or not requesting a concrete edit, \
+respond conversationally WITHOUT <content> tags."""
 
 _LOCAL_PROVIDERS = {"ollama", "llamafile", "llamacpp", "lmstudio", "vllm"}
 
@@ -92,7 +97,7 @@ async def get_models(provider: str, api_base: str | None = None) -> list[str]:
 
 
 def _build_parse_kwargs(
-    lyrics_with_chords: str,
+    content: str,
     provider: str,
     model: str,
     api_base: str | None = None,
@@ -106,7 +111,7 @@ def _build_parse_kwargs(
             {"role": "system", "content": CLEAN_SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": f"Clean up this pasted input. Identify the title and artist.\n\nPASTED INPUT:\n{lyrics_with_chords}",
+                "content": f"Clean up this pasted input. Identify the title and artist.\n\nPASTED INPUT:\n{content}",
             },
         ],
     }
@@ -117,37 +122,37 @@ def _build_parse_kwargs(
     return kwargs
 
 
-async def parse_lyrics(
-    lyrics_with_chords: str,
+async def parse_content(
+    content: str,
     provider: str,
     model: str,
     api_base: str | None = None,
     reasoning_effort: str | None = None,
 ) -> dict[str, str | None]:
-    """Clean up raw pasted lyrics and identify title/artist (non-streaming).
+    """Clean up raw pasted content and identify title/artist (non-streaming).
 
-    Returns dict with: original_lyrics, title, artist
+    Returns dict with: original_content, title, artist
     """
-    kwargs = _build_parse_kwargs(lyrics_with_chords, provider, model, api_base, reasoning_effort)
+    kwargs = _build_parse_kwargs(content, provider, model, api_base, reasoning_effort)
     clean_response = await acompletion(**kwargs)
-    clean_result = _parse_clean_response(_get_content(clean_response), lyrics_with_chords)
+    clean_result = _parse_clean_response(_get_content(clean_response), content)
 
     return {
-        "original_lyrics": clean_result["original"],
+        "original_content": clean_result["original"],
         "title": clean_result["title"],
         "artist": clean_result["artist"],
     }
 
 
-async def parse_lyrics_stream(
-    lyrics_with_chords: str,
+async def parse_content_stream(
+    content: str,
     provider: str,
     model: str,
     api_base: str | None = None,
     reasoning_effort: str | None = None,
 ) -> AsyncIterator[str]:
     """Stream parse tokens. Caller accumulates and parses the final result."""
-    kwargs = _build_parse_kwargs(lyrics_with_chords, provider, model, api_base, reasoning_effort)
+    kwargs = _build_parse_kwargs(content, provider, model, api_base, reasoning_effort)
     response = await acompletion(stream=True, **kwargs)
 
     async for chunk in response:
@@ -201,16 +206,20 @@ def _parse_clean_response(raw: str, fallback_original: str) -> dict[str, str | N
     return {"original": original, "title": title, "artist": artist}
 
 
-def _parse_chat_response(raw: str) -> dict[str, str]:
-    """Parse chat LLM response, extracting lyrics from <lyrics> tags and explanation."""
-    xml_lyrics = _extract_xml_section(raw, "lyrics")
-    if xml_lyrics is not None:
-        after = raw.split("</lyrics>", 1)
-        explanation = after[1].strip() if len(after) > 1 else ""
-        return {"lyrics": xml_lyrics, "explanation": explanation}
+def _parse_chat_response(raw: str) -> dict[str, str | None]:
+    """Parse chat LLM response, extracting content from <content> tags and explanation.
 
-    # Fallback: treat entire response as lyrics
-    return {"lyrics": raw.strip(), "explanation": ""}
+    Returns ``{"content": ..., "explanation": ...}`` where ``content`` is ``None``
+    when the LLM responded conversationally without ``<content>`` tags.
+    """
+    xml_content = _extract_xml_section(raw, "content")
+    if xml_content is not None:
+        after = raw.split("</content>", 1)
+        explanation = after[1].strip() if len(after) > 1 else ""
+        return {"content": xml_content, "explanation": explanation}
+
+    # No <content> tags → conversational response, no content update
+    return {"content": None, "explanation": raw.strip()}
 
 
 def _build_chat_kwargs(
@@ -223,8 +232,8 @@ def _build_chat_kwargs(
 ) -> dict[str, object]:
     """Build the common kwargs dict for chat LLM calls."""
     system_content = CHAT_SYSTEM_PROMPT
-    system_content += "\n\nORIGINAL SONG:\n" + song.original_lyrics
-    system_content += "\n\nEDITED SONG:\n" + song.rewritten_lyrics
+    system_content += "\n\nORIGINAL SONG:\n" + song.original_content
+    system_content += "\n\nEDITED SONG:\n" + song.rewritten_content
 
     llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_content}]
     for msg in messages:
@@ -242,18 +251,21 @@ def _build_chat_kwargs(
     return kwargs
 
 
-async def chat_edit_lyrics(
+async def chat_edit_content(
     song: Song,
     messages: list[dict[str, str]],
     provider: str,
     model: str,
     api_base: str | None = None,
     reasoning_effort: str | None = None,
-) -> dict[str, str]:
-    """Process a chat-based lyric edit (non-streaming).
+) -> dict[str, str | None]:
+    """Process a chat-based content edit (non-streaming).
 
-    Builds system context with original + current lyrics and the conversation history,
-    sends to LLM, parses the response for updated lyrics.
+    Builds system context with original + current content and the conversation history,
+    sends to LLM, parses the response for updated content.
+
+    ``rewritten_content`` is ``None`` when the LLM responded conversationally
+    without ``<content>`` tags.
     """
     kwargs = _build_chat_kwargs(song, messages, provider, model, api_base, reasoning_effort)
     response = await acompletion(**kwargs)
@@ -265,13 +277,13 @@ async def chat_edit_lyrics(
     changes_summary = parsed["explanation"] or "Chat edit applied."
 
     return {
-        "rewritten_lyrics": parsed["lyrics"],
+        "rewritten_content": parsed["content"],
         "assistant_message": raw_response,
         "changes_summary": changes_summary,
     }
 
 
-async def chat_edit_lyrics_stream(
+async def chat_edit_content_stream(
     song: Song,
     messages: list[dict[str, str]],
     provider: str,
@@ -279,7 +291,7 @@ async def chat_edit_lyrics_stream(
     api_base: str | None = None,
     reasoning_effort: str | None = None,
 ) -> AsyncIterator[str]:
-    """Stream a chat-based lyric edit token by token.
+    """Stream a chat-based content edit token by token.
 
     Yields individual token strings as they arrive from the LLM.
     The caller is responsible for accumulating the full text and parsing it.

@@ -23,8 +23,8 @@ def _make_profile_and_song(client):
         "profile_id": profile["id"],
         "title": "Test Song",
         "artist": "Test Artist",
-        "original_lyrics": "G  Am\nHello world\nDm  G\nGoodbye moon",
-        "rewritten_lyrics": "G  Am\nHi there world\nDm  G\nSee ya moon",
+        "original_content": "G  Am\nHello world\nDm  G\nGoodbye moon",
+        "rewritten_content": "G  Am\nHi there world\nDm  G\nSee ya moon",
         "changes_summary": "Changed hello to hi",
     }).json()
     return profile, song
@@ -52,12 +52,12 @@ def test_parse_endpoint(mock_acompletion, client):
 
     resp = client.post("/api/parse", json={
         "profile_id": profile["id"],
-        "lyrics": "G  Am\nHello world\nDm  G\nGoodbye moon",
+        "content": "G  Am\nHello world\nDm  G\nGoodbye moon",
         **LLM_SETTINGS,
     })
     assert resp.status_code == 200
     data = resp.json()
-    assert "Hello world" in data["original_lyrics"]
+    assert "Hello world" in data["original_content"]
     assert data["title"] == "Test Song"
     assert data["artist"] == "Test Artist"
 
@@ -81,20 +81,20 @@ def test_parse_unknown_title_artist(mock_acompletion, client):
 
     resp = client.post("/api/parse", json={
         "profile_id": profile["id"],
-        "lyrics": "Original line one\nOriginal line two",
+        "content": "Original line one\nOriginal line two",
         **LLM_SETTINGS,
     })
     assert resp.status_code == 200
     data = resp.json()
     assert data["title"] is None
     assert data["artist"] is None
-    assert "Original line one" in data["original_lyrics"]
+    assert "Original line one" in data["original_content"]
 
 
 def test_parse_profile_not_found(client):
     resp = client.post("/api/parse", json={
         "profile_id": 9999,
-        "lyrics": "Hello",
+        "content": "Hello",
         **LLM_SETTINGS,
     })
     assert resp.status_code == 404
@@ -108,7 +108,7 @@ def test_parse_llm_error(mock_acompletion, client):
 
     resp = client.post("/api/parse", json={
         "profile_id": profile["id"],
-        "lyrics": "Hello world",
+        "content": "Hello world",
         **LLM_SETTINGS,
     })
     assert resp.status_code == 502
@@ -123,7 +123,7 @@ def test_chat_endpoint(mock_acompletion, client):
     _, song = _make_profile_and_song(client)
 
     mock_acompletion.return_value = _fake_completion_response(
-        "<lyrics>\nHi there world\nCatch ya moon\n</lyrics>\nI changed 'see ya' to 'catch ya'."
+        "<content>\nHi there world\nCatch ya moon\n</content>\nI changed 'see ya' to 'catch ya'."
     )
 
     resp = client.post("/api/chat", json={
@@ -135,7 +135,7 @@ def test_chat_endpoint(mock_acompletion, client):
     })
     assert resp.status_code == 200
     data = resp.json()
-    assert "catch ya" in data["rewritten_lyrics"].lower() or "Catch ya" in data["rewritten_lyrics"]
+    assert "catch ya" in data["rewritten_content"].lower() or "Catch ya" in data["rewritten_content"]
     assert "assistant_message" in data
     assert data["version"] == 2  # bumped from 1
 
@@ -146,7 +146,7 @@ def test_chat_persists_changes(mock_acompletion, client):
     _, song = _make_profile_and_song(client)
 
     mock_acompletion.return_value = _fake_completion_response(
-        "<lyrics>\nUpdated line one\nUpdated line two\n</lyrics>\nChanged everything."
+        "<content>\nUpdated line one\nUpdated line two\n</content>\nChanged everything."
     )
 
     client.post("/api/chat", json={
@@ -171,7 +171,7 @@ def test_chat_persists_messages(mock_acompletion, client):
     _, song = _make_profile_and_song(client)
 
     mock_acompletion.return_value = _fake_completion_response(
-        "<lyrics>\nUpdated line one\nUpdated line two\n</lyrics>\nChanged everything."
+        "<content>\nUpdated line one\nUpdated line two\n</content>\nChanged everything."
     )
 
     client.post("/api/chat", json={
@@ -188,6 +188,82 @@ def test_chat_persists_messages(mock_acompletion, client):
     assert msgs[0]["is_note"] is False
     assert msgs[1]["role"] == "assistant"
     assert msgs[1]["is_note"] is False
+
+
+@patch("app.services.llm_service.acompletion")
+def test_chat_conversational_no_content(mock_acompletion, client):
+    """When the LLM responds without <content> tags, no version bump or revision is created."""
+    _, song = _make_profile_and_song(client)
+    original_version = song["current_version"]
+
+    mock_acompletion.return_value = _fake_completion_response(
+        "Sure! The rhyme scheme in verse 2 is ABAB. Want me to change it?"
+    )
+
+    resp = client.post("/api/chat", json={
+        "song_id": song["id"],
+        "messages": [{"role": "user", "content": "What's the rhyme scheme in verse 2?"}],
+        **LLM_SETTINGS,
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+
+    # No content returned
+    assert data["rewritten_content"] is None
+    # Version should NOT be bumped
+    assert data["version"] == original_version
+
+    # Song in DB should be unchanged
+    song_resp = client.get(f"/api/songs/{song['id']}")
+    assert song_resp.json()["current_version"] == original_version
+
+    # No new revision created (only the initial one from song creation)
+    revisions = client.get(f"/api/songs/{song['id']}/revisions").json()
+    assert len(revisions) == 1  # only the initial revision
+
+
+@patch("app.services.llm_service.acompletion")
+def test_chat_stores_full_raw_response(mock_acompletion, client):
+    """The assistant ChatMessage stored in DB should be the full raw LLM response."""
+    _, song = _make_profile_and_song(client)
+
+    raw_response = "<content>\nNew line one\nNew line two\n</content>\nI rewrote both lines for clarity."
+    mock_acompletion.return_value = _fake_completion_response(raw_response)
+
+    client.post("/api/chat", json={
+        "song_id": song["id"],
+        "messages": [{"role": "user", "content": "Rewrite both lines"}],
+        **LLM_SETTINGS,
+    })
+
+    msgs = client.get(f"/api/songs/{song['id']}/messages").json()
+    assert len(msgs) == 2
+    assistant_msg = msgs[1]
+    assert assistant_msg["role"] == "assistant"
+    # Should contain the full raw response, not just the summary
+    assert "<content>" in assistant_msg["content"]
+    assert "I rewrote both lines" in assistant_msg["content"]
+
+
+@patch("app.services.llm_service.acompletion")
+def test_chat_conversational_stores_messages(mock_acompletion, client):
+    """Conversational (no-content) responses should still persist chat messages."""
+    _, song = _make_profile_and_song(client)
+
+    conversational_response = "Great question! I think we could try an AABB scheme instead."
+    mock_acompletion.return_value = _fake_completion_response(conversational_response)
+
+    client.post("/api/chat", json={
+        "song_id": song["id"],
+        "messages": [{"role": "user", "content": "What do you think about the rhyme scheme?"}],
+        **LLM_SETTINGS,
+    })
+
+    msgs = client.get(f"/api/songs/{song['id']}/messages").json()
+    assert len(msgs) == 2
+    assert msgs[0]["role"] == "user"
+    assert msgs[1]["role"] == "assistant"
+    assert msgs[1]["content"] == conversational_response
 
 
 def test_chat_song_not_found(client):
@@ -247,7 +323,7 @@ def test_parse_passes_api_base(mock_acompletion, client):
 
     resp = client.post("/api/parse", json={
         "profile_id": profile["id"],
-        "lyrics": "Hello world",
+        "content": "Hello world",
         "provider": "ollama",
         "model": "llama3",
     })
@@ -271,7 +347,7 @@ def test_parse_no_api_base_when_no_profile_model(mock_acompletion, client):
 
     resp = client.post("/api/parse", json={
         "profile_id": profile["id"],
-        "lyrics": "Hello world",
+        "content": "Hello world",
         **LLM_SETTINGS,
     })
     assert resp.status_code == 200

@@ -3,6 +3,7 @@ import api from '@/api';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { StreamParser } from '@/lib/streamParser';
 import type { ChatMessage, LlmSettings } from '@/types';
 
 const MAX_MESSAGES = 20;
@@ -43,12 +44,13 @@ interface ChatPanelProps {
   messages: ChatMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   llmSettings: LlmSettings;
-  onLyricsUpdated: (lyrics: string) => void;
+  onContentUpdated: (content: string) => void;
   initialLoading: boolean;
   onBeforeSend?: () => Promise<number>;
+  onContentStreaming?: (partialContent: string) => void;
 }
 
-export default function ChatPanel({ songId, messages, setMessages, llmSettings, onLyricsUpdated, initialLoading, onBeforeSend }: ChatPanelProps) {
+export default function ChatPanel({ songId, messages, setMessages, llmSettings, onContentUpdated, initialLoading, onBeforeSend, onContentStreaming }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [streaming, setStreaming] = useState(false);
@@ -92,6 +94,7 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
     abortRef.current = controller;
     if (!sending) setSending(true);
     let streamStarted = false;
+    const parser = onContentStreaming ? new StreamParser() : null;
 
     try {
       const apiMessages = [{ role: 'user' as const, content: text }];
@@ -103,48 +106,72 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
           ...llmSettings,
         },
         (token: string) => {
-          if (!streamStarted) {
-            streamStarted = true;
-            setStreaming(true);
-            // Add the streaming bubble with the first token
-            setMessages(prev => [...prev, { role: 'assistant' as const, content: token }].slice(-MAX_MESSAGES));
+          if (parser) {
+            // Streaming mode: separate content from chat text
+            const { contentDelta } = parser.processToken(token);
+
+            if (contentDelta) {
+              onContentStreaming!(parser.contentText);
+            }
+
+            // Determine what to show in the chat bubble
+            const bubbleContent = parser.phase === 'content' && !parser.chatText
+              ? 'Updating song...'
+              : parser.chatText || 'Updating song...';
+
+            if (!streamStarted) {
+              streamStarted = true;
+              setStreaming(true);
+              setMessages(prev => [...prev, { role: 'assistant' as const, content: bubbleContent }].slice(-MAX_MESSAGES));
+            } else {
+              setMessages(prev => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last && last.role === 'assistant') {
+                  updated[updated.length - 1] = { ...last, content: bubbleContent };
+                }
+                return updated;
+              });
+            }
           } else {
-            // Append token to the streaming bubble
-            setMessages(prev => {
-              const updated = [...prev];
-              const last = updated[updated.length - 1];
-              if (last && last.role === 'assistant') {
-                updated[updated.length - 1] = { ...last, content: last.content + token };
-              }
-              return updated;
-            });
+            // No streaming — all tokens go to chat bubble
+            if (!streamStarted) {
+              streamStarted = true;
+              setStreaming(true);
+              setMessages(prev => [...prev, { role: 'assistant' as const, content: token }].slice(-MAX_MESSAGES));
+            } else {
+              setMessages(prev => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last && last.role === 'assistant') {
+                  updated[updated.length - 1] = { ...last, content: last.content + token };
+                }
+                return updated;
+              });
+            }
           }
         },
         controller.signal,
       );
 
       // Replace the streaming bubble with the final parsed result
+      const hasContent = result.rewritten_content !== null;
+      const finalMsg: ChatMessage = hasContent
+        ? { role: 'assistant', content: result.changes_summary, rawContent: result.assistant_message }
+        : { role: 'assistant', content: result.assistant_message };
       if (streamStarted) {
         setMessages(prev => {
           const updated = [...prev];
-          const finalMsg: ChatMessage = {
-            role: 'assistant',
-            content: result.changes_summary,
-            rawContent: result.assistant_message,
-          };
           updated[updated.length - 1] = finalMsg;
           return updated;
         });
       } else {
         // No tokens were streamed (unlikely but handle it)
-        const finalMsg: ChatMessage = {
-          role: 'assistant',
-          content: result.changes_summary,
-          rawContent: result.assistant_message,
-        };
         setMessages(prev => [...prev, finalMsg].slice(-MAX_MESSAGES));
       }
-      onLyricsUpdated(result.rewritten_lyrics);
+      if (result.rewritten_content !== null) {
+        onContentUpdated(result.rewritten_content);
+      }
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
         const cancelMsg: ChatMessage = { role: 'assistant', content: 'Cancelled.' };
@@ -175,7 +202,7 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
         {initialLoading && (
           <div className="flex items-center gap-2 py-2 text-muted-foreground text-sm">
             <div className="size-6 border-3 border-border border-t-primary rounded-full animate-spin" aria-hidden="true" />
-            <span>Parsing lyrics...</span>
+            <span>Parsing song...</span>
           </div>
         )}
         {sending && !streaming && (
@@ -190,7 +217,7 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
         <Input
           value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder="Tell the AI how to change the lyrics..."
+          placeholder="Tell the AI how to change the song..."
           onKeyDown={e => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();

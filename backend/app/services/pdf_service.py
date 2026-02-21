@@ -21,15 +21,15 @@ def _sanitize_for_latin1(text: str) -> str:
     return text.encode("latin-1", errors="replace").decode("latin-1")
 
 
-def generate_song_pdf(title: str, artist: str | None, lyrics: str) -> bytes:
-    """Generate a PDF for a song with monospace lyrics to preserve chord alignment."""
+def generate_song_pdf(title: str, artist: str | None, content: str) -> bytes:
+    """Generate a PDF for a song with monospace content to preserve chord alignment."""
     pdf = FPDF(orientation="P", unit="mm", format="A4")
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
     safe_title = _sanitize_for_latin1(title or "Untitled")
     safe_artist = _sanitize_for_latin1(artist) if artist else None
-    safe_lyrics = _sanitize_for_latin1(lyrics)
+    safe_content = _sanitize_for_latin1(content)
 
     # --- Header: title + artist ---
     pdf.set_font("Helvetica", "B", 16)
@@ -41,15 +41,15 @@ def generate_song_pdf(title: str, artist: str | None, lyrics: str) -> bytes:
 
     pdf.ln(5)
 
-    # --- Lyrics in monospace ---
+    # --- Content in monospace ---
     # Determine font size: start at 10pt, shrink if any line overflows the page width
     usable_width = pdf.w - pdf.l_margin - pdf.r_margin
-    font_size = _fit_font_size(pdf, safe_lyrics, usable_width)
+    font_size = _fit_font_size(pdf, safe_content, usable_width)
 
     pdf.set_font("Courier", "", font_size)
     line_height = font_size * 0.45  # mm per line, tuned for readability
 
-    for line in safe_lyrics.split("\n"):
+    for line in safe_content.split("\n"):
         pdf.cell(0, line_height, line, new_x="LMARGIN", new_y="NEXT")
 
     return bytes(pdf.output())

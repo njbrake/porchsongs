@@ -74,14 +74,14 @@ class ProviderConnectionOut(BaseModel):
 # --- Parse ---
 class ParseRequest(BaseModel):
     profile_id: int
-    lyrics: str
+    content: str
     provider: str
     model: str
     reasoning_effort: str | None = None
 
 
 class ParseResponse(BaseModel):
-    original_lyrics: str
+    original_content: str
     title: str | None = None
     artist: str | None = None
 
@@ -92,8 +92,8 @@ class SongCreate(BaseModel):
     title: str | None = None
     artist: str | None = None
     source_url: str | None = None
-    original_lyrics: str
-    rewritten_lyrics: str
+    original_content: str
+    rewritten_content: str
     changes_summary: str | None = None
     llm_provider: str | None = None
     llm_model: str | None = None
@@ -107,8 +107,8 @@ class SongOut(BaseModel):
     title: str | None
     artist: str | None
     source_url: str | None
-    original_lyrics: str
-    rewritten_lyrics: str
+    original_content: str
+    rewritten_content: str
     changes_summary: str | None
     llm_provider: str | None
     llm_model: str | None
@@ -126,7 +126,7 @@ class SongRevisionOut(BaseModel):
     id: int
     song_id: int
     version: int
-    rewritten_lyrics: str
+    rewritten_content: str
     changes_summary: str | None
     edit_type: str
     edit_context: str | None
@@ -138,7 +138,7 @@ class SongRevisionOut(BaseModel):
 class SongUpdate(BaseModel):
     title: str | None = None
     artist: str | None = None
-    rewritten_lyrics: str | None = None
+    rewritten_content: str | None = None
     font_size: float | None = None
     folder: str | None = None
 
@@ -151,12 +151,12 @@ class SongStatusUpdate(BaseModel):
 # --- Apply Edit ---
 class ApplyEditRequest(BaseModel):
     song_id: int
-    line_index: int  # lyrics-only line index
+    line_index: int  # text-only line index
     new_line_text: str
 
 
 class ApplyEditResponse(BaseModel):
-    rewritten_lyrics: str
+    rewritten_content: str
     version: int
 
 
@@ -192,7 +192,7 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    rewritten_lyrics: str
+    rewritten_content: str | None = None
     assistant_message: str
     changes_summary: str
     version: int

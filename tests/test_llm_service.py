@@ -10,24 +10,25 @@ from app.services.llm_service import (
 
 
 def test_parse_chat_with_xml_tags():
-    raw = "<lyrics>\nHello world\nSecond line\n</lyrics>\nI changed the first word."
+    raw = "<content>\nHello world\nSecond line\n</content>\nI changed the first word."
     result = _parse_chat_response(raw)
-    assert result["lyrics"] == "Hello world\nSecond line"
+    assert result["content"] == "Hello world\nSecond line"
     assert "changed" in result["explanation"]
 
 
 def test_parse_chat_with_xml_tags_no_explanation():
-    raw = "<lyrics>\nHello\n</lyrics>"
+    raw = "<content>\nHello\n</content>"
     result = _parse_chat_response(raw)
-    assert result["lyrics"] == "Hello"
+    assert result["content"] == "Hello"
     assert result["explanation"] == ""
 
 
 def test_parse_chat_no_markers():
+    """Without <content> tags the response is conversational — no content update."""
     raw = "Just some text without markers"
     result = _parse_chat_response(raw)
-    assert result["lyrics"] == "Just some text without markers"
-    assert result["explanation"] == ""
+    assert result["content"] is None
+    assert result["explanation"] == "Just some text without markers"
 
 
 # --- _parse_clean_response ---

@@ -15,8 +15,8 @@ export interface Song {
   title: string | null;
   artist: string | null;
   source_url: string | null;
-  original_lyrics: string;
-  rewritten_lyrics: string;
+  original_content: string;
+  rewritten_content: string;
   changes_summary: string | null;
   status: 'draft' | 'completed';
   font_size: number | null;
@@ -31,15 +31,15 @@ export interface SongRevision {
   id: number;
   song_id: number;
   version: number;
-  rewritten_lyrics: string;
+  rewritten_content: string;
   changes_summary: string | null;
   edit_type: 'rewrite' | 'line' | 'chat';
   created_at: string;
 }
 
 export interface RewriteResult {
-  original_lyrics: string;
-  rewritten_lyrics: string;
+  original_content: string;
+  rewritten_content: string;
   changes_summary: string;
   title?: string;
   artist?: string;
@@ -121,7 +121,7 @@ export interface ChatRequest {
 // API response types
 
 export interface ChatResult {
-  rewritten_lyrics: string;
+  rewritten_content: string | null;
   changes_summary: string;
   assistant_message: string;
 }
@@ -133,7 +133,7 @@ export interface ChatHistoryRow {
 }
 
 export interface ParseResult {
-  original_lyrics: string;
+  original_content: string;
   title?: string;
   artist?: string;
 }

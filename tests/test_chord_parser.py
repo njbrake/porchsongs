@@ -4,11 +4,11 @@ from app.services.chord_parser import (
     _extract_chord_positions,
     _place_chords,
     _snap_to_boundary,
-    extract_lyrics_only,
+    extract_text_only,
     is_chord_line,
     realign_chords,
     replace_line_with_chords,
-    separate_chords_and_lyrics,
+    separate_chords_and_text,
 )
 
 
@@ -40,56 +40,56 @@ def test_not_chord_line_section_header():
     assert is_chord_line("[Verse 1]") is False
 
 
-# --- separate_chords_and_lyrics ---
+# --- separate_chords_and_text ---
 
 
 def test_separate_basic():
     text = "G   Am  C\nTake me home\nDm  G\nCountry roads"
-    result = separate_chords_and_lyrics(text)
+    result = separate_chords_and_text(text)
     assert len(result) == 2
     assert result[0]["chords"] == "G   Am  C"
-    assert result[0]["lyrics"] == "Take me home"
+    assert result[0]["text"] == "Take me home"
     assert result[1]["chords"] == "Dm  G"
-    assert result[1]["lyrics"] == "Country roads"
+    assert result[1]["text"] == "Country roads"
 
 
 def test_separate_no_chords():
     text = "Just a lyric line\nAnother lyric"
-    result = separate_chords_and_lyrics(text)
+    result = separate_chords_and_text(text)
     assert len(result) == 2
     assert all(entry["chords"] is None for entry in result)
 
 
 def test_separate_section_headers():
     text = "[Verse]\nG  C\nHello world"
-    result = separate_chords_and_lyrics(text)
+    result = separate_chords_and_text(text)
     assert result[0]["chords"] is None
-    assert result[0]["lyrics"] == "[Verse]"
+    assert result[0]["text"] == "[Verse]"
     assert result[1]["chords"] == "G  C"
-    assert result[1]["lyrics"] == "Hello world"
+    assert result[1]["text"] == "Hello world"
 
 
 def test_separate_chord_line_no_lyric_below():
     text = "G  Am  C"
-    result = separate_chords_and_lyrics(text)
+    result = separate_chords_and_text(text)
     assert len(result) == 1
     assert result[0]["chords"] == "G  Am  C"
-    assert result[0]["lyrics"] == ""
+    assert result[0]["text"] == ""
 
 
-# --- extract_lyrics_only ---
+# --- extract_text_only ---
 
 
-def test_extract_lyrics_only():
+def test_extract_text_only():
     text = "G   Am  C\nTake me home\nDm  G\nCountry roads"
-    lyrics = extract_lyrics_only(text)
-    assert lyrics == "Take me home\nCountry roads"
+    result = extract_text_only(text)
+    assert result == "Take me home\nCountry roads"
 
 
-def test_extract_lyrics_preserves_empty_lines():
+def test_extract_text_preserves_empty_lines():
     text = "G  C\nHello\n\nDm  G\nWorld"
-    lyrics = extract_lyrics_only(text)
-    assert lyrics == "Hello\n\nWorld"
+    result = extract_text_only(text)
+    assert result == "Hello\n\nWorld"
 
 
 # --- _extract_chord_positions ---

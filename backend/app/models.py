@@ -64,8 +64,8 @@ class Song(Base):
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
     artist: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
-    original_lyrics: Mapped[str] = mapped_column(Text, nullable=False)
-    rewritten_lyrics: Mapped[str] = mapped_column(Text, nullable=False)
+    original_content: Mapped[str] = mapped_column(Text, nullable=False)
+    rewritten_content: Mapped[str] = mapped_column(Text, nullable=False)
     changes_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     llm_provider: Mapped[str | None] = mapped_column(String, nullable=True)
     llm_model: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -84,7 +84,7 @@ class SongRevision(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     song_id: Mapped[int] = mapped_column(Integer, ForeignKey("songs.id"), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
-    rewritten_lyrics: Mapped[str] = mapped_column(Text, nullable=False)
+    rewritten_content: Mapped[str] = mapped_column(Text, nullable=False)
     changes_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     edit_type: Mapped[str] = mapped_column(String, default="full")  # "full" or "line"
     edit_context: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON

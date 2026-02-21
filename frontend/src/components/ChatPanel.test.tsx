@@ -8,7 +8,7 @@ describe('ChatPanel', () => {
     messages: [] as ChatMessage[],
     setMessages: vi.fn(),
     llmSettings: { provider: 'openai', model: 'gpt-4o', reasoning_effort: 'high' },
-    onLyricsUpdated: vi.fn(),
+    onContentUpdated: vi.fn(),
     initialLoading: false,
   };
 
@@ -27,7 +27,7 @@ describe('ChatPanel', () => {
     render(<ChatPanel {...defaults} initialLoading={true} />);
     expect(screen.getByPlaceholderText(/Tell the AI/)).toBeDisabled();
     expect(screen.getByText('Send')).toBeDisabled();
-    expect(screen.getByText('Parsing lyrics...')).toBeInTheDocument();
+    expect(screen.getByText('Parsing song...')).toBeInTheDocument();
   });
 
   it('renders chat messages', () => {

@@ -33,7 +33,7 @@ export default function Header({ onHomeClick, user, authRequired, onLogout }: He
                 : 'bg-white/15 border-white/25 text-header-text opacity-70 hover:opacity-100'
             } hover:bg-white/25`}
             onClick={wakeLock.toggle}
-            title={wakeLock.active ? 'Screen staying awake — click to disable' : 'Keep screen awake while viewing lyrics'}
+            title={wakeLock.active ? 'Screen staying awake — click to disable' : 'Keep screen awake while viewing song'}
           >
             Stay Awake
           </button>

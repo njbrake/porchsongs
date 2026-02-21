@@ -165,8 +165,8 @@ export default function App() {
     if (authState !== 'ready' || rewriteResult || !currentSongId) return;
     api.getSong(currentSongId).then(async (song: Song) => {
       setRewriteResult({
-        original_lyrics: song.original_lyrics,
-        rewritten_lyrics: song.rewritten_lyrics,
+        original_content: song.original_content,
+        rewritten_content: song.rewritten_content,
         changes_summary: song.changes_summary || '',
       });
       setRewriteMeta({
@@ -217,14 +217,14 @@ export default function App() {
     setCurrentSongId(songId);
   }, [setCurrentSongId]);
 
-  const handleLyricsUpdated = useCallback((newLyrics: string) => {
-    setRewriteResult(prev => prev ? { ...prev, rewritten_lyrics: newLyrics } : prev);
+  const handleContentUpdated = useCallback((newContent: string) => {
+    setRewriteResult(prev => prev ? { ...prev, rewritten_content: newContent } : prev);
   }, []);
 
   const handleLoadSong = useCallback(async (song: Song) => {
     setRewriteResult({
-      original_lyrics: song.original_lyrics,
-      rewritten_lyrics: song.rewritten_lyrics,
+      original_content: song.original_content,
+      rewritten_content: song.rewritten_content,
       changes_summary: song.changes_summary || '',
     });
     setRewriteMeta({
@@ -296,7 +296,7 @@ export default function App() {
             setChatMessages={setChatMessages}
             onNewRewrite={handleNewRewrite}
             onSongSaved={handleSongSaved}
-            onLyricsUpdated={handleLyricsUpdated}
+            onContentUpdated={handleContentUpdated}
             onChangeProvider={setProvider}
             onChangeModel={setModel}
             reasoningEffort={reasoningEffort}

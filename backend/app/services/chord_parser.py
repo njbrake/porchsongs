@@ -28,13 +28,13 @@ def is_chord_line(line: str) -> bool:
     return True
 
 
-def separate_chords_and_lyrics(text: str) -> list[dict]:
-    """Separate chord lines from lyric lines.
+def separate_chords_and_text(text: str) -> list[dict]:
+    """Separate chord lines from text lines.
 
     Returns a list of dicts with structure:
-        {"chords": "G   Am  C" or None, "lyrics": "Take me home..." or ""}
+        {"chords": "G   Am  C" or None, "text": "Take me home..." or ""}
 
-    Chord lines are paired with the lyric line immediately below them.
+    Chord lines are paired with the text line immediately below them.
     """
     lines = text.split("\n")
     result = []
@@ -45,75 +45,75 @@ def separate_chords_and_lyrics(text: str) -> list[dict]:
 
         if is_chord_line(line):
             chords = line
-            # Look ahead for the lyric line
+            # Look ahead for the text line
             if i + 1 < len(lines) and not is_chord_line(lines[i + 1]):
-                lyrics = lines[i + 1]
+                text_line = lines[i + 1]
                 i += 2
             else:
-                # Chord line with no lyric below (e.g., instrumental)
-                lyrics = ""
+                # Chord line with no text below (e.g., instrumental)
+                text_line = ""
                 i += 1
-            result.append({"chords": chords, "lyrics": lyrics})
+            result.append({"chords": chords, "text": text_line})
         else:
-            # Pure lyric line or empty/section header
-            result.append({"chords": None, "lyrics": line})
+            # Pure text line or empty/section header
+            result.append({"chords": None, "text": line})
             i += 1
 
     return result
 
 
-def extract_lyrics_only(text: str) -> str:
-    """Extract only the lyric lines (no chords) for sending to the LLM."""
-    parsed = separate_chords_and_lyrics(text)
-    lyrics_lines = []
+def extract_text_only(text: str) -> str:
+    """Extract only the text lines (no chords) for sending to the LLM."""
+    parsed = separate_chords_and_text(text)
+    text_lines = []
     for entry in parsed:
-        lyrics_lines.append(entry["lyrics"])
-    return "\n".join(lyrics_lines)
+        text_lines.append(entry["text"])
+    return "\n".join(text_lines)
 
 
-def realign_chords(original_text: str, rewritten_lyrics: str) -> str:
-    """Realign chords from the original text above the rewritten lyrics.
+def realign_chords(original_text: str, rewritten_content: str) -> str:
+    """Realign chords from the original text above the rewritten content.
 
-    Strategy: map chord positions proportionally from old lyrics to new lyrics,
+    Strategy: map chord positions proportionally from old text to new text,
     snapping to the nearest word/syllable boundary.
     """
-    original_parsed = separate_chords_and_lyrics(original_text)
-    rewritten_lines = rewritten_lyrics.split("\n")
+    original_parsed = separate_chords_and_text(original_text)
+    rewritten_lines = rewritten_content.split("\n")
 
     result = []
     rewrite_idx = 0
 
     for entry in original_parsed:
         if entry["chords"] is not None:
-            # This was a chord+lyric pair
-            original_lyric = entry["lyrics"]
+            # This was a chord+text pair
+            original_line = entry["text"]
             chord_line = entry["chords"]
 
             if rewrite_idx < len(rewritten_lines):
-                new_lyric = rewritten_lines[rewrite_idx]
+                new_line = rewritten_lines[rewrite_idx]
                 rewrite_idx += 1
             else:
-                new_lyric = ""
+                new_line = ""
 
-            if not new_lyric.strip():
+            if not new_line.strip():
                 result.append(chord_line)
-                result.append(new_lyric)
+                result.append(new_line)
                 continue
 
             # Extract chord positions from original
             chord_positions = _extract_chord_positions(chord_line)
 
-            # Remap to new lyric
-            new_chord_line = _place_chords(chord_positions, original_lyric, new_lyric)
+            # Remap to new line
+            new_chord_line = _place_chords(chord_positions, original_line, new_line)
             result.append(new_chord_line)
-            result.append(new_lyric)
+            result.append(new_line)
         else:
-            # Non-chord line: could be section header, empty, or lyric-only
+            # Non-chord line: could be section header, empty, or text-only
             if rewrite_idx < len(rewritten_lines):
                 result.append(rewritten_lines[rewrite_idx])
                 rewrite_idx += 1
             else:
-                result.append(entry["lyrics"])
+                result.append(entry["text"])
 
     # Append any remaining rewritten lines
     while rewrite_idx < len(rewritten_lines):
@@ -141,22 +141,22 @@ def _extract_chord_positions(chord_line: str) -> list[tuple[int, str]]:
 
 def _place_chords(
     chord_positions: list[tuple[int, str]],
-    original_lyric: str,
-    new_lyric: str,
+    original_line: str,
+    new_line: str,
 ) -> str:
-    """Place chords above new lyric using proportional mapping."""
+    """Place chords above new line using proportional mapping."""
     if not chord_positions:
         return ""
 
-    old_len = max(len(original_lyric), 1)
-    new_len = max(len(new_lyric), 1)
+    old_len = max(len(original_line), 1)
+    new_len = max(len(new_line), 1)
 
     new_positions = []
     for pos, chord in chord_positions:
         # Proportional mapping
         new_pos = int(pos * new_len / old_len)
         # Snap to nearest word boundary (space or start)
-        new_pos = _snap_to_boundary(new_lyric, new_pos)
+        new_pos = _snap_to_boundary(new_line, new_pos)
         new_positions.append((new_pos, chord))
 
     # Build the chord line ensuring no overlaps
@@ -205,47 +205,47 @@ def _snap_to_boundary(text: str, pos: int) -> int:
 
 def replace_line_with_chords(
     full_text: str,
-    lyrics_line_index: int,
+    text_line_index: int,
     new_line_text: str,
 ) -> str:
-    """Replace a single lyrics line in a chord-annotated text, re-placing chords.
+    """Replace a single text line in a chord-annotated text, re-placing chords.
 
     Args:
-        full_text: Full text with chord lines above lyric lines.
-        lyrics_line_index: Zero-based index into lyrics-only lines.
+        full_text: Full text with chord lines above text lines.
+        text_line_index: Zero-based index into text-only lines.
         new_line_text: Replacement text for the line.
 
     Returns:
         Full text with the line replaced and chords realigned.
     """
-    parsed = separate_chords_and_lyrics(full_text)
+    parsed = separate_chords_and_text(full_text)
 
-    # Map lyrics-only index to parsed entry index
-    lyrics_count = 0
+    # Map text-only index to parsed entry index
+    text_count = 0
     target_entry_idx: int | None = None
     for idx in range(len(parsed)):
-        if lyrics_count == lyrics_line_index:
+        if text_count == text_line_index:
             target_entry_idx = idx
             break
-        lyrics_count += 1
+        text_count += 1
 
     if target_entry_idx is None:
-        max_idx = lyrics_count - 1
-        raise IndexError(f"Lyrics line index {lyrics_line_index} out of range (max {max_idx})")
+        max_idx = text_count - 1
+        raise IndexError(f"Text line index {text_line_index} out of range (max {max_idx})")
 
     entry = parsed[target_entry_idx]
-    old_lyric = entry["lyrics"]
-    entry["lyrics"] = new_line_text
+    old_text = entry["text"]
+    entry["text"] = new_line_text
 
     if entry["chords"] is not None and new_line_text.strip():
         chord_positions = _extract_chord_positions(entry["chords"])
-        entry["chords"] = _place_chords(chord_positions, old_lyric, new_line_text)
+        entry["chords"] = _place_chords(chord_positions, old_text, new_line_text)
 
     # Reassemble the full text
     result_lines = []
     for e in parsed:
         if e["chords"] is not None:
             result_lines.append(e["chords"])
-        result_lines.append(e["lyrics"])
+        result_lines.append(e["text"])
 
     return "\n".join(result_lines)

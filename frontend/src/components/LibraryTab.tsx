@@ -126,7 +126,7 @@ function PerformanceSheet({ song, onSongUpdated }: { song: Song; onSongUpdated: 
   };
 
   const controls = (
-    <div className="absolute top-2 right-2 z-10 flex items-center gap-2 opacity-60 hover:opacity-100 transition-opacity">
+    <div className="flex items-center justify-end gap-2 mb-2 sm:mb-0 sm:absolute sm:top-2 sm:right-2 sm:z-10 sm:opacity-60 sm:hover:opacity-100 sm:transition-opacity">
       <div className="flex items-center gap-1.5 bg-background/80 backdrop-blur-sm rounded-md px-2 py-1 border border-border">
         <span className="text-xs text-muted-foreground whitespace-nowrap">
           {isAuto ? 'Auto' : `${Math.round(sliderValue)}px`}
@@ -157,6 +157,7 @@ function PerformanceSheet({ song, onSongUpdated }: { song: Song; onSongUpdated: 
         <Button
           variant="secondary"
           size="sm"
+          className="hidden xl:inline-flex"
           onClick={() => setUserOverride(showTwoCol ? 1 : 2)}
         >
           {showTwoCol ? '1 Column' : '2 Columns'}

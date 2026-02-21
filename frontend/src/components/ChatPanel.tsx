@@ -101,7 +101,7 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
     abortRef.current = controller;
     if (!sending) setSending(true);
     let streamStarted = false;
-    const parser = onContentStreaming ? new StreamParser() : null;
+    const parser = new StreamParser();
 
     try {
       const apiMessages = [{ role: 'user' as const, content: text }];
@@ -113,49 +113,30 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
           ...llmSettings,
         },
         (token: string) => {
-          if (parser) {
-            // Streaming mode: separate content from chat text
-            const { contentDelta } = parser.processToken(token);
+          const { contentDelta } = parser.processToken(token);
 
-            if (contentDelta) {
-              onContentStreaming!(parser.contentText);
-            }
+          if (contentDelta && onContentStreaming) {
+            onContentStreaming(parser.contentText);
+          }
 
-            // Determine what to show in the chat bubble
-            const bubbleContent = parser.phase === 'content' && !parser.chatText
-              ? 'Updating song...'
-              : parser.chatText || 'Updating song...';
+          // Determine what to show in the chat bubble
+          const bubbleContent = parser.phase === 'content' && !parser.chatText
+            ? 'Updating song...'
+            : parser.chatText || 'Updating song...';
 
-            if (!streamStarted) {
-              streamStarted = true;
-              setStreaming(true);
-              setMessages(prev => [...prev, { role: 'assistant' as const, content: bubbleContent }].slice(-MAX_MESSAGES));
-            } else {
-              setMessages(prev => {
-                const updated = [...prev];
-                const last = updated[updated.length - 1];
-                if (last && last.role === 'assistant') {
-                  updated[updated.length - 1] = { ...last, content: bubbleContent };
-                }
-                return updated;
-              });
-            }
+          if (!streamStarted) {
+            streamStarted = true;
+            setStreaming(true);
+            setMessages(prev => [...prev, { role: 'assistant' as const, content: bubbleContent }].slice(-MAX_MESSAGES));
           } else {
-            // No streaming — all tokens go to chat bubble
-            if (!streamStarted) {
-              streamStarted = true;
-              setStreaming(true);
-              setMessages(prev => [...prev, { role: 'assistant' as const, content: token }].slice(-MAX_MESSAGES));
-            } else {
-              setMessages(prev => {
-                const updated = [...prev];
-                const last = updated[updated.length - 1];
-                if (last && last.role === 'assistant') {
-                  updated[updated.length - 1] = { ...last, content: last.content + token };
-                }
-                return updated;
-              });
-            }
+            setMessages(prev => {
+              const updated = [...prev];
+              const last = updated[updated.length - 1];
+              if (last && last.role === 'assistant') {
+                updated[updated.length - 1] = { ...last, content: bubbleContent };
+              }
+              return updated;
+            });
           }
         },
         controller.signal,

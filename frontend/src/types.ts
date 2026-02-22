@@ -33,7 +33,7 @@ export interface SongRevision {
   version: number;
   rewritten_content: string;
   changes_summary: string | null;
-  edit_type: 'rewrite' | 'line' | 'chat';
+  edit_type: 'rewrite' | 'chat';
   created_at: string;
 }
 

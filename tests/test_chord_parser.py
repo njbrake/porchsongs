@@ -7,7 +7,6 @@ from app.services.chord_parser import (
     extract_text_only,
     is_chord_line,
     realign_chords,
-    replace_line_with_chords,
     separate_chords_and_text,
 )
 
@@ -154,22 +153,3 @@ def test_realign_preserves_non_chord_lines():
     assert "[Verse]" in result
     assert "Hi there" in result
     assert "See ya" in result
-
-
-# --- replace_line_with_chords ---
-
-
-def test_replace_line():
-    text = "G   Am\nHello world\nDm  G\nCountry roads"
-    result = replace_line_with_chords(text, 0, "Hi there")
-    assert "Hi there" in result
-    assert "Country roads" in result
-
-
-
-def test_replace_line_out_of_range():
-    import pytest
-
-    text = "G   Am\nHello world"
-    with pytest.raises(IndexError):
-        replace_line_with_chords(text, 99, "oops")

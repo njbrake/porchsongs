@@ -658,7 +658,7 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
                 <h4 className="text-sm text-muted-foreground mb-2">Revision History ({revisions.length} versions)</h4>
                 {revisions.map(rev => (
                   <div key={rev.id} className="text-xs py-1 text-muted-foreground border-b border-border last:border-b-0">
-                    v{rev.version} &mdash; {rev.edit_type === 'line' ? 'Line edit' : rev.edit_type === 'chat' ? 'Chat edit' : 'Full rewrite'} &mdash; {rev.changes_summary || 'No summary'} &mdash; {new Date(rev.created_at).toLocaleString()}
+                    v{rev.version} &mdash; {rev.edit_type === 'chat' ? 'Chat edit' : 'Full rewrite'} &mdash; {rev.changes_summary || 'No summary'} &mdash; {new Date(rev.created_at).toLocaleString()}
                   </div>
                 ))}
               </div>

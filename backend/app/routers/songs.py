@@ -1,6 +1,4 @@
-import json
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -14,8 +12,6 @@ from ..models import (
     User,
 )
 from ..schemas import (
-    ApplyEditRequest,
-    ApplyEditResponse,
     ChatMessageCreate,
     ChatMessageOut,
     SongCreate,
@@ -24,7 +20,6 @@ from ..schemas import (
     SongStatusUpdate,
     SongUpdate,
 )
-from ..services.chord_parser import replace_line_with_chords
 from ..services.pdf_service import generate_song_pdf
 
 router = APIRouter()
@@ -221,46 +216,3 @@ async def update_song_status(
     db.refresh(song)
 
     return song
-
-
-@router.post("/apply-edit", response_model=ApplyEditResponse)
-async def apply_edit(
-    data: ApplyEditRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> ApplyEditResponse:
-    song = get_user_song(db, current_user, data.song_id)
-
-    # Replace the line in the full chord text
-    try:
-        new_full_text = replace_line_with_chords(
-            song.rewritten_content, data.line_index, data.new_line_text
-        )
-    except (IndexError, ValueError) as e:
-        raise HTTPException(status_code=400, detail=str(e)) from None
-
-    # Bump version
-    new_version = song.current_version + 1
-    song.rewritten_content = new_full_text
-    song.current_version = new_version
-
-    # Save revision
-    summary = f"Line {data.line_index + 1} edited"
-    revision = SongRevision(
-        song_id=song.id,
-        version=new_version,
-        rewritten_content=new_full_text,
-        changes_summary=summary,
-        edit_type="line",
-        edit_context=json.dumps(
-            {
-                "line_index": data.line_index,
-                "new_line_text": data.new_line_text,
-            }
-        ),
-    )
-    db.add(revision)
-    db.commit()
-    db.refresh(song)
-
-    return ApplyEditResponse(rewritten_content=song.rewritten_content, version=new_version)

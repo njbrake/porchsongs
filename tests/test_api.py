@@ -191,45 +191,6 @@ def test_song_revisions(client):
     assert revisions[0]["edit_type"] == "full"
 
 
-# --- Apply Edit ---
-
-
-def test_apply_edit(client):
-    profile = client.post("/api/profiles", json={"name": "Test"}).json()
-    song = client.post("/api/songs", json={
-        "profile_id": profile["id"],
-        "original_content": "G  Am\nHello world\nDm  G\nGoodbye moon",
-        "rewritten_content": "G  Am\nHello world\nDm  G\nGoodbye moon",
-    }).json()
-
-    resp = client.post("/api/apply-edit", json={
-        "song_id": song["id"],
-        "line_index": 0,
-        "new_line_text": "Hi there",
-    })
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "Hi there" in data["rewritten_content"]
-    assert data["version"] == 2
-
-
-
-def test_apply_edit_invalid_line(client):
-    profile = client.post("/api/profiles", json={"name": "Test"}).json()
-    song = client.post("/api/songs", json={
-        "profile_id": profile["id"],
-        "original_content": "Hello",
-        "rewritten_content": "Hello",
-    }).json()
-
-    resp = client.post("/api/apply-edit", json={
-        "song_id": song["id"],
-        "line_index": 99,
-        "new_line_text": "oops",
-    })
-    assert resp.status_code == 400
-
-
 # --- Providers ---
 
 

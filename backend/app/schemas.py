@@ -130,7 +130,7 @@ class SongRevisionOut(BaseModel):
     version: int
     rewritten_content: str
     changes_summary: str | None
-    edit_type: Literal["full", "line", "chat"]
+    edit_type: Literal["full", "chat"]
     edit_context: str | None
     created_at: datetime
 
@@ -148,18 +148,6 @@ class SongUpdate(BaseModel):
 # --- Song Status ---
 class SongStatusUpdate(BaseModel):
     status: Literal["draft", "completed"]
-
-
-# --- Apply Edit ---
-class ApplyEditRequest(BaseModel):
-    song_id: int
-    line_index: int  # text-only line index
-    new_line_text: str
-
-
-class ApplyEditResponse(BaseModel):
-    rewritten_content: str
-    version: int
 
 
 # --- Chat ---

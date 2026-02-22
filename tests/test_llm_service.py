@@ -1,9 +1,38 @@
 """Tests for llm_service pure functions (no LLM calls)."""
 
+from types import SimpleNamespace
+
 from app.services.llm_service import (
+    _build_chat_kwargs,
     _parse_chat_response,
     _parse_clean_response,
 )
+
+
+# --- _build_chat_kwargs ---
+
+
+def test_build_chat_kwargs_system_prompt():
+    """System prompt contains ORIGINAL SONG but NOT EDITED SONG."""
+    song = SimpleNamespace(
+        original_content="G  Am\nHello world",
+        rewritten_content="G  Am\nHello changed world",
+    )
+    messages = [
+        {"role": "user", "content": "make it sadder"},
+        {"role": "assistant", "content": "ok"},
+    ]
+    kwargs = _build_chat_kwargs(song, messages, "openai", "gpt-4o")
+
+    system_msg = kwargs["messages"][0]  # type: ignore[index]
+    assert system_msg["role"] == "system"  # type: ignore[index]
+    assert "ORIGINAL SONG" in system_msg["content"]  # type: ignore[index]
+    assert song.original_content in system_msg["content"]  # type: ignore[index]
+    assert "EDITED SONG" not in system_msg["content"]  # type: ignore[index]
+
+    # User/assistant messages passed through unchanged
+    assert kwargs["messages"][1] == {"role": "user", "content": "make it sadder"}  # type: ignore[index]
+    assert kwargs["messages"][2] == {"role": "assistant", "content": "ok"}  # type: ignore[index]
 
 
 # --- _parse_chat_response ---

@@ -82,7 +82,10 @@ IMPORTANT — only include <content> tags when you are actually changing the son
 (A friendly explanation of what you changed and why)
 
 If the user is purely asking a question or brainstorming without implying any specific edit, \
-respond conversationally WITHOUT <content> tags."""
+respond conversationally WITHOUT <content> tags.
+
+The song is provided in the system prompt. When you make changes and emit <content> tags, \
+that becomes the new current version for subsequent turns."""
 
 _LOCAL_PROVIDERS = {"ollama", "llamafile", "llamacpp", "lmstudio", "vllm"}
 
@@ -243,7 +246,6 @@ def _build_chat_kwargs(
     """Build the common kwargs dict for chat LLM calls."""
     system_content = CHAT_SYSTEM_PROMPT
     system_content += "\n\nORIGINAL SONG:\n" + song.original_content
-    system_content += "\n\nEDITED SONG:\n" + song.rewritten_content
 
     llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_content}]
     for msg in messages:

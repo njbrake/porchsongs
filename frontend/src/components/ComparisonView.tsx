@@ -3,13 +3,14 @@ import { toast } from 'sonner';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { copyToClipboard as copyText } from '@/lib/utils';
 
 function copyToClipboard(text: string) {
-  navigator.clipboard.writeText(text).then(() => {
+  if (copyText(text)) {
     toast.success('Copied to clipboard');
-  }).catch(() => {
+  } else {
     toast.error('Failed to copy');
-  });
+  }
 }
 
 interface ComparisonViewProps {

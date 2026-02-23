@@ -13,7 +13,7 @@ import { Select } from '@/components/ui/select';
 import Spinner from '@/components/ui/spinner';
 import StreamingPre from '@/components/ui/streaming-pre';
 import { Alert } from '@/components/ui/alert';
-import { cn } from '@/lib/utils';
+import { cn, copyToClipboard } from '@/lib/utils';
 import type { Profile, Song, RewriteResult, RewriteMeta, ChatMessage, LlmSettings, SavedModel, ParseResult } from '@/types';
 
 interface RewriteTabProps {
@@ -367,24 +367,10 @@ export default function RewriteTab({
       }
     }
 
-    try {
-      await navigator.clipboard.writeText(text);
+    if (copyToClipboard(text)) {
       toast.success('Summary copied to clipboard');
-    } catch {
-      // Clipboard API failed — use textarea fallback
-      try {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-        toast.success('Summary copied to clipboard');
-      } catch {
-        toast.error('Could not copy to clipboard — try selecting and copying manually');
-      }
+    } else {
+      toast.error('Could not copy to clipboard — try selecting and copying manually');
     }
   }, [rewriteResult, chatMessages, songTitle, songArtist]);
 

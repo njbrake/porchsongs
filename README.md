@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  A personal song lyric rewriter. Paste a chord chart, chat with an AI to workshop the lyrics into your own life, and play a song that actually sounds like you.
+  A personal song lyric rewriter. Edit and refine your lyrics with AI — workshop them into something that actually sounds like you.
 </p>
 
 ---
@@ -26,7 +26,7 @@ porchsongs preserves meter, rhyme scheme, chord alignment, and emotional meaning
 
 ## How It Works
 
-1. **Find a chord chart** — paste in a tab or lyrics
+1. **Paste your lyrics** — with or without chords, any format works
 2. **Chat to workshop the lyrics** — tell the AI what to change ("swap the truck for my bike," "make verse 2 about coding") and iterate in a live conversation
 3. **Play and enjoy** — chords are automatically realigned above your new lyrics
 

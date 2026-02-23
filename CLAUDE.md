@@ -90,9 +90,9 @@ Profiles have a freeform `description` field (not structured fields). The descri
 
 Paste lyrics → rewrite → auto-saved as "draft" → iterate via chat/workshop → mark "completed" → patterns extracted by LLM and saved to `substitution_patterns` table → future rewrites for that profile include learned patterns. Songs can be organized into folders.
 
-### Tab Fetching & PDF Export
+### PDF Export
 
-`tab_fetcher.py` fetches tabs from Ultimate Guitar using `curl_cffi` (to bypass Cloudflare). `pdf_service.py` generates monospace PDFs with chord alignment using `fpdf2`. Both are exposed via API endpoints.
+`pdf_service.py` generates monospace PDFs with chord alignment using `fpdf2`, exposed via an API endpoint.
 
 ### Profile Models
 

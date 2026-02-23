@@ -475,7 +475,7 @@ export default function RewriteTab({
                 rows={10}
                 value={input}
                 onChange={e => setInput(e.target.value)}
-                placeholder="Paste lyrics, chords, or a copy from a tab site — any format works"
+                placeholder="Paste your lyrics and chords here — any format works"
                 onKeyDown={e => {
                   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canParse) {
                     e.preventDefault();

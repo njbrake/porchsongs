@@ -253,14 +253,6 @@ def test_list_providers(client):
     assert "name" in providers[0]
 
 
-# --- fetch-tab endpoint removed ---
-
-
-def test_fetch_tab_removed(client):
-    resp = client.post("/api/fetch-tab", json={"url": "https://tabs.ultimate-guitar.com/tab/test"})
-    # Should 404 or 405 since the endpoint was removed
-    assert resp.status_code in (404, 405)
-
 
 # --- Chat Messages ---
 

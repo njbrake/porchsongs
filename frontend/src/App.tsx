@@ -42,6 +42,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(() => tabFromPath(window.location.pathname));
   const [settingsTab, setSettingsTab] = useState(() => settingsTabFromPath(window.location.pathname));
   const [initialSongId, setInitialSongId] = useState(() => songIdFromPath(window.location.pathname));
+  const [libraryResetKey, setLibraryResetKey] = useState(0);
   // Auth state: "loading" | "login" | "ready"
   const [authState, setAuthState] = useState<'loading' | 'login' | 'ready'>('loading');
   const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null);
@@ -107,13 +108,16 @@ export default function App() {
         window.history.pushState(null, '', target);
       }
     } else {
+      if (key === 'library' && activeTab === 'library') {
+        setLibraryResetKey(k => k + 1);
+      }
       setActiveTab(key);
       const target = key === 'rewrite' ? '/' : `/${key}`;
       if (window.location.pathname !== target) {
         window.history.pushState(null, '', target);
       }
     }
-  }, [settingsTab]);
+  }, [settingsTab, activeTab]);
 
   // Profile state
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -309,7 +313,7 @@ export default function App() {
           />
         </div>
         {activeTab === 'library' && (
-          <LibraryTab onLoadSong={handleLoadSong} initialSongId={initialSongId} onInitialSongConsumed={() => setInitialSongId(null)} />
+          <LibraryTab onLoadSong={handleLoadSong} initialSongId={initialSongId} onInitialSongConsumed={() => setInitialSongId(null)} resetKey={libraryResetKey} />
         )}
         {activeTab === 'settings' && (
           <SettingsPage

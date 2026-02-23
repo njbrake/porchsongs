@@ -306,9 +306,10 @@ interface LibraryTabProps {
   onLoadSong: (song: Song) => void;
   initialSongId: number | null;
   onInitialSongConsumed: () => void;
+  resetKey?: number;
 }
 
-export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongConsumed }: LibraryTabProps) {
+export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongConsumed, resetKey }: LibraryTabProps) {
   const [songs, setSongs] = useState<Song[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [viewingSong, setViewingSong] = useState<Song | null>(null);
@@ -331,6 +332,7 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
       setLoaded(true);
     }).catch(() => setLoaded(true));
   }, []);
+
 
   const folders = useMemo(() => {
     const names = new Set(localFolders);
@@ -395,6 +397,18 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
       window.history.pushState(null, '', target);
     }
   }, []);
+
+  // Reset to song list when the Library tab is re-clicked
+  const prevResetKey = useRef(resetKey);
+  useEffect(() => {
+    if (resetKey !== prevResetKey.current) {
+      prevResetKey.current = resetKey;
+      if (viewingSong) {
+        setViewingSong(null);
+        pushSongUrl(null);
+      }
+    }
+  }, [resetKey, viewingSong, pushSongUrl]);
 
   const handleView = (song: Song) => {
     setViewingSong(song);

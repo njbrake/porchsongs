@@ -16,7 +16,11 @@ export default function Tabs({ active, onChange }: TabsProps) {
     <TabsRoot value={active} onValueChange={onChange}>
       <TabsList>
         {TAB_ITEMS.map(t => (
-          <TabsTrigger key={t.key} value={t.key}>
+          <TabsTrigger
+            key={t.key}
+            value={t.key}
+            onClick={() => { if (t.key === active) onChange(t.key); }}
+          >
             {t.label}
           </TabsTrigger>
         ))}

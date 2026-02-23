@@ -371,7 +371,20 @@ export default function RewriteTab({
       await navigator.clipboard.writeText(text);
       toast.success('Summary copied to clipboard');
     } catch {
-      toast.error('Failed to share');
+      // Clipboard API failed — use textarea fallback
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        toast.success('Summary copied to clipboard');
+      } catch {
+        toast.error('Could not copy to clipboard — try selecting and copying manually');
+      }
     }
   }, [rewriteResult, chatMessages, songTitle, songArtist]);
 

@@ -19,6 +19,7 @@ from ..schemas import (
     ChatResponse,
     ParseRequest,
     ParseResponse,
+    TokenUsage,
 )
 from ..services import llm_service
 
@@ -310,6 +311,9 @@ async def chat(
     )
     db.commit()
 
+    usage_data = result.get("usage")
+    usage = TokenUsage(**usage_data) if usage_data else None
+
     return ChatResponse(
         rewritten_content=result["rewritten_content"],
         original_content=result.get("original_content"),
@@ -317,6 +321,7 @@ async def chat(
         changes_summary=result["changes_summary"],
         version=song.current_version,
         reasoning=result.get("reasoning"),
+        usage=usage,
     )
 
 
@@ -335,6 +340,7 @@ async def chat_stream(
     async def event_generator() -> AsyncIterator[str]:
         accumulated = ""
         reasoning_accumulated = ""
+        usage_data: dict[str, int] | None = None
         try:
             stream = llm_service.chat_edit_content_stream(
                 song=song,
@@ -351,6 +357,8 @@ async def chat_stream(
                 if kind == "reasoning":
                     reasoning_accumulated += text
                     yield f"event: reasoning\ndata: {json.dumps(text)}\n\n"
+                elif kind == "usage":
+                    usage_data = json.loads(text)
                 else:
                     accumulated += text
                     yield f"event: token\ndata: {json.dumps(text)}\n\n"
@@ -381,13 +389,14 @@ async def chat_stream(
             db.rollback()
 
         # Send final result
-        done_data: dict[str, str | int | None] = {
+        done_data: dict[str, object] = {
             "rewritten_content": parsed["content"],
             "original_content": parsed.get("original_content"),
             "assistant_message": accumulated,
             "changes_summary": changes_summary,
             "version": song.current_version,
             "reasoning": reasoning_accumulated or None,
+            "usage": usage_data,
         }
         yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
 

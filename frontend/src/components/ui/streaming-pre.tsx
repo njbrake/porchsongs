@@ -1,4 +1,4 @@
-import { useRef, useEffect, type HTMLAttributes } from 'react';
+import { useRef, useEffect, useCallback, type HTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -7,26 +7,27 @@ import { cn } from '@/lib/utils';
  */
 export default function StreamingPre({ children, className, ...props }: HTMLAttributes<HTMLPreElement>) {
   const ref = useRef<HTMLPreElement>(null);
-  const wasAtBottom = useRef(true);
+  const isAtBottom = useRef(true);
 
-  // Before React updates the DOM, snapshot whether we're at the bottom
-  useEffect(() => {
+  // Track scroll position via scroll events so we know whether
+  // the user has manually scrolled away from the bottom.
+  const handleScroll = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    const threshold = 30; // px tolerance
-    wasAtBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
-  });
+    const threshold = 30;
+    isAtBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  }, []);
 
-  // After content changes, scroll to bottom if we were there
+  // When content changes, scroll to bottom if the user was there
   useEffect(() => {
     const el = ref.current;
-    if (el && wasAtBottom.current) {
+    if (el && isAtBottom.current) {
       el.scrollTop = el.scrollHeight;
     }
   }, [children]);
 
   return (
-    <pre ref={ref} className={cn('whitespace-pre-wrap break-words', className)} {...props}>
+    <pre ref={ref} onScroll={handleScroll} className={cn('whitespace-pre-wrap break-words', className)} {...props}>
       {children}
     </pre>
   );

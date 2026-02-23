@@ -21,6 +21,17 @@ def _get_content(response: ChatCompletion | Iterator[ChatCompletionChunk]) -> st
     return content
 
 
+def _get_usage(response: ChatCompletion) -> dict[str, int] | None:
+    """Extract token usage from a completion response, if present."""
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return None
+    return {
+        "input_tokens": getattr(usage, "prompt_tokens", 0) or 0,
+        "output_tokens": getattr(usage, "completion_tokens", 0) or 0,
+    }
+
+
 CLEAN_SYSTEM_PROMPT = """You are a songwriter's assistant. Your ONLY job is to clean up raw pasted \
 song input. Do NOT rewrite or change the content in any way.
 
@@ -348,6 +359,7 @@ async def chat_edit_content(
     raw_response = _get_content(response)
     parsed = _parse_chat_response(raw_response)
     reasoning = _get_reasoning(response)
+    usage = _get_usage(response)
 
     # Build a changes summary
     changes_summary = parsed["explanation"] or "Chat edit applied."
@@ -358,6 +370,7 @@ async def chat_edit_content(
         "assistant_message": raw_response,
         "changes_summary": changes_summary,
         "reasoning": reasoning,
+        "usage": usage,
     }
 
 
@@ -372,12 +385,17 @@ async def chat_edit_content_stream(
 ) -> AsyncIterator[tuple[str, str]]:
     """Stream a chat-based content edit token by token as ``(type, text)`` tuples.
 
-    Types: ``"token"`` for content, ``"reasoning"`` for reasoning/thinking.
+    Types: ``"token"`` for content, ``"reasoning"`` for reasoning/thinking,
+    ``"usage"`` for final token usage JSON.
     """
     kwargs = _build_chat_kwargs(
         song, messages, provider, model, api_base, reasoning_effort, system_prompt
     )
+    if provider == "openai":
+        kwargs["stream_options"] = {"include_usage": True}
     response = await acompletion(stream=True, **kwargs)
+
+    import json
 
     async for chunk in response:
         delta = chunk.choices[0].delta  # type: ignore[union-attr]
@@ -389,3 +407,12 @@ async def chat_edit_content_stream(
                     yield ("reasoning", str(reasoning_content))
             if delta.content:
                 yield ("token", delta.content)
+
+        # Check for usage in the chunk (sent in the final chunk by most providers)
+        chunk_usage = getattr(chunk, "usage", None)
+        if chunk_usage is not None:
+            usage_data = {
+                "input_tokens": getattr(chunk_usage, "prompt_tokens", 0) or 0,
+                "output_tokens": getattr(chunk_usage, "completion_tokens", 0) or 0,
+            }
+            yield ("usage", json.dumps(usage_data))

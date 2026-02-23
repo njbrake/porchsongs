@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import Markdown from 'react-markdown';
 import { cn } from '@/lib/utils';
 import api from '@/api';
 import { Card, CardHeader } from '@/components/ui/card';
@@ -7,9 +8,17 @@ import { Button } from '@/components/ui/button';
 import Spinner from '@/components/ui/spinner';
 import StreamingPre from '@/components/ui/streaming-pre';
 import { StreamParser } from '@/lib/streamParser';
-import type { ChatMessage, LlmSettings } from '@/types';
+import type { ChatMessage, LlmSettings, TokenUsage } from '@/types';
 
 const MAX_MESSAGES = 20;
+
+/** Strip <content>...</content> and <original_song>...</original_song> XML blocks from text. */
+function stripXmlTags(text: string): string {
+  return text
+    .replace(/<content>[\s\S]*?<\/content>/g, '')
+    .replace(/<original_song>[\s\S]*?<\/original_song>/g, '')
+    .trim();
+}
 
 function ChatMessageBubble({ msg, isStreaming }: { msg: ChatMessage; isStreaming?: boolean }) {
   const [expanded, setExpanded] = useState(false);
@@ -42,6 +51,8 @@ function ChatMessageBubble({ msg, isStreaming }: { msg: ChatMessage; isStreaming
         <pre className="whitespace-pre-wrap break-words text-xs m-0 font-mono">{msg.content}</pre>
       ) : expanded ? (
         <pre className="whitespace-pre-wrap break-words text-xs m-0 font-mono max-h-80 overflow-y-auto">{msg.rawContent}</pre>
+      ) : msg.role === 'assistant' && !msg.isNote ? (
+        <div className="chat-markdown"><Markdown>{msg.content}</Markdown></div>
       ) : (
         msg.content
       )}
@@ -52,6 +63,9 @@ function ChatMessageBubble({ msg, isStreaming }: { msg: ChatMessage; isStreaming
         >
           {expanded ? 'Show summary' : 'Show full response'}
         </button>
+      )}
+      {msg.model && !isStreaming && (
+        <div className="mt-1.5 text-[10px] text-muted-foreground opacity-70 text-right">{msg.model}</div>
       )}
     </div>
   );
@@ -75,6 +89,7 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
   const [streaming, setStreaming] = useState(false);
   const [reasoningText, setReasoningText] = useState('');
   const [lastFailedInput, setLastFailedInput] = useState<string | null>(null);
+  const [tokenUsage, setTokenUsage] = useState<TokenUsage>({ input_tokens: 0, output_tokens: 0 });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -153,6 +168,7 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
     const parser = new StreamParser();
     let reasoningAccumulated = '';
     setReasoningText('');
+    const sentModel = llmSettings.model;
 
     try {
       const apiMessages = [{ role: 'user' as const, content: text }];
@@ -206,8 +222,8 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
       const reasoning = (result.reasoning ?? reasoningAccumulated) || undefined;
       const hasContent = result.rewritten_content !== null;
       const finalMsg: ChatMessage = hasContent
-        ? { role: 'assistant', content: result.changes_summary, rawContent: result.assistant_message, reasoning }
-        : { role: 'assistant', content: result.assistant_message, reasoning };
+        ? { role: 'assistant', content: stripXmlTags(result.changes_summary), rawContent: result.assistant_message, reasoning, model: sentModel }
+        : { role: 'assistant', content: stripXmlTags(result.assistant_message), reasoning, model: sentModel };
       if (streamStarted) {
         setMessages(prev => {
           const updated = [...prev];
@@ -223,6 +239,12 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
       }
       if (result.original_content && onOriginalContentUpdated) {
         onOriginalContentUpdated(result.original_content);
+      }
+      if (result.usage) {
+        setTokenUsage(prev => ({
+          input_tokens: prev.input_tokens + result.usage!.input_tokens,
+          output_tokens: prev.output_tokens + result.usage!.output_tokens,
+        }));
       }
       setLastFailedInput(null);
     } catch (err) {
@@ -280,6 +302,16 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
         )}
         <div ref={messagesEndRef} />
       </div>
+      {(tokenUsage.input_tokens > 0 || tokenUsage.output_tokens > 0) && (
+        <div className="px-4 py-1.5 border-t border-border text-xs text-muted-foreground flex justify-between">
+          <span>
+            Tokens used: {(tokenUsage.input_tokens + tokenUsage.output_tokens).toLocaleString()}
+          </span>
+          <span>
+            {tokenUsage.input_tokens.toLocaleString()} in / {tokenUsage.output_tokens.toLocaleString()} out
+          </span>
+        </div>
+      )}
       <div className="flex gap-3 px-4 py-3 border-t border-border">
         <Input
           value={input}

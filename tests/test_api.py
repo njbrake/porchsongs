@@ -171,6 +171,56 @@ def test_update_song_status_invalid(client):
     assert resp.status_code == 422
 
 
+# --- Duplicate Song ---
+
+
+def test_duplicate_song(client):
+    profile = client.post("/api/profiles", json={"name": "Test"}).json()
+    song = client.post("/api/songs", json={
+        "profile_id": profile["id"],
+        "title": "My Song",
+        "artist": "Artist",
+        "original_content": "Hello world",
+        "rewritten_content": "Hi world",
+        "changes_summary": "Changed hello to hi",
+    }).json()
+
+    resp = client.post(f"/api/songs/{song['id']}/duplicate")
+    assert resp.status_code == 201
+    copy = resp.json()
+    assert copy["id"] != song["id"]
+    assert copy["title"] == "My Song (Copy)"
+    assert copy["artist"] == "Artist"
+    assert copy["original_content"] == "Hello world"
+    assert copy["rewritten_content"] == "Hi world"
+    assert copy["status"] == "draft"
+    assert copy["current_version"] == 1
+
+    # Verify revision was created
+    revs = client.get(f"/api/songs/{copy['id']}/revisions").json()
+    assert len(revs) == 1
+    assert revs[0]["version"] == 1
+
+
+def test_duplicate_song_no_title(client):
+    profile = client.post("/api/profiles", json={"name": "Test"}).json()
+    song = client.post("/api/songs", json={
+        "profile_id": profile["id"],
+        "original_content": "Hello",
+        "rewritten_content": "Hi",
+    }).json()
+    assert song["title"] is None
+
+    resp = client.post(f"/api/songs/{song['id']}/duplicate")
+    assert resp.status_code == 201
+    assert resp.json()["title"] == "Untitled (Copy)"
+
+
+def test_duplicate_song_not_found(client):
+    resp = client.post("/api/songs/9999/duplicate")
+    assert resp.status_code == 404
+
+
 # --- Song Revisions ---
 
 

@@ -143,6 +143,47 @@ async def update_song(
     return song
 
 
+@router.post("/songs/{song_id}/duplicate", response_model=SongOut, status_code=201)
+async def duplicate_song(
+    song_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Song:
+    source = get_user_song(db, current_user, song_id)
+    title = (source.title + " (Copy)") if source.title else "Untitled (Copy)"
+    copy = Song(
+        user_id=current_user.id,
+        profile_id=source.profile_id,
+        title=title,
+        artist=source.artist,
+        source_url=source.source_url,
+        original_content=source.original_content,
+        rewritten_content=source.rewritten_content,
+        changes_summary=source.changes_summary,
+        llm_provider=source.llm_provider,
+        llm_model=source.llm_model,
+        folder=source.folder,
+        font_size=source.font_size,
+        status="draft",
+        current_version=1,
+    )
+    db.add(copy)
+    db.commit()
+    db.refresh(copy)
+
+    revision = SongRevision(
+        song_id=copy.id,
+        version=1,
+        rewritten_content=copy.rewritten_content,
+        changes_summary=copy.changes_summary,
+        edit_type="full",
+    )
+    db.add(revision)
+    db.commit()
+
+    return copy
+
+
 @router.delete("/songs/{song_id}")
 async def delete_song(
     song_id: int,

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { toast } from 'sonner';
 import api, { STORAGE_KEYS } from '@/api';
 import ComparisonView from '@/components/ComparisonView';
 import ChatPanel from '@/components/ChatPanel';
@@ -75,7 +76,7 @@ export default function RewriteTab({
   const parseAbortRef = useRef<AbortController | null>(null);
   const [mobilePane, setMobilePane] = useState<'chat' | 'content'>('chat');
   const [error, setError] = useState<string | null>(null);
-  const [completedStatus, setCompletedStatus] = useState<'saving' | 'completed' | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | null>(null);
   const [songTitle, setSongTitle] = useState('');
   const [songArtist, setSongArtist] = useState('');
   const [scrapDialogOpen, setScrapDialogOpen] = useState(false);
@@ -95,7 +96,7 @@ export default function RewriteTab({
   }, [rewriteMeta]);
 
   useEffect(() => {
-    setCompletedStatus(null);
+    setSaveStatus(null);
   }, [currentSongId]);
 
   const needsProfile = !profile?.id;
@@ -217,7 +218,7 @@ export default function RewriteTab({
     setParseStreamText('');
     setParseReasoningText('');
     setParseReasoningExpanded(false);
-    setCompletedStatus(null);
+    setSaveStatus(null);
     setError(null);
     setSongTitle('');
     setSongArtist('');
@@ -234,15 +235,61 @@ export default function RewriteTab({
     handleNewSong();
   };
 
-  const handleMarkComplete = async () => {
-    if (!currentSongId) return;
-    setCompletedStatus('saving');
+  const handleSave = async () => {
+    if (!currentSongId || !rewriteResult) return;
+    setSaveStatus('saving');
     try {
-      await api.updateSongStatus(currentSongId, { status: 'completed' });
-      setCompletedStatus('completed');
+      await api.updateSong(currentSongId, {
+        title: songTitle || null,
+        artist: songArtist || null,
+        rewritten_content: rewriteResult.rewritten_content,
+        original_content: rewriteResult.original_content,
+      } as Partial<Song>);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus(null), 2000);
     } catch (err) {
-      setError('Failed to mark as complete: ' + (err as Error).message);
-      setCompletedStatus(null);
+      setError('Failed to save: ' + (err as Error).message);
+      setSaveStatus(null);
+    }
+  };
+
+  const handleSaveAs = async () => {
+    if (!currentSongId || !rewriteResult) return;
+    setSaveStatus('saving');
+    try {
+      // Save current state first
+      await api.updateSong(currentSongId, {
+        title: songTitle || null,
+        artist: songArtist || null,
+        rewritten_content: rewriteResult.rewritten_content,
+        original_content: rewriteResult.original_content,
+      } as Partial<Song>);
+      // Duplicate
+      const copy = await api.duplicateSong(currentSongId);
+      setSaveStatus(null);
+      // Switch to editing the copy
+      setSongTitle(copy.title || '');
+      setSongArtist(copy.artist || '');
+      setChatMessages([]);
+      onNewRewrite(
+        {
+          original_content: copy.original_content,
+          rewritten_content: copy.rewritten_content,
+          changes_summary: copy.changes_summary || '',
+        },
+        {
+          profile_id: copy.profile_id,
+          title: copy.title || undefined,
+          artist: copy.artist || undefined,
+          llm_provider: copy.llm_provider || undefined,
+          llm_model: copy.llm_model || undefined,
+        },
+      );
+      onSongSaved(copy.id);
+      toast.success('Saved as copy');
+    } catch (err) {
+      setError('Failed to save as copy: ' + (err as Error).message);
+      setSaveStatus(null);
     }
   };
 
@@ -286,6 +333,47 @@ export default function RewriteTab({
       api.updateSong(currentSongId, { rewritten_content: rewriteResult.rewritten_content } as Partial<Song>).catch(() => {});
     }
   }, [currentSongId, rewriteResult]);
+
+  const handleShare = useCallback(async () => {
+    if (!rewriteResult) return;
+
+    const titleLine = songTitle ? `# ${songTitle}` : '# Untitled Song';
+    const artistLine = songArtist ? `*${songArtist}*` : '';
+    const header = [titleLine, artistLine].filter(Boolean).join('\n');
+
+    const sections: string[] = [header];
+
+    sections.push('\n---\n\n## Original\n```\n' + rewriteResult.original_content + '\n```');
+
+    if (chatMessages.length > 0) {
+      const chatLines = chatMessages
+        .filter(m => !m.isNote)
+        .map(m => m.role === 'user' ? `**You:** ${m.content}` : `**AI:** ${m.content}`)
+        .join('\n\n');
+      sections.push('\n---\n\n## Conversation\n' + chatLines);
+    }
+
+    sections.push('\n---\n\n## Final Version\n```\n' + rewriteResult.rewritten_content + '\n```');
+
+    const text = sections.join('\n');
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: songTitle || 'Song Workshop', text });
+        return;
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
+        // Fall through to clipboard
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Summary copied to clipboard');
+    } catch {
+      toast.error('Failed to share');
+    }
+  }, [rewriteResult, chatMessages, songTitle, songArtist]);
 
   const titleArtistInputs = (withBlur?: boolean) => (
     <div className="flex flex-col gap-1 mb-2">
@@ -522,11 +610,24 @@ export default function RewriteTab({
                   </Button>
                   <Button
                     variant="secondary"
-                    onClick={handleMarkComplete}
-                    disabled={completedStatus === 'completed' || completedStatus === 'saving' || !currentSongId}
+                    onClick={handleSave}
+                    disabled={saveStatus === 'saving' || !currentSongId}
                   >
-                    {completedStatus === 'completed' ? 'Completed!' :
-                     completedStatus === 'saving' ? 'Saving...' : 'Mark as Complete'}
+                    {saveStatus === 'saved' ? 'Saved!' :
+                     saveStatus === 'saving' ? 'Saving...' : 'Save'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={handleSaveAs}
+                    disabled={saveStatus === 'saving' || !currentSongId}
+                  >
+                    Save As Copy
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={handleShare}
+                  >
+                    Share
                   </Button>
                   <Button
                     variant="danger-outline"

@@ -189,6 +189,11 @@ class ChatRequest(BaseModel):
     reasoning_effort: str | None = None
 
 
+class TokenUsage(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
 class ChatResponse(BaseModel):
     rewritten_content: str | None = None
     original_content: str | None = None
@@ -196,3 +201,4 @@ class ChatResponse(BaseModel):
     changes_summary: str
     version: int
     reasoning: str | None = None
+    usage: TokenUsage | None = None

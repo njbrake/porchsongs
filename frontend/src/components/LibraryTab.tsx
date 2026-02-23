@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import Spinner from '@/components/ui/spinner';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select } from '@/components/ui/select';
 import {
@@ -241,13 +240,12 @@ interface SongMenuProps {
   onDelete: (id: number) => void;
   onRename: (song: Song) => void;
   onEdit: (song: Song) => void;
-  onReopen: (song: Song) => void;
   folders: string[];
   onMoveToFolder: (song: Song, folder: string) => void;
   onMoveToNewFolder: (song: Song) => void;
 }
 
-function SongMenu({ song, onDelete, onRename, onEdit, onReopen, folders, onMoveToFolder, onMoveToNewFolder }: SongMenuProps) {
+function SongMenu({ song, onDelete, onRename, onEdit, folders, onMoveToFolder, onMoveToNewFolder }: SongMenuProps) {
   const otherFolders = folders.filter(f => f !== song.folder);
 
   return (
@@ -262,8 +260,8 @@ function SongMenu({ song, onDelete, onRename, onEdit, onReopen, folders, onMoveT
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => song.status === 'completed' ? onReopen(song) : onEdit(song)}>
-          {song.status === 'completed' ? 'Reopen' : 'Edit'}
+        <DropdownMenuItem onClick={() => onEdit(song)}>
+          Edit
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => onRename(song)}>
           Rename
@@ -294,7 +292,7 @@ function SongMenu({ song, onDelete, onRename, onEdit, onReopen, folders, onMoveT
   );
 }
 
-type SortKey = 'date' | 'title' | 'artist' | 'status';
+type SortKey = 'date' | 'title' | 'artist';
 type SortDir = 'asc' | 'desc';
 
 type DialogState =
@@ -369,9 +367,6 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
         case 'artist':
           cmp = (a.artist || '').localeCompare(b.artist || '');
           break;
-        case 'status':
-          cmp = (a.status || '').localeCompare(b.status || '');
-          break;
         case 'date':
         default:
           cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
@@ -422,17 +417,6 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
       } catch {
         // ignore
       }
-    }
-  };
-
-  const handleReopen = async (song: Song) => {
-    try {
-      await api.updateSongStatus(song.id, { status: 'draft' });
-      const updated = { ...song, status: 'draft' as const };
-      setSongs(prev => prev.map(s => s.id === song.id ? updated : s));
-      onLoadSong(updated);
-    } catch (err) {
-      toast.error('Failed to reopen: ' + (err as Error).message);
     }
   };
 
@@ -619,11 +603,7 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
           <Button variant="secondary" onClick={handleBack}>&larr; All Songs</Button>
           <div className="flex gap-2 justify-end flex-wrap">
             <Button variant="secondary" onClick={() => handleDownloadPdf(song)}>Download PDF</Button>
-            {song.status === 'completed' ? (
-              <Button variant="secondary" onClick={() => handleReopen(song)}>Reopen for Editing</Button>
-            ) : (
-              <Button variant="secondary" onClick={() => onLoadSong(song)}>Edit in Rewrite</Button>
-            )}
+            <Button variant="secondary" onClick={() => onLoadSong(song)}>Edit in Rewrite</Button>
             <Button variant="danger" onClick={() => handleDeleteRequest(song.id)}>Delete</Button>
           </div>
         </div>
@@ -665,7 +645,6 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
             )}
 
             <div className="flex gap-4 text-xs text-muted-foreground pt-2">
-              {song.llm_model && <span>Model: {song.llm_model}</span>}
               {song.current_version > 1 && <span>Version {song.current_version}</span>}
               <span>{new Date(song.created_at).toLocaleDateString()}</span>
             </div>
@@ -727,7 +706,6 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
             <option value="date">Date</option>
             <option value="title">Title</option>
             <option value="artist">Artist</option>
-            <option value="status">Status</option>
           </Select>
           <Button
             variant="secondary"
@@ -857,16 +835,9 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
                   <h3 className="text-sm sm:text-base mb-0.5 leading-snug">
                     <EditableTitle song={song} onSaved={handleSongUpdated} />
                     {artist}
-                    <Badge
-                      variant={song.status === 'completed' ? 'completed' : 'draft'}
-                      className="ml-2"
-                    >
-                      {song.status === 'completed' ? 'Completed' : 'Draft'}
-                    </Badge>
                   </h3>
                   <span className="text-xs text-muted-foreground">
                     {date}
-                    {song.llm_model ? ` \u00B7 ${song.llm_model}` : ''}
                     {song.current_version > 1 ? ` \u00B7 v${song.current_version}` : ''}
                     {song.folder ? ` \u00B7 ${song.folder}` : ''}
                   </span>
@@ -877,7 +848,6 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
                     onDelete={handleDeleteRequest}
                     onRename={handleRenameRequest}
                     onEdit={onLoadSong}
-                    onReopen={handleReopen}
                     folders={folders}
                     onMoveToFolder={handleMoveToFolder}
                     onMoveToNewFolder={handleMoveToNewFolder}

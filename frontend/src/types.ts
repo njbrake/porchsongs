@@ -20,7 +20,7 @@ export interface Song {
   original_content: string;
   rewritten_content: string;
   changes_summary: string | null;
-  status: 'draft' | 'completed';
+  status: string;
   font_size: number | null;
   folder: string | null;
   llm_provider: string | null;
@@ -62,6 +62,7 @@ export interface ChatMessage {
   isNote?: boolean;
   rawContent?: string;
   reasoning?: string;
+  model?: string;
 }
 
 export interface LlmSettings {
@@ -127,12 +128,18 @@ export interface ChatRequest {
 
 // API response types
 
+export interface TokenUsage {
+  input_tokens: number;
+  output_tokens: number;
+}
+
 export interface ChatResult {
   rewritten_content: string | null;
   original_content?: string | null;
   changes_summary: string;
   assistant_message: string;
   reasoning?: string | null;
+  usage?: TokenUsage | null;
 }
 
 export interface ChatHistoryRow {

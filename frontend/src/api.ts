@@ -308,7 +308,7 @@ const api = {
   saveSong: (data: Partial<Song>) => _fetch<Song>('/songs', { method: 'POST', body: JSON.stringify(data) }),
   updateSong: (id: number, data: Partial<Song>) => _fetch<Song>(`/songs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteSong: (id: number) => _fetch<void>(`/songs/${id}`, { method: 'DELETE' }),
-  updateSongStatus: (id: number, data: { status: string }) => _fetch<Song>(`/songs/${id}/status`, { method: 'PUT', body: JSON.stringify(data) }),
+  duplicateSong: (id: number) => _fetch<Song>(`/songs/${id}/duplicate`, { method: 'POST' }),
   getSongRevisions: (id: number) => _fetch<SongRevision[]>(`/songs/${id}/revisions`),
 
   // Chat

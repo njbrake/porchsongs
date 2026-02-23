@@ -81,6 +81,14 @@ IMPORTANT — only include <content> tags when you are actually changing the son
 
 (A friendly explanation of what you changed and why)
 
+If you need to edit the ORIGINAL/SOURCE version of the song (e.g. fixing a chord, correcting a \
+lyric in the original, adjusting tuning info), wrap the updated original in \
+<original_song>...</original_song> tags. You can use this alongside <content> tags or on its own:
+
+<original_song>
+(the complete updated original song)
+</original_song>
+
 If the user is purely asking a question or brainstorming without implying any specific edit, \
 respond conversationally WITHOUT <content> tags.
 
@@ -111,6 +119,7 @@ def _build_parse_kwargs(
     api_base: str | None = None,
     reasoning_effort: str | None = None,
     instruction: str | None = None,
+    system_prompt: str | None = None,
 ) -> dict[str, object]:
     """Build the common kwargs dict for parse LLM calls."""
     user_text = "Clean up this pasted input. Identify the title and artist."
@@ -122,7 +131,7 @@ def _build_parse_kwargs(
         "model": model,
         "provider": provider,
         "messages": [
-            {"role": "system", "content": CLEAN_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt or CLEAN_SYSTEM_PROMPT},
             {"role": "user", "content": user_text},
         ],
     }
@@ -133,6 +142,17 @@ def _build_parse_kwargs(
     return kwargs
 
 
+def _get_reasoning(response: ChatCompletion) -> str | None:
+    """Extract reasoning content from a completion response, if present."""
+    msg = response.choices[0].message  # type: ignore[union-attr]
+    reasoning = getattr(msg, "reasoning", None)
+    if reasoning is not None:
+        reasoning_content = getattr(reasoning, "content", None)
+        if reasoning_content:
+            return str(reasoning_content)
+    return None
+
+
 async def parse_content(
     content: str,
     provider: str,
@@ -140,19 +160,24 @@ async def parse_content(
     api_base: str | None = None,
     reasoning_effort: str | None = None,
     instruction: str | None = None,
+    system_prompt: str | None = None,
 ) -> dict[str, str | None]:
     """Clean up raw pasted content and identify title/artist (non-streaming).
 
-    Returns dict with: original_content, title, artist
+    Returns dict with: original_content, title, artist, reasoning
     """
-    kwargs = _build_parse_kwargs(content, provider, model, api_base, reasoning_effort, instruction)
+    kwargs = _build_parse_kwargs(
+        content, provider, model, api_base, reasoning_effort, instruction, system_prompt
+    )
     clean_response = await acompletion(**kwargs)
     clean_result = _parse_clean_response(_get_content(clean_response), content)
+    reasoning = _get_reasoning(clean_response)
 
     return {
         "original_content": clean_result["original"],
         "title": clean_result["title"],
         "artist": clean_result["artist"],
+        "reasoning": reasoning,
     }
 
 
@@ -163,15 +188,27 @@ async def parse_content_stream(
     api_base: str | None = None,
     reasoning_effort: str | None = None,
     instruction: str | None = None,
-) -> AsyncIterator[str]:
-    """Stream parse tokens. Caller accumulates and parses the final result."""
-    kwargs = _build_parse_kwargs(content, provider, model, api_base, reasoning_effort, instruction)
+    system_prompt: str | None = None,
+) -> AsyncIterator[tuple[str, str]]:
+    """Stream parse tokens as ``(type, text)`` tuples.
+
+    Types: ``"token"`` for content, ``"reasoning"`` for reasoning/thinking.
+    """
+    kwargs = _build_parse_kwargs(
+        content, provider, model, api_base, reasoning_effort, instruction, system_prompt
+    )
     response = await acompletion(stream=True, **kwargs)
 
     async for chunk in response:
         delta = chunk.choices[0].delta  # type: ignore[union-attr]
-        if delta and delta.content:
-            yield delta.content
+        if delta:
+            reasoning = getattr(delta, "reasoning", None)
+            if reasoning is not None:
+                reasoning_content = getattr(reasoning, "content", None)
+                if reasoning_content:
+                    yield ("reasoning", str(reasoning_content))
+            if delta.content:
+                yield ("token", delta.content)
 
 
 def _extract_xml_section(raw: str, tag: str) -> str | None:
@@ -222,17 +259,39 @@ def _parse_clean_response(raw: str, fallback_original: str) -> dict[str, str | N
 def _parse_chat_response(raw: str) -> dict[str, str | None]:
     """Parse chat LLM response, extracting content from <content> tags and explanation.
 
-    Returns ``{"content": ..., "explanation": ...}`` where ``content`` is ``None``
-    when the LLM responded conversationally without ``<content>`` tags.
+    Returns ``{"content": ..., "original_content": ..., "explanation": ...}``
+    where ``content`` and ``original_content`` are ``None`` when the LLM
+    responded conversationally without the respective tags.
     """
     xml_content = _extract_xml_section(raw, "content")
+    original_content = _extract_xml_section(raw, "original_song")
+
     if xml_content is not None:
         after = raw.split("</content>", 1)
         explanation = after[1].strip() if len(after) > 1 else ""
-        return {"content": xml_content, "explanation": explanation}
+        # Strip any <original_song> tags from the explanation
+        if original_content is not None and "</original_song>" in explanation:
+            import re
 
-    # No <content> tags → conversational response, no content update
-    return {"content": None, "explanation": raw.strip()}
+            explanation = re.sub(
+                r"<original_song>.*?</original_song>", "", explanation, flags=re.DOTALL
+            ).strip()
+        return {
+            "content": xml_content,
+            "original_content": original_content,
+            "explanation": explanation,
+        }
+
+    # No <content> tags — check if there's an original_song update alone
+    explanation = raw.strip()
+    if original_content is not None:
+        import re
+
+        explanation = re.sub(
+            r"<original_song>.*?</original_song>", "", explanation, flags=re.DOTALL
+        ).strip()
+
+    return {"content": None, "original_content": original_content, "explanation": explanation}
 
 
 def _build_chat_kwargs(
@@ -242,9 +301,10 @@ def _build_chat_kwargs(
     model: str,
     api_base: str | None = None,
     reasoning_effort: str | None = None,
+    system_prompt: str | None = None,
 ) -> dict[str, object]:
     """Build the common kwargs dict for chat LLM calls."""
-    system_content = CHAT_SYSTEM_PROMPT
+    system_content = system_prompt or CHAT_SYSTEM_PROMPT
     system_content += "\n\nORIGINAL SONG:\n" + song.original_content
 
     llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_content}]
@@ -270,6 +330,7 @@ async def chat_edit_content(
     model: str,
     api_base: str | None = None,
     reasoning_effort: str | None = None,
+    system_prompt: str | None = None,
 ) -> dict[str, str | None]:
     """Process a chat-based content edit (non-streaming).
 
@@ -279,19 +340,24 @@ async def chat_edit_content(
     ``rewritten_content`` is ``None`` when the LLM responded conversationally
     without ``<content>`` tags.
     """
-    kwargs = _build_chat_kwargs(song, messages, provider, model, api_base, reasoning_effort)
+    kwargs = _build_chat_kwargs(
+        song, messages, provider, model, api_base, reasoning_effort, system_prompt
+    )
     response = await acompletion(**kwargs)
 
     raw_response = _get_content(response)
     parsed = _parse_chat_response(raw_response)
+    reasoning = _get_reasoning(response)
 
     # Build a changes summary
     changes_summary = parsed["explanation"] or "Chat edit applied."
 
     return {
         "rewritten_content": parsed["content"],
+        "original_content": parsed["original_content"],
         "assistant_message": raw_response,
         "changes_summary": changes_summary,
+        "reasoning": reasoning,
     }
 
 
@@ -302,16 +368,24 @@ async def chat_edit_content_stream(
     model: str,
     api_base: str | None = None,
     reasoning_effort: str | None = None,
-) -> AsyncIterator[str]:
-    """Stream a chat-based content edit token by token.
+    system_prompt: str | None = None,
+) -> AsyncIterator[tuple[str, str]]:
+    """Stream a chat-based content edit token by token as ``(type, text)`` tuples.
 
-    Yields individual token strings as they arrive from the LLM.
-    The caller is responsible for accumulating the full text and parsing it.
+    Types: ``"token"`` for content, ``"reasoning"`` for reasoning/thinking.
     """
-    kwargs = _build_chat_kwargs(song, messages, provider, model, api_base, reasoning_effort)
+    kwargs = _build_chat_kwargs(
+        song, messages, provider, model, api_base, reasoning_effort, system_prompt
+    )
     response = await acompletion(stream=True, **kwargs)
 
     async for chunk in response:
         delta = chunk.choices[0].delta  # type: ignore[union-attr]
-        if delta and delta.content:
-            yield delta.content
+        if delta:
+            reasoning = getattr(delta, "reasoning", None)
+            if reasoning is not None:
+                reasoning_content = getattr(reasoning, "content", None)
+                if reasoning_content:
+                    yield ("reasoning", str(reasoning_content))
+            if delta.content:
+                yield ("token", delta.content)

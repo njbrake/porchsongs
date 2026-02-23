@@ -14,7 +14,7 @@ import LoginPage from '@/components/LoginPage';
 import type { Profile, RewriteResult, RewriteMeta, ChatMessage, Song, AuthConfig, AuthUser } from '@/types';
 
 const TAB_KEYS = ['rewrite', 'library', 'settings'];
-const SETTINGS_SUB_TABS = ['profile', 'providers'];
+const SETTINGS_SUB_TABS_ALL = ['profile', 'prompts', 'providers'];
 
 function tabFromPath(pathname: string): string {
   const seg = pathname.replace(/^\//, '').split('/')[0]!.toLowerCase();
@@ -23,7 +23,7 @@ function tabFromPath(pathname: string): string {
 
 function settingsTabFromPath(pathname: string): string {
   const parts = pathname.replace(/^\//, '').split('/');
-  if (parts[0]?.toLowerCase() === 'settings' && SETTINGS_SUB_TABS.includes(parts[1]?.toLowerCase() ?? '')) {
+  if (parts[0]?.toLowerCase() === 'settings' && SETTINGS_SUB_TABS_ALL.includes(parts[1]?.toLowerCase() ?? '')) {
     return parts[1]!.toLowerCase();
   }
   return 'profile';
@@ -151,6 +151,7 @@ export default function App() {
   }, []);
 
   const llmSettings = { provider, model, reasoning_effort: reasoningEffort };
+  const isPremium = authConfig?.method === 'oauth_google';
 
   // Load profile on mount (only when ready)
   useEffect(() => {
@@ -194,7 +195,7 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authState]);
 
-  const handleSaveProfile = useCallback(async (data: { name: string; is_default: boolean }) => {
+  const handleSaveProfile = useCallback(async (data: Partial<Profile>) => {
     let saved: Profile;
     if (profile?.id) {
       saved = await api.updateProfile(profile.id, data);
@@ -304,6 +305,7 @@ export default function App() {
             onChangeReasoningEffort={setReasoningEffort}
             savedModels={savedModels}
             onOpenSettings={() => setTab('settings', 'profile')}
+            isPremium={isPremium}
           />
         </div>
         {activeTab === 'library' && (
@@ -341,6 +343,7 @@ export default function App() {
             onChangeTab={(sub) => setTab('settings', sub)}
             reasoningEffort={reasoningEffort}
             onChangeReasoningEffort={setReasoningEffort}
+            isPremium={isPremium}
           />
         )}
       </main>

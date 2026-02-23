@@ -99,7 +99,19 @@ async def delete_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, bool]:
+    from ..models import Song
+
     profile = get_user_profile(db, current_user, profile_id)
+
+    # Prevent deleting a profile that still has songs
+    song_count = db.query(Song).filter(Song.profile_id == profile.id).count()
+    if song_count > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete profile with {song_count} song(s). "
+            "Move or delete the songs first.",
+        )
+
     db.query(ProfileModel).filter(ProfileModel.profile_id == profile.id).delete()
     db.query(ProviderConnection).filter(ProviderConnection.profile_id == profile.id).delete()
     db.delete(profile)

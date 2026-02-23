@@ -1,9 +1,10 @@
-import { useState, useEffect, type FormEvent, type ChangeEvent } from 'react';
+import { useState, useEffect, useCallback, type FormEvent, type ChangeEvent } from 'react';
 import api from '@/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -268,9 +269,10 @@ interface ProfileSubTabProps {
   onSave: (data: { name: string; is_default: boolean }) => Promise<Profile>;
   reasoningEffort: string;
   onChangeReasoningEffort: (value: string) => void;
+  isPremium?: boolean;
 }
 
-function ProfileSubTab({ profile, onSave, reasoningEffort, onChangeReasoningEffort }: ProfileSubTabProps) {
+function ProfileSubTab({ profile, onSave, reasoningEffort, onChangeReasoningEffort, isPremium }: ProfileSubTabProps) {
   const [name, setName] = useState('');
   const [status, setStatus] = useState('');
 
@@ -322,23 +324,127 @@ function ProfileSubTab({ profile, onSave, reasoningEffort, onChangeReasoningEffo
         </CardContent>
       </Card>
 
-      <Card className="mt-6">
+      {!isPremium && (
+        <Card className="mt-6">
+          <CardContent className="pt-6">
+            <h3 className="text-sm font-semibold mb-3">Default Reasoning Effort</h3>
+            <p className="text-sm text-muted-foreground mb-3">Controls how much effort the LLM spends thinking before responding. Higher effort may produce better results but takes longer.</p>
+            <Select value={reasoningEffort} onChange={(e: ChangeEvent<HTMLSelectElement>) => onChangeReasoningEffort(e.target.value)}>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </Select>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+interface SystemPromptsTabProps {
+  profile: Profile | null;
+  onSaveProfile: (data: Partial<Profile>) => Promise<Profile>;
+}
+
+function SystemPromptsTab({ profile, onSaveProfile }: SystemPromptsTabProps) {
+  const [defaults, setDefaults] = useState<{ parse: string; chat: string } | null>(null);
+  const [parsePrompt, setParsePrompt] = useState('');
+  const [chatPrompt, setChatPrompt] = useState('');
+  const [status, setStatus] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.getDefaultPrompts()
+      .then(setDefaults)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (profile) {
+      setParsePrompt(profile.system_prompt_parse ?? '');
+      setChatPrompt(profile.system_prompt_chat ?? '');
+    }
+  }, [profile]);
+
+  const handleSave = useCallback(async () => {
+    if (!profile) return;
+    try {
+      await onSaveProfile({
+        system_prompt_parse: parsePrompt || null,
+        system_prompt_chat: chatPrompt || null,
+      });
+      setStatus('Saved!');
+      setTimeout(() => setStatus(''), 2000);
+    } catch (err) {
+      setStatus('Error: ' + (err as Error).message);
+    }
+  }, [profile, parsePrompt, chatPrompt, onSaveProfile]);
+
+  if (loading) return null;
+
+  return (
+    <div>
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold mb-1">System Prompts</h2>
+        <p className="text-muted-foreground">Customize the system prompts used for LLM calls. Leave empty to use the built-in defaults.</p>
+      </div>
+
+      <Card className="mb-6">
         <CardContent className="pt-6">
-          <h3 className="text-sm font-semibold mb-3">Default Reasoning Effort</h3>
-          <p className="text-sm text-muted-foreground mb-3">Controls how much effort the LLM spends thinking before responding. Higher effort may produce better results but takes longer.</p>
-          <Select value={reasoningEffort} onChange={(e: ChangeEvent<HTMLSelectElement>) => onChangeReasoningEffort(e.target.value)}>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </Select>
+          <div className="flex items-center justify-between mb-2">
+            <Label htmlFor="parse-prompt">Parse Prompt</Label>
+            {parsePrompt && (
+              <Button variant="ghost" size="sm" onClick={() => setParsePrompt('')}>
+                Reset to Default
+              </Button>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground mb-2">Used when cleaning up pasted song input.</p>
+          <Textarea
+            id="parse-prompt"
+            value={parsePrompt}
+            onChange={e => setParsePrompt(e.target.value)}
+            placeholder={defaults?.parse ?? ''}
+            rows={10}
+            className="font-mono text-code"
+          />
         </CardContent>
       </Card>
+
+      <Card className="mb-6">
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between mb-2">
+            <Label htmlFor="chat-prompt">Chat Prompt</Label>
+            {chatPrompt && (
+              <Button variant="ghost" size="sm" onClick={() => setChatPrompt('')}>
+                Reset to Default
+              </Button>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground mb-2">Used for chat-based song editing.</p>
+          <Textarea
+            id="chat-prompt"
+            value={chatPrompt}
+            onChange={e => setChatPrompt(e.target.value)}
+            placeholder={defaults?.chat ?? ''}
+            rows={10}
+            className="font-mono text-code"
+          />
+        </CardContent>
+      </Card>
+
+      <div className="flex items-center gap-4">
+        <Button onClick={handleSave} disabled={!profile}>Save</Button>
+        {status && <span className="text-sm text-success">{status}</span>}
+      </div>
     </div>
   );
 }
 
 const SETTINGS_TABS = [
   { key: 'profile', label: 'Profile' },
+  { key: 'prompts', label: 'System Prompts' },
   { key: 'providers', label: 'LLM Providers' },
 ] as const;
 
@@ -353,38 +459,50 @@ interface SettingsPageProps {
   onAddConnection: (provider: string, apiBase?: string | null) => Promise<ProviderConnection | null>;
   onRemoveConnection: (id: number) => void;
   profile: Profile | null;
-  onSaveProfile: (data: { name: string; is_default: boolean }) => Promise<Profile>;
+  onSaveProfile: (data: Partial<Profile>) => Promise<Profile>;
   activeTab: string;
   onChangeTab: (tab: string) => void;
   reasoningEffort: string;
   onChangeReasoningEffort: (value: string) => void;
+  /** When true, LLM providers are managed by the platform — hide the providers tab. */
+  isPremium?: boolean;
 }
 
-export default function SettingsPage({ provider, model, savedModels, onSave, onAddModel, onRemoveModel, connections, onAddConnection, onRemoveConnection, profile, onSaveProfile, activeTab, onChangeTab, reasoningEffort, onChangeReasoningEffort }: SettingsPageProps) {
+export default function SettingsPage({ provider, model, savedModels, onSave, onAddModel, onRemoveModel, connections, onAddConnection, onRemoveConnection, profile, onSaveProfile, activeTab, onChangeTab, reasoningEffort, onChangeReasoningEffort, isPremium }: SettingsPageProps) {
+  const visibleTabs = isPremium
+    ? SETTINGS_TABS.filter(t => t.key !== 'providers')
+    : SETTINGS_TABS;
+
   return (
     <div>
-      <div className="flex border-b border-border mb-4">
-        {SETTINGS_TABS.map(t => (
-          <button
-            key={t.key}
-            className={cn(
-              'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
-              activeTab === t.key
-                ? 'text-primary border-primary'
-                : 'text-muted-foreground border-transparent hover:text-foreground'
-            )}
-            onClick={() => onChangeTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {activeTab === 'profile' && (
-        <ProfileSubTab profile={profile} onSave={onSaveProfile} reasoningEffort={reasoningEffort} onChangeReasoningEffort={onChangeReasoningEffort} />
+      {visibleTabs.length > 1 && (
+        <div className="flex border-b border-border mb-4">
+          {visibleTabs.map(t => (
+            <button
+              key={t.key}
+              className={cn(
+                'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                activeTab === t.key
+                  ? 'text-primary border-primary'
+                  : 'text-muted-foreground border-transparent hover:text-foreground'
+              )}
+              onClick={() => onChangeTab(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       )}
 
-      {activeTab === 'providers' && (
+      {activeTab === 'profile' && (
+        <ProfileSubTab profile={profile} onSave={onSaveProfile} reasoningEffort={isPremium ? '' : reasoningEffort} onChangeReasoningEffort={onChangeReasoningEffort} isPremium={isPremium} />
+      )}
+
+      {activeTab === 'prompts' && (
+        <SystemPromptsTab profile={profile} onSaveProfile={onSaveProfile} />
+      )}
+
+      {activeTab === 'providers' && !isPremium && (
         <LLMProvidersTab
           provider={provider}
           model={model}

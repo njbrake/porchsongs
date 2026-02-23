@@ -22,9 +22,14 @@ DATABASE_URL="sqlite:///:memory:" uv run pytest           # all tests (~120)
 DATABASE_URL="sqlite:///:memory:" uv run pytest -v         # verbose
 DATABASE_URL="sqlite:///:memory:" uv run pytest tests/test_api.py::test_create_profile  # single test
 
+# Frontend tests
+cd frontend && npx vitest run                            # all tests (~39)
+cd frontend && npx vitest run src/components/Header.test  # single test file
+
 # Lint & type check
 uv run ruff check backend/
 uv run ruff format backend/
+cd frontend && npx eslint src/      # frontend lint
 cd frontend && npm run typecheck    # tsc --noEmit
 
 # Database migrations
@@ -68,6 +73,10 @@ Three LLM interaction modes:
 - **Full rewrite** (`POST /api/rewrite`) — rewrites entire song at once; supports `?stream=true` for SSE streaming
 - **Line workshop** (`POST /api/workshop-line`) — generates 3 alternatives for a single line
 - **Chat** (`POST /api/chat`) — multi-turn conversation for iterative edits, persists each edit as a `SongRevision`
+
+### SSE Streaming
+
+`POST /api/rewrite?stream=true` uses Server-Sent Events. The auth middleware in `main.py` (`OptionalBearerAuth`) is implemented as **pure ASGI** (`__call__(self, scope, receive, send)`) — not Starlette's `BaseHTTPMiddleware`, which buffers the entire response body and silently breaks `StreamingResponse`/SSE. Always add `Cache-Control: no-cache` and `X-Accel-Buffering: no` headers to SSE responses to prevent reverse proxy buffering.
 
 ### Chord Processing
 
@@ -113,6 +122,10 @@ cd frontend && npx vitest run                 # frontend tests (~37)
 ## Frontend Design System & Code Style
 
 The frontend uses Tailwind CSS v4 with a custom `@theme` block in `src/index.css`. Follow these conventions to keep the design simple and avoid duplication:
+
+### Tailwind v4 cascade layers
+
+All Tailwind utilities live in `@layer utilities`. Any custom CSS **not** inside a `@layer` block (unlayered) silently overrides all utility classes per CSS spec. Never add unlayered resets like `* { margin: 0 }` — Tailwind preflight handles this. All custom CSS in `index.css` must be inside `@layer base { ... }`.
 
 ### Use design tokens, not arbitrary values
 - **Colors**: All colors are defined as `--color-*` tokens in `@theme`. Never hardcode hex values — add a new token if needed.

@@ -12,7 +12,7 @@ from ..auth.dependencies import get_current_user
 from ..auth.scoping import get_user_profile, get_user_song
 from ..database import get_db
 from ..models import ChatMessage as ChatMessageModel
-from ..models import ProfileModel, ProviderConnection, Song, SongRevision, User
+from ..models import Profile, ProfileModel, ProviderConnection, Song, SongRevision, User
 from ..schemas import (
     ChatMessage,
     ChatRequest,
@@ -24,6 +24,39 @@ from ..services import llm_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Maps provider names to the env var they need for authentication.
+_PROVIDER_KEY_ENV_VARS: dict[str, str] = {
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "google": "GOOGLE_API_KEY",
+    "mistral": "MISTRAL_API_KEY",
+    "cohere": "COHERE_API_KEY",
+    "groq": "GROQ_API_KEY",
+    "together": "TOGETHER_API_KEY",
+    "fireworks": "FIREWORKS_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
+}
+
+
+def _format_llm_error(e: Exception, provider: str | None = None) -> str:
+    """Turn raw SDK errors into user-friendly messages with setup instructions."""
+    msg = str(e).lower()
+    if "api key" in msg or "apikey" in msg or "authentication" in msg or "unauthorized" in msg:
+        env_var = _PROVIDER_KEY_ENV_VARS.get(provider or "")
+        if env_var:
+            return (
+                f"No API key configured for {provider}. "
+                f"Set the {env_var} environment variable on the server and restart. "
+                f"Example: export {env_var}=sk-..."
+            )
+        return (
+            f"No API key configured for {provider or 'this provider'}. "
+            "Set the appropriate API key environment variable on the server and restart."
+        )
+    return f"LLM error: {e}"
+
 
 T = TypeVar("T")
 
@@ -80,6 +113,16 @@ def _lookup_api_base(
     return None
 
 
+@router.get("/prompts/defaults")
+async def get_default_prompts(
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    return {
+        "parse": llm_service.CLEAN_SYSTEM_PROMPT,
+        "chat": llm_service.CHAT_SYSTEM_PROMPT,
+    }
+
+
 @router.post("/parse", response_model=ParseResponse)
 async def parse(
     req: ParseRequest,
@@ -87,7 +130,7 @@ async def parse(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, str | None]:
-    get_user_profile(db, current_user, req.profile_id)
+    profile = get_user_profile(db, current_user, req.profile_id)
     api_base = _lookup_api_base(db, req.profile_id, req.provider, req.model)
 
     try:
@@ -100,12 +143,13 @@ async def parse(
                 api_base=api_base,
                 reasoning_effort=req.reasoning_effort,
                 instruction=req.instruction,
+                system_prompt=profile.system_prompt_parse,
             ),
         )
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"LLM error: {e}") from None
+        raise HTTPException(status_code=502, detail=_format_llm_error(e, req.provider)) from None
 
     return result
 
@@ -117,11 +161,12 @@ async def parse_stream(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
-    get_user_profile(db, current_user, req.profile_id)
+    profile = get_user_profile(db, current_user, req.profile_id)
     api_base = _lookup_api_base(db, req.profile_id, req.provider, req.model)
 
     async def event_generator() -> AsyncIterator[str]:
         accumulated = ""
+        reasoning_accumulated = ""
         try:
             stream = llm_service.parse_content_stream(
                 content=req.content,
@@ -130,23 +175,30 @@ async def parse_stream(
                 api_base=api_base,
                 reasoning_effort=req.reasoning_effort,
                 instruction=req.instruction,
+                system_prompt=profile.system_prompt_parse,
             )
-            async for token in stream:
+            async for kind, text in stream:
                 if await request.is_disconnected():
                     return
-                accumulated += token
-                yield f"event: token\ndata: {json.dumps(token)}\n\n"
-        except Exception:
+                if kind == "reasoning":
+                    reasoning_accumulated += text
+                    yield f"event: reasoning\ndata: {json.dumps(text)}\n\n"
+                else:
+                    accumulated += text
+                    yield f"event: token\ndata: {json.dumps(text)}\n\n"
+        except Exception as e:
             logger.exception("Parse stream LLM error")
-            yield f"event: error\ndata: {json.dumps({'detail': 'LLM streaming error'})}\n\n"
+            detail = _format_llm_error(e, req.provider)
+            yield f"event: error\ndata: {json.dumps({'detail': detail})}\n\n"
             return
 
         # Parse the accumulated response
         parsed = llm_service._parse_clean_response(accumulated, req.content)
-        done_data = {
+        done_data: dict[str, str | None] = {
             "original_content": parsed["original"],
             "title": parsed["title"],
             "artist": parsed["artist"],
+            "reasoning": reasoning_accumulated or None,
         }
         yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
 
@@ -182,8 +234,12 @@ def _persist_chat_result(
     changes_summary: str,
     assistant_content: str,
     req_messages: list[ChatMessage],
+    original_content: str | None = None,
 ) -> None:
     """Update song, create revision, and save chat messages (does not commit)."""
+    if original_content is not None:
+        song.original_content = original_content
+
     if rewritten_content is not None:
         song.rewritten_content = rewritten_content
         song.changes_summary = changes_summary
@@ -223,6 +279,7 @@ async def chat(
     song = get_user_song(db, current_user, req.song_id)
     messages = _load_chat_messages(db, song.id, req.messages)
     api_base = _lookup_api_base(db, song.profile_id, req.provider, req.model)
+    profile = db.query(Profile).filter(Profile.id == song.profile_id).first()
 
     try:
         result = await _cancellable(
@@ -234,12 +291,13 @@ async def chat(
                 model=req.model,
                 api_base=api_base,
                 reasoning_effort=req.reasoning_effort,
+                system_prompt=profile.system_prompt_chat if profile else None,
             ),
         )
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"LLM error: {e}") from None
+        raise HTTPException(status_code=502, detail=_format_llm_error(e, req.provider)) from None
 
     _persist_chat_result(
         db,
@@ -248,14 +306,17 @@ async def chat(
         changes_summary=result["changes_summary"],
         assistant_content=result["assistant_message"],
         req_messages=req.messages,
+        original_content=result.get("original_content"),
     )
     db.commit()
 
     return ChatResponse(
         rewritten_content=result["rewritten_content"],
+        original_content=result.get("original_content"),
         assistant_message=result["assistant_message"],
         changes_summary=result["changes_summary"],
         version=song.current_version,
+        reasoning=result.get("reasoning"),
     )
 
 
@@ -269,9 +330,11 @@ async def chat_stream(
     song = get_user_song(db, current_user, req.song_id)
     messages = _load_chat_messages(db, song.id, req.messages)
     api_base = _lookup_api_base(db, song.profile_id, req.provider, req.model)
+    profile = db.query(Profile).filter(Profile.id == song.profile_id).first()
 
     async def event_generator() -> AsyncIterator[str]:
         accumulated = ""
+        reasoning_accumulated = ""
         try:
             stream = llm_service.chat_edit_content_stream(
                 song=song,
@@ -280,15 +343,21 @@ async def chat_stream(
                 model=req.model,
                 api_base=api_base,
                 reasoning_effort=req.reasoning_effort,
+                system_prompt=profile.system_prompt_chat if profile else None,
             )
-            async for token in stream:
+            async for kind, text in stream:
                 if await request.is_disconnected():
                     return
-                accumulated += token
-                yield f"event: token\ndata: {json.dumps(token)}\n\n"
-        except Exception:
+                if kind == "reasoning":
+                    reasoning_accumulated += text
+                    yield f"event: reasoning\ndata: {json.dumps(text)}\n\n"
+                else:
+                    accumulated += text
+                    yield f"event: token\ndata: {json.dumps(text)}\n\n"
+        except Exception as e:
             logger.exception("Chat stream LLM error")
-            yield f"event: error\ndata: {json.dumps({'detail': 'LLM streaming error'})}\n\n"
+            detail = _format_llm_error(e, req.provider)
+            yield f"event: error\ndata: {json.dumps({'detail': detail})}\n\n"
             return
 
         # Parse the accumulated response
@@ -304,6 +373,7 @@ async def chat_stream(
                 changes_summary=changes_summary,
                 assistant_content=accumulated,
                 req_messages=req.messages,
+                original_content=parsed.get("original_content"),
             )
             db.commit()
         except Exception:
@@ -311,11 +381,13 @@ async def chat_stream(
             db.rollback()
 
         # Send final result
-        done_data = {
+        done_data: dict[str, str | int | None] = {
             "rewritten_content": parsed["content"],
+            "original_content": parsed.get("original_content"),
             "assistant_message": accumulated,
             "changes_summary": changes_summary,
             "version": song.current_version,
+            "reasoning": reasoning_accumulated or None,
         }
         yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
 
@@ -342,4 +414,4 @@ async def list_provider_models(
     try:
         return await llm_service.get_models(provider, api_base=api_base)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e)) from None
+        raise HTTPException(status_code=502, detail=_format_llm_error(e, provider)) from None

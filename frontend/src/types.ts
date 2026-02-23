@@ -5,6 +5,8 @@ export interface Profile {
   user_id: number;
   name: string;
   is_default: boolean;
+  system_prompt_parse?: string | null;
+  system_prompt_chat?: string | null;
   created_at: string;
 }
 
@@ -59,6 +61,7 @@ export interface ChatMessage {
   content: string;
   isNote?: boolean;
   rawContent?: string;
+  reasoning?: string;
 }
 
 export interface LlmSettings {
@@ -91,6 +94,10 @@ export interface Provider {
 export interface AuthConfig {
   method: 'password' | 'oauth_google';
   required: boolean;
+  /** Present when method is 'oauth_google' (premium mode) */
+  google_client_id?: string;
+  /** Whether new users need an invite code to register */
+  require_invite_code?: boolean;
 }
 
 export interface AuthUser {
@@ -122,8 +129,10 @@ export interface ChatRequest {
 
 export interface ChatResult {
   rewritten_content: string | null;
+  original_content?: string | null;
   changes_summary: string;
   assistant_message: string;
+  reasoning?: string | null;
 }
 
 export interface ChatHistoryRow {
@@ -136,4 +145,5 @@ export interface ParseResult {
   original_content: string;
   title?: string;
   artist?: string;
+  reasoning?: string | null;
 }

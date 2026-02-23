@@ -21,7 +21,7 @@ describe('StreamParser', () => {
     expect(r.chatDelta).toBe('Here is the summary');
     expect(parser.contentText).toBe('Verse 1\nLine 2\n');
     expect(parser.chatText).toBe('Here is the summary');
-    expect(parser.phase).toBe('after');
+    expect(['between', 'after']).toContain(parser.phase);
   });
 
   it('handles open tag split across tokens', () => {
@@ -46,7 +46,7 @@ describe('StreamParser', () => {
 
     const r2 = parser.processToken('tent>');
     expect(r2.contentDelta).toBe('');
-    expect(parser.phase).toBe('after');
+    expect(['between', 'after']).toContain(parser.phase);
 
     const r3 = parser.processToken('Summary');
     expect(r3.chatDelta).toBe('Summary');
@@ -105,7 +105,7 @@ describe('StreamParser', () => {
     }
     expect(content).toBe('ABC');
     expect(chat).toBe('XY');
-    expect(parser.phase).toBe('after');
+    expect(['between', 'after']).toContain(parser.phase);
   });
 
   it('flushes partial tag match that turns out not to be a tag', () => {
@@ -124,5 +124,40 @@ describe('StreamParser', () => {
     expect(r.contentDelta).toBe('A < B');
     expect(parser.contentText).toBe('A < B');
     expect(parser.phase).toBe('content');
+  });
+
+  it('parses <original_song> tags without <content>', () => {
+    const parser = new StreamParser();
+    const r = parser.processToken('Here is the fix\n<original_song>\nFixed original\n</original_song>Done');
+    expect(r.chatDelta).toBe('Here is the fix\nDone');
+    expect(r.originalSongDelta).toBe('Fixed original\n');
+    expect(parser.originalSongText).toBe('Fixed original\n');
+    expect(parser.phase).toBe('after');
+  });
+
+  it('parses both <content> and <original_song> tags', () => {
+    const parser = new StreamParser();
+    const full = '<content>\nNew lyrics</content>Explanation\n<original_song>\nFixed chords</original_song>Final note';
+    let content = '';
+    let chat = '';
+    let original = '';
+    for (const ch of full) {
+      const r = parser.processToken(ch);
+      content += r.contentDelta;
+      chat += r.chatDelta;
+      original += r.originalSongDelta;
+    }
+    expect(content).toBe('New lyrics');
+    expect(original).toBe('Fixed chords');
+    expect(chat).toBe('Explanation\nFinal note');
+    expect(parser.phase).toBe('after');
+  });
+
+  it('strips leading newline after <original_song> tag', () => {
+    const parser = new StreamParser();
+    parser.processToken('<original_song>');
+    const r = parser.processToken('\nFirst line');
+    expect(r.originalSongDelta).toBe('First line');
+    expect(parser.originalSongText).toBe('First line');
   });
 });

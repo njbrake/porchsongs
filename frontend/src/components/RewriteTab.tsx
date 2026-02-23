@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import Spinner from '@/components/ui/spinner';
+import StreamingPre from '@/components/ui/streaming-pre';
 import { Alert } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import type { Profile, Song, RewriteResult, RewriteMeta, ChatMessage, LlmSettings, SavedModel, ParseResult } from '@/types';
@@ -31,6 +32,8 @@ interface RewriteTabProps {
   onChangeReasoningEffort: (value: string) => void;
   savedModels: SavedModel[];
   onOpenSettings: () => void;
+  /** When true, provider/model selection is managed by the platform. */
+  isPremium?: boolean;
 }
 
 export default function RewriteTab({
@@ -50,6 +53,7 @@ export default function RewriteTab({
   onChangeReasoningEffort,
   savedModels,
   onOpenSettings,
+  isPremium,
 }: RewriteTabProps) {
   const [input, setInputRaw] = useState(
     () => sessionStorage.getItem(STORAGE_KEYS.DRAFT_INPUT) || ''
@@ -80,6 +84,8 @@ export default function RewriteTab({
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [parsedContent, setParsedContent] = useState('');
   const [parseStreamText, setParseStreamText] = useState('');
+  const [parseReasoningText, setParseReasoningText] = useState('');
+  const [parseReasoningExpanded, setParseReasoningExpanded] = useState(false);
 
   useEffect(() => {
     if (rewriteMeta) {
@@ -93,11 +99,12 @@ export default function RewriteTab({
   }, [currentSongId]);
 
   const needsProfile = !profile?.id;
-  const canParse = !needsProfile && llmSettings.provider && llmSettings.model && !loading && input.trim().length > 0;
+  const hasModel = isPremium || (llmSettings.provider && llmSettings.model);
+  const canParse = !needsProfile && hasModel && !loading && input.trim().length > 0;
 
   const parseBlocker = needsProfile
     ? 'Create a profile first'
-    : !llmSettings.provider || !llmSettings.model
+    : !hasModel
       ? 'Select a model'
       : input.trim().length === 0
         ? 'Paste some content above'
@@ -123,9 +130,11 @@ export default function RewriteTab({
     setLoading(true);
     setError(null);
     setParseStreamText('');
+    setParseReasoningText('');
     onNewRewrite(null, null);
     setParseResult(null);
 
+    let reasoningAccumulated = '';
     try {
       const result = await api.parseStream(
         {
@@ -138,6 +147,10 @@ export default function RewriteTab({
           setParseStreamText(prev => prev + token);
         },
         controller.signal,
+        (reasoningToken: string) => {
+          reasoningAccumulated += reasoningToken;
+          setParseReasoningText(reasoningAccumulated);
+        },
       );
 
       setParseResult(result);
@@ -202,6 +215,8 @@ export default function RewriteTab({
     setParseResult(null);
     setParsedContent('');
     setParseStreamText('');
+    setParseReasoningText('');
+    setParseReasoningExpanded(false);
     setCompletedStatus(null);
     setError(null);
     setSongTitle('');
@@ -244,6 +259,23 @@ export default function RewriteTab({
       api.updateSong(currentSongId, { title: songTitle || null, artist: songArtist || null } as Partial<Song>).catch(() => {});
     }
   }, [currentSongId, songTitle, songArtist]);
+
+  const handleOriginalContentUpdated = useCallback((newOriginal: string) => {
+    if (!rewriteResult && parseResult) {
+      // PARSED state — update the editable parsed content
+      setParsedContent(newOriginal);
+    } else if (rewriteResult) {
+      // WORKSHOPPING state — update the original in the rewrite result
+      onNewRewrite(
+        { ...rewriteResult, original_content: newOriginal },
+        rewriteMeta,
+      );
+    }
+    // Persist to DB
+    if (currentSongId) {
+      api.updateSong(currentSongId, { original_content: newOriginal } as Partial<Song>).catch(() => {});
+    }
+  }, [rewriteResult, parseResult, rewriteMeta, currentSongId, onNewRewrite]);
 
   const handleRewrittenChange = useCallback((newText: string) => {
     onContentUpdated(newText);
@@ -348,7 +380,7 @@ export default function RewriteTab({
       {/* INPUT state */}
       {isInput && !loading && (
         <>
-          {modelControls()}
+          {!isPremium && modelControls()}
 
           <Card>
             <CardContent className="pt-6">
@@ -397,9 +429,12 @@ export default function RewriteTab({
         <Card className="flex flex-col text-muted-foreground">
           <div className="flex items-center justify-center gap-3 py-4">
             <Spinner size="sm" />
-            <span className="text-sm">Parsing song...</span>
+            <span className="text-sm">{parseReasoningText ? 'Thinking...' : 'Parsing song...'}</span>
             <Button variant="danger-outline" size="sm" onClick={handleCancelParse}>Cancel</Button>
           </div>
+          {parseReasoningText && !parseStreamText && (
+            <StreamingPre className="px-4 pb-4 text-xs font-mono text-foreground max-h-[40vh] overflow-y-auto opacity-70">{parseReasoningText}</StreamingPre>
+          )}
           {parseStreamText && (
             <pre className="px-4 pb-4 whitespace-pre-wrap break-words text-xs font-mono text-foreground max-h-[60vh] overflow-y-auto">{parseStreamText}</pre>
           )}
@@ -417,7 +452,7 @@ export default function RewriteTab({
             mobilePane={mobilePane === 'chat' ? 'left' : 'right'}
             left={
               <>
-                {modelControls()}
+                {!isPremium && modelControls()}
 
                 <div className="flex gap-2 mb-2 flex-wrap">
                   <Button variant="secondary" onClick={handleNewSong}>
@@ -433,12 +468,27 @@ export default function RewriteTab({
                   onContentUpdated={handleChatUpdate}
                   initialLoading={false}
                   onBeforeSend={handleBeforeSend}
+                  onOriginalContentUpdated={handleOriginalContentUpdated}
                 />
               </>
             }
             right={
               <>
                 {titleArtistInputs()}
+
+                {parseResult?.reasoning && (
+                  <div className="mb-2">
+                    <button
+                      className="bg-transparent border-0 p-0 text-xs text-primary cursor-pointer underline opacity-80 hover:opacity-100"
+                      onClick={() => setParseReasoningExpanded(prev => !prev)}
+                    >
+                      {parseReasoningExpanded ? 'Hide parse thinking' : 'Show parse thinking'}
+                    </button>
+                    {parseReasoningExpanded && (
+                      <pre className="whitespace-pre-wrap break-words text-xs mt-1 font-mono max-h-60 overflow-y-auto opacity-70">{parseResult.reasoning}</pre>
+                    )}
+                  </div>
+                )}
 
                 <Card className="flex flex-col flex-1 overflow-hidden">
                   <Textarea
@@ -464,7 +514,7 @@ export default function RewriteTab({
             mobilePane={mobilePane === 'chat' ? 'left' : 'right'}
             left={
               <>
-                {modelControls()}
+                {!isPremium && modelControls()}
 
                 <div className="flex gap-2 mb-2 flex-wrap">
                   <Button variant="secondary" onClick={handleNewSong}>
@@ -495,6 +545,7 @@ export default function RewriteTab({
                   onContentUpdated={handleChatUpdate}
                   initialLoading={false}
                   onContentStreaming={handleChatUpdate}
+                  onOriginalContentUpdated={handleOriginalContentUpdated}
                 />
               </>
             }

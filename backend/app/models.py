@@ -29,7 +29,9 @@ class RefreshToken(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     token: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), index=True, nullable=False
+    )
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
@@ -41,11 +43,15 @@ class Profile(Base):
     __tablename__ = "profiles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), index=True, nullable=False
+    )
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    system_prompt_parse: Mapped[str | None] = mapped_column(Text, nullable=True)
+    system_prompt_chat: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(UTC),
@@ -59,8 +65,12 @@ class Song(Base):
     __tablename__ = "songs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    profile_id: Mapped[int] = mapped_column(Integer, ForeignKey("profiles.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), index=True, nullable=False
+    )
+    profile_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("profiles.id"), index=True, nullable=False
+    )
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
     artist: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -82,7 +92,9 @@ class SongRevision(Base):
     __tablename__ = "song_revisions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    song_id: Mapped[int] = mapped_column(Integer, ForeignKey("songs.id"), nullable=False)
+    song_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("songs.id"), index=True, nullable=False
+    )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     rewritten_content: Mapped[str] = mapped_column(Text, nullable=False)
     changes_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -95,7 +107,9 @@ class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    song_id: Mapped[int] = mapped_column(Integer, ForeignKey("songs.id"), nullable=False)
+    song_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("songs.id"), index=True, nullable=False
+    )
     role: Mapped[str] = mapped_column(String, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     is_note: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -106,7 +120,9 @@ class ProviderConnection(Base):
     __tablename__ = "provider_connections"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    profile_id: Mapped[int] = mapped_column(Integer, ForeignKey("profiles.id"), nullable=False)
+    profile_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("profiles.id"), index=True, nullable=False
+    )
     provider: Mapped[str] = mapped_column(String, nullable=False)
     api_base: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
@@ -116,7 +132,9 @@ class ProfileModel(Base):
     __tablename__ = "profile_models"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    profile_id: Mapped[int] = mapped_column(Integer, ForeignKey("profiles.id"), nullable=False)
+    profile_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("profiles.id"), index=True, nullable=False
+    )
     provider: Mapped[str] = mapped_column(String, nullable=False)
     model: Mapped[str] = mapped_column(String, nullable=False)
     api_base: Mapped[str | None] = mapped_column(Text, nullable=True)

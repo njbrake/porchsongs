@@ -20,11 +20,15 @@ class UserOut(BaseModel):
 class ProfileCreate(BaseModel):
     name: str
     is_default: bool = False
+    system_prompt_parse: str | None = None
+    system_prompt_chat: str | None = None
 
 
 class ProfileUpdate(BaseModel):
     name: str | None = None
     is_default: bool | None = None
+    system_prompt_parse: str | None = None
+    system_prompt_chat: str | None = None
 
 
 class ProfileOut(BaseModel):
@@ -32,6 +36,8 @@ class ProfileOut(BaseModel):
     user_id: int
     name: str
     is_default: bool
+    system_prompt_parse: str | None = None
+    system_prompt_chat: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -86,6 +92,7 @@ class ParseResponse(BaseModel):
     original_content: str
     title: str | None = None
     artist: str | None = None
+    reasoning: str | None = None
 
 
 # --- Songs ---
@@ -140,6 +147,7 @@ class SongRevisionOut(BaseModel):
 class SongUpdate(BaseModel):
     title: str | None = None
     artist: str | None = None
+    original_content: str | None = None
     rewritten_content: str | None = None
     font_size: float | None = Field(default=None, ge=0, le=100)
     folder: str | None = None
@@ -183,6 +191,8 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     rewritten_content: str | None = None
+    original_content: str | None = None
     assistant_message: str
     changes_summary: str
     version: int
+    reasoning: str | None = None

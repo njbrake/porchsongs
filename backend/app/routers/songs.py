@@ -3,7 +3,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ..auth.dependencies import get_current_user
-from ..auth.scoping import get_user_song
+from ..auth.scoping import get_user_profile, get_user_song
 from ..database import get_db
 from ..models import (
     ChatMessage,
@@ -96,6 +96,9 @@ async def create_song(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Song:
+    # Verify the profile belongs to this user
+    get_user_profile(db, current_user, data.profile_id)
+
     song = Song(**data.model_dump(), user_id=current_user.id, status="draft", current_version=1)
     db.add(song)
     db.commit()
@@ -127,6 +130,8 @@ async def update_song(
         song.title = data.title
     if data.artist is not None:
         song.artist = data.artist
+    if data.original_content is not None:
+        song.original_content = data.original_content
     if data.rewritten_content is not None:
         song.rewritten_content = data.rewritten_content
     if data.font_size is not None:

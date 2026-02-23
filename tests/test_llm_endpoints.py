@@ -296,7 +296,7 @@ def test_list_provider_models_failure(mock_list_models, client):
 
     resp = client.get("/api/providers/openai/models")
     assert resp.status_code == 502
-    assert "Invalid API key" in resp.json()["detail"]
+    assert "OPENAI_API_KEY" in resp.json()["detail"]
 
 
 # --- api_base passthrough tests ---
@@ -370,3 +370,90 @@ def test_list_models_with_api_base(mock_list_models, client):
     mock_list_models.assert_called_once()
     call_kwargs = mock_list_models.call_args.kwargs
     assert call_kwargs.get("api_base") == "http://localhost:11434"
+
+
+# --- GET /api/prompts/defaults ---
+
+
+def test_get_default_prompts(client):
+    resp = client.get("/api/prompts/defaults")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "parse" in data
+    assert "chat" in data
+    assert "songwriter" in data["parse"].lower()
+    assert "songwriter" in data["chat"].lower()
+
+
+# --- System prompt fields on profiles ---
+
+
+def test_profile_system_prompt_fields_roundtrip(client):
+    """Creating and updating profiles with system prompt fields."""
+    profile = client.post("/api/profiles", json={
+        "name": "Custom Prompts",
+        "system_prompt_parse": "Custom parse prompt",
+        "system_prompt_chat": "Custom chat prompt",
+    }).json()
+    assert profile["system_prompt_parse"] == "Custom parse prompt"
+    assert profile["system_prompt_chat"] == "Custom chat prompt"
+
+    # Update to clear one prompt
+    updated = client.put(f"/api/profiles/{profile['id']}", json={
+        "system_prompt_parse": None,
+    }).json()
+    assert updated["system_prompt_parse"] is None
+    assert updated["system_prompt_chat"] == "Custom chat prompt"
+
+
+@patch("app.services.llm_service.acompletion")
+def test_parse_uses_custom_system_prompt(mock_acompletion, client):
+    """When a profile has a custom parse prompt, it should be used in the LLM call."""
+    custom_prompt = "You are a CUSTOM parse assistant."
+    profile = client.post("/api/profiles", json={
+        "name": "Custom",
+        "system_prompt_parse": custom_prompt,
+    }).json()
+
+    mock_acompletion.return_value = _fake_completion_response(
+        "<meta>\nTitle: Test\nArtist: Test\n</meta>\n"
+        "<original>\nHello world\n</original>"
+    )
+
+    client.post("/api/parse", json={
+        "profile_id": profile["id"],
+        "content": "Hello world",
+        **LLM_SETTINGS,
+    })
+
+    messages = mock_acompletion.call_args.kwargs.get("messages") or mock_acompletion.call_args[1].get("messages")
+    assert messages[0]["content"] == custom_prompt
+
+
+@patch("app.services.llm_service.acompletion")
+def test_chat_uses_custom_system_prompt(mock_acompletion, client):
+    """When a profile has a custom chat prompt, it should be used in the LLM call."""
+    custom_prompt = "You are a CUSTOM chat assistant."
+    profile = client.post("/api/profiles", json={
+        "name": "Custom Chat",
+        "system_prompt_chat": custom_prompt,
+    }).json()
+    song = client.post("/api/songs", json={
+        "profile_id": profile["id"],
+        "original_content": "Hello world",
+        "rewritten_content": "Hi there world",
+    }).json()
+
+    mock_acompletion.return_value = _fake_completion_response(
+        "Just a conversational response."
+    )
+
+    client.post("/api/chat", json={
+        "song_id": song["id"],
+        "messages": [{"role": "user", "content": "Hello"}],
+        **LLM_SETTINGS,
+    })
+
+    messages = mock_acompletion.call_args.kwargs.get("messages") or mock_acompletion.call_args[1].get("messages")
+    # The system message should start with the custom prompt (song content is appended)
+    assert messages[0]["content"].startswith(custom_prompt)

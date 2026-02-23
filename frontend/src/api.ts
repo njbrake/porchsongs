@@ -92,13 +92,27 @@ async function _tryRefresh(): Promise<boolean> {
 // --- Shared helpers ---
 
 function _parseApiError(body: unknown, fallback: string): string {
-  return (body as { detail?: string }).detail || fallback;
+  const b = body as { detail?: string | { message?: string; error?: string } };
+  if (!b.detail) return fallback;
+
+  // Premium middleware returns structured error objects like:
+  // { detail: { error: "quota_exceeded", message: "...", rewrites_used: N } }
+  if (typeof b.detail === 'object') {
+    return b.detail.message || b.detail.error || fallback;
+  }
+
+  return b.detail;
 }
 
 async function _throwIfNotOk(res: Response): Promise<void> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(_parseApiError(body, `Request failed: ${res.status}`));
+    const message = _parseApiError(body, `Request failed: ${res.status}`);
+
+    // Attach status code to the error so callers can distinguish error types
+    const err = new Error(message) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
 }
 
@@ -118,6 +132,7 @@ async function _streamSse<T>(
   data: Record<string, unknown>,
   onToken: (token: string) => void,
   signal?: AbortSignal,
+  onReasoning?: (token: string) => void,
 ): Promise<T> {
   const doStream = async (retry: boolean): Promise<T> => {
     const res = await fetch(`${BASE}${endpoint}`, {
@@ -156,11 +171,16 @@ async function _streamSse<T>(
           const payload = line.slice(6);
           if (eventType === 'token') {
             onToken(JSON.parse(payload) as string);
+          } else if (eventType === 'reasoning') {
+            if (onReasoning) onReasoning(JSON.parse(payload) as string);
           } else if (eventType === 'done') {
             result = JSON.parse(payload) as T;
           } else if (eventType === 'error') {
-            const err = JSON.parse(payload) as { detail: string };
-            throw new Error(err.detail);
+            const err = JSON.parse(payload) as { detail: string | { message?: string; error?: string } };
+            const msg = typeof err.detail === 'object'
+              ? (err.detail.message || err.detail.error || 'Stream error')
+              : (err.detail || 'Stream error');
+            throw new Error(msg);
           }
           eventType = '';
         }
@@ -266,13 +286,17 @@ const api = {
   updateProfile: (id: number, data: Partial<Profile>) => _fetch<Profile>(`/profiles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteProfile: (id: number) => _fetch<void>(`/profiles/${id}`, { method: 'DELETE' }),
 
+  // Prompts
+  getDefaultPrompts: () => _fetch<{ parse: string; chat: string }>('/prompts/defaults'),
+
   // Parse
   parse: (data: Record<string, unknown>, signal?: AbortSignal) => _fetch<ParseResult>('/parse', { method: 'POST', body: JSON.stringify(data), signal }),
   parseStream: (
     data: Record<string, unknown>,
     onToken: (token: string) => void,
     signal?: AbortSignal,
-  ): Promise<ParseResult> => _streamSse<ParseResult>('/parse/stream', data, onToken, signal),
+    onReasoning?: (token: string) => void,
+  ): Promise<ParseResult> => _streamSse<ParseResult>('/parse/stream', data, onToken, signal, onReasoning),
 
   // Songs
   listSongs: (profileId?: number) => {
@@ -293,7 +317,8 @@ const api = {
     data: Record<string, unknown>,
     onToken: (token: string) => void,
     signal?: AbortSignal,
-  ): Promise<ChatResult & { version: number }> => _streamSse<ChatResult & { version: number }>('/chat/stream', data, onToken, signal),
+    onReasoning?: (token: string) => void,
+  ): Promise<ChatResult & { version: number }> => _streamSse<ChatResult & { version: number }>('/chat/stream', data, onToken, signal, onReasoning),
   getChatHistory: (songId: number) => _fetch<ChatHistoryRow[]>(`/songs/${songId}/messages`),
   saveChatMessages: (songId: number, messages: { role: string; content: string; is_note: boolean }[]) =>
     _fetch<void>(`/songs/${songId}/messages`, { method: 'POST', body: JSON.stringify(messages) }),

@@ -11,6 +11,9 @@ import type {
   TokenResponse,
   ChatHistoryRow,
   ParseResult,
+  SubscriptionInfo,
+  UsageInfo,
+  PlanInfo,
 } from '@/types';
 
 const BASE = '/api';
@@ -360,6 +363,13 @@ const api = {
     const query = apiBase ? `?api_base=${encodeURIComponent(apiBase)}` : '';
     return _fetch<string[]>(`/providers/${provider}/models${query}`);
   },
+
+  // Premium: Subscriptions & Billing
+  getSubscription: () => _fetch<SubscriptionInfo>('/subscriptions/me'),
+  getUsage: () => _fetch<UsageInfo>('/subscriptions/usage'),
+  listPlans: () => _fetch<PlanInfo[]>('/subscriptions/plans'),
+  createCheckout: (plan: string) => _fetch<{ checkout_url: string }>('/billing/checkout', { method: 'POST', body: JSON.stringify({ plan }) }),
+  createPortal: () => _fetch<{ portal_url: string }>('/billing/portal', { method: 'POST' }),
 };
 
 export default api;

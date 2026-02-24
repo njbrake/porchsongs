@@ -2,18 +2,18 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '@/api';
 import type { ProviderConnection } from '@/types';
 
-export default function useProviderConnections(profileId: number | undefined) {
+export default function useProviderConnections(profileId: number | undefined, skip = false) {
   const [connections, setConnections] = useState<ProviderConnection[]>([]);
 
   const refresh = useCallback(() => {
-    if (!profileId) {
+    if (!profileId || skip) {
       setConnections([]);
       return;
     }
     api.listProviderConnections(profileId)
       .then(setConnections)
       .catch(() => setConnections([]));
-  }, [profileId]);
+  }, [profileId, skip]);
 
   useEffect(() => {
     refresh();

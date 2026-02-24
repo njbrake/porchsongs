@@ -2,12 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '@/api';
 import type { SavedModel } from '@/types';
 
-export default function useSavedModels(profileId: number | undefined) {
+export default function useSavedModels(profileId: number | undefined, skip = false) {
   const [savedModels, setSavedModels] = useState<SavedModel[]>([]);
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(() => {
-    if (!profileId) {
+    if (!profileId || skip) {
       setSavedModels([]);
       return;
     }
@@ -16,7 +16,7 @@ export default function useSavedModels(profileId: number | undefined) {
       .then(setSavedModels)
       .catch(() => setSavedModels([]))
       .finally(() => setLoading(false));
-  }, [profileId]);
+  }, [profileId, skip]);
 
   useEffect(() => {
     refresh();

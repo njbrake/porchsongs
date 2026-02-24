@@ -14,7 +14,7 @@ import LoginPage from '@/components/LoginPage';
 import type { Profile, RewriteResult, RewriteMeta, ChatMessage, Song, AuthConfig, AuthUser } from '@/types';
 
 const TAB_KEYS = ['rewrite', 'library', 'settings'];
-const SETTINGS_SUB_TABS_ALL = ['profile', 'prompts', 'providers'];
+const SETTINGS_SUB_TABS_ALL = ['account', 'profile', 'prompts', 'providers'];
 
 function tabFromPath(pathname: string): string {
   const seg = pathname.replace(/^\//, '').split('/')[0]!.toLowerCase();
@@ -97,10 +97,12 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
+  const isPremium = authConfig?.method === 'oauth_google';
+
   // Wrapper that updates both state and URL
   const setTab = useCallback((key: string, subTab?: string) => {
     if (key === 'settings') {
-      const sub = subTab || settingsTab || 'profile';
+      const sub = subTab || settingsTab || (isPremium ? 'account' : 'profile');
       setActiveTab('settings');
       setSettingsTab(sub);
       const target = `/settings/${sub}`;
@@ -117,7 +119,7 @@ export default function App() {
         window.history.pushState(null, '', target);
       }
     }
-  }, [settingsTab, activeTab]);
+  }, [settingsTab, activeTab, isPremium]);
 
   // Profile state
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -128,8 +130,9 @@ export default function App() {
   const [reasoningEffort, setReasoningEffort] = useLocalStorage(STORAGE_KEYS.REASONING_EFFORT, 'high');
 
   // Provider connections and saved models for current profile
-  const { connections, addConnection, removeConnection } = useProviderConnections(profile?.id);
-  const { savedModels, addModel, removeModel, refresh: refreshModels } = useSavedModels(profile?.id);
+  // In premium mode, skip these calls — the platform manages LLM config and the endpoints return 403.
+  const { connections, addConnection, removeConnection } = useProviderConnections(profile?.id, isPremium);
+  const { savedModels, addModel, removeModel, refresh: refreshModels } = useSavedModels(profile?.id, isPremium);
 
   // Rewrite state (shared between RewriteTab, comparison, chat)
   const [rewriteResult, setRewriteResult] = useState<RewriteResult | null>(null);
@@ -155,7 +158,6 @@ export default function App() {
   }, []);
 
   const llmSettings = { provider, model, reasoning_effort: reasoningEffort };
-  const isPremium = authConfig?.method === 'oauth_google';
 
   // Load profile on mount (only when ready)
   useEffect(() => {

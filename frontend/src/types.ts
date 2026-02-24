@@ -154,3 +154,35 @@ export interface ParseResult {
   artist?: string;
   reasoning?: string | null;
 }
+
+// Premium types
+
+export interface SubscriptionInfo {
+  plan: string;
+  is_active: boolean;
+  stripe_customer_id?: string | null;
+  created_at: string;
+  expires_at?: string | null;
+  rewrites_per_month: number;
+  rewrites_used: number;
+  max_profiles: number;
+  max_songs: number;
+}
+
+export interface UsageInfo {
+  month: string;
+  rewrites_used: number;
+  rewrites_limit: number;
+}
+
+export interface PlanInfo {
+  name: string;
+  display_name: string;
+  price_cents: number;
+  rewrites_per_month: number;
+  max_profiles: number;
+  max_songs: number;
+  can_create_invites: boolean;
+  max_input_chars: number;
+  max_output_tokens: number;
+}

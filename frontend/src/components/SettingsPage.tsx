@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import type { Profile, SavedModel, ProviderConnection, Provider } from '@/types';
+import type { Profile, SavedModel, ProviderConnection, Provider, SubscriptionInfo, PlanInfo } from '@/types';
 
 interface ProviderCardProps {
   conn: ProviderConnection;
@@ -442,6 +442,119 @@ function SystemPromptsTab({ profile, onSaveProfile }: SystemPromptsTabProps) {
   );
 }
 
+function AccountTab() {
+  const [sub, setSub] = useState<SubscriptionInfo | null>(null);
+  const [plans, setPlans] = useState<PlanInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  useEffect(() => {
+    Promise.all([api.getSubscription(), api.listPlans()])
+      .then(([s, p]) => { setSub(s); setPlans(p); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleUpgrade = async (planName: string) => {
+    setActionLoading(true);
+    try {
+      const { checkout_url } = await api.createCheckout(planName);
+      window.location.href = checkout_url;
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleManageBilling = async () => {
+    setActionLoading(true);
+    try {
+      const { portal_url } = await api.createPortal();
+      window.location.href = portal_url;
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  if (loading) return null;
+  if (!sub) return <p className="text-muted-foreground">Could not load account info.</p>;
+
+  const currentPlan = plans.find(p => p.name === sub.plan);
+  const upgradePlans = plans.filter(p => p.price_cents > (currentPlan?.price_cents ?? 0));
+  const quotaPercent = sub.rewrites_per_month === -1 ? 0 : Math.min(100, Math.round((sub.rewrites_used / sub.rewrites_per_month) * 100));
+
+  return (
+    <div>
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold mb-1">Account</h2>
+        <p className="text-muted-foreground">Your subscription and usage.</p>
+      </div>
+
+      <Card className="mb-4">
+        <CardContent className="pt-6">
+          <div className="flex items-center gap-3 mb-4">
+            <h3 className="text-sm font-semibold">Current Plan</h3>
+            <Badge>{currentPlan?.display_name ?? sub.plan}</Badge>
+          </div>
+
+          {/* Usage bar */}
+          <div className="mb-1 flex justify-between text-sm text-muted-foreground">
+            <span>Rewrites this month</span>
+            <span>
+              {sub.rewrites_used} / {sub.rewrites_per_month === -1 ? 'unlimited' : sub.rewrites_per_month}
+            </span>
+          </div>
+          {sub.rewrites_per_month !== -1 && (
+            <div className="w-full h-2 bg-panel rounded-full overflow-hidden">
+              <div
+                className={cn('h-full rounded-full transition-all', quotaPercent >= 90 ? 'bg-danger' : 'bg-primary')}
+                style={{ width: `${quotaPercent}%` }}
+              />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Upgrade options */}
+      {upgradePlans.length > 0 && (
+        <Card className="mb-4">
+          <CardContent className="pt-6">
+            <h3 className="text-sm font-semibold mb-3">Upgrade</h3>
+            <div className="flex flex-col gap-3">
+              {upgradePlans.map(plan => (
+                <div key={plan.name} className="flex items-center justify-between border border-border rounded-md p-3">
+                  <div>
+                    <span className="font-medium">{plan.display_name}</span>
+                    <span className="text-muted-foreground ml-2 text-sm">
+                      ${(plan.price_cents / 100).toFixed(0)}/mo
+                    </span>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      {plan.rewrites_per_month === -1 ? 'Unlimited' : plan.rewrites_per_month} rewrites/mo
+                    </p>
+                  </div>
+                  <Button size="sm" onClick={() => handleUpgrade(plan.name)} disabled={actionLoading}>
+                    Upgrade
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Manage billing */}
+      {sub.stripe_customer_id && (
+        <Button variant="secondary" onClick={handleManageBilling} disabled={actionLoading}>
+          Manage Billing
+        </Button>
+      )}
+    </div>
+  );
+}
+
 const SETTINGS_TABS = [
   { key: 'profile', label: 'Profile' },
   { key: 'prompts', label: 'System Prompts' },
@@ -470,7 +583,7 @@ interface SettingsPageProps {
 
 export default function SettingsPage({ provider, model, savedModels, onSave, onAddModel, onRemoveModel, connections, onAddConnection, onRemoveConnection, profile, onSaveProfile, activeTab, onChangeTab, reasoningEffort, onChangeReasoningEffort, isPremium }: SettingsPageProps) {
   const visibleTabs = isPremium
-    ? SETTINGS_TABS.filter(t => t.key !== 'providers')
+    ? [{ key: 'account', label: 'Account' }, ...SETTINGS_TABS.filter(t => t.key !== 'providers')]
     : SETTINGS_TABS;
 
   return (
@@ -493,6 +606,8 @@ export default function SettingsPage({ provider, model, savedModels, onSave, onA
           ))}
         </div>
       )}
+
+      {activeTab === 'account' && isPremium && <AccountTab />}
 
       {activeTab === 'profile' && (
         <ProfileSubTab profile={profile} onSave={onSaveProfile} reasoningEffort={isPremium ? '' : reasoningEffort} onChangeReasoningEffort={onChangeReasoningEffort} isPremium={isPremium} />

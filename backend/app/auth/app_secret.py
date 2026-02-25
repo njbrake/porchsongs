@@ -49,7 +49,6 @@ class AppSecretBackend(AuthBackend):
         """Create a default profile for the local user."""
         profile = Profile(
             user_id=user.id,
-            name="Default",
             is_default=True,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),

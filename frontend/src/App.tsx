@@ -159,12 +159,17 @@ export default function App() {
 
   const llmSettings = { provider, model, reasoning_effort: reasoningEffort };
 
-  // Load profile on mount (only when ready)
+  // Load profile on mount (only when ready); auto-create if none exist
   useEffect(() => {
     if (authState !== 'ready') return;
-    api.listProfiles().then(profiles => {
+    api.listProfiles().then(async profiles => {
       const def = profiles.find(p => p.is_default) || profiles[0];
-      if (def) setProfile(def);
+      if (def) {
+        setProfile(def);
+      } else {
+        const created = await api.createProfile({ is_default: true });
+        setProfile(created);
+      }
     }).catch(() => {});
   }, [authState]);
 

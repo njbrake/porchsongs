@@ -18,12 +18,12 @@ cd backend && uv run uvicorn app.main:app --reload
 cd frontend && npm run dev
 
 # Tests (from project root)
-DATABASE_URL="sqlite:///:memory:" uv run pytest           # all tests (~120)
+DATABASE_URL="sqlite:///:memory:" uv run pytest           # all tests
 DATABASE_URL="sqlite:///:memory:" uv run pytest -v         # verbose
 DATABASE_URL="sqlite:///:memory:" uv run pytest tests/test_api.py::test_create_profile  # single test
 
 # Frontend tests
-cd frontend && npx vitest run                            # all tests (~39)
+cd frontend && npx vitest run                            # all tests
 cd frontend && npx vitest run src/components/Header.test  # single test file
 
 # Lint & type check
@@ -115,8 +115,8 @@ uv run ruff check backend/                    # backend lint
 uv run ruff format --check backend/           # backend formatting
 cd frontend && npx eslint src/                # frontend lint
 cd frontend && npm run typecheck              # TypeScript type check
-DATABASE_URL="sqlite:///:memory:" uv run pytest  # backend tests (~120)
-cd frontend && npx vitest run                 # frontend tests (~37)
+DATABASE_URL="sqlite:///:memory:" uv run pytest  # backend tests
+cd frontend && npx vitest run                 # frontend tests
 ```
 
 ## Frontend Design System & Code Style

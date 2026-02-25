@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type FormEvent, type ChangeEvent } from 'react';
+import { useState, useEffect, useCallback, type ChangeEvent } from 'react';
 import api from '@/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -266,66 +266,21 @@ function LLMProvidersTab({ provider, model, savedModels, onSave, onAddModel, onR
 
 interface ProfileSubTabProps {
   profile: Profile | null;
-  onSave: (data: { name: string; is_default: boolean }) => Promise<Profile>;
   reasoningEffort: string;
   onChangeReasoningEffort: (value: string) => void;
   isPremium?: boolean;
 }
 
-function ProfileSubTab({ profile, onSave, reasoningEffort, onChangeReasoningEffort, isPremium }: ProfileSubTabProps) {
-  const [name, setName] = useState('');
-  const [status, setStatus] = useState('');
-
-  useEffect(() => {
-    if (profile) {
-      setName(profile.name || '');
-    }
-  }, [profile]);
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-    try {
-      await onSave({
-        name: name.trim(),
-        is_default: true,
-      });
-      setStatus('Saved!');
-      setTimeout(() => setStatus(''), 2000);
-    } catch (err) {
-      setStatus('Error: ' + (err as Error).message);
-    }
-  };
-
+function ProfileSubTab({ profile, reasoningEffort, onChangeReasoningEffort, isPremium }: ProfileSubTabProps) {
   return (
     <div>
       <div className="mb-6">
         <h2 className="text-xl font-semibold mb-1">Profile</h2>
-        <p className="text-muted-foreground">Your profile name.</p>
+        <p className="text-muted-foreground">Profile settings.</p>
       </div>
-      <Card>
-        <CardContent className="pt-6">
-          <form onSubmit={handleSubmit}>
-            <div className="mb-4">
-              <Label htmlFor="profile-name">Name</Label>
-              <Input
-                id="profile-name"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                required
-                placeholder="Your name"
-              />
-            </div>
-            <div className="flex items-center gap-4 mt-2">
-              <Button type="submit">Save</Button>
-              {status && <span className="text-sm text-success">{status}</span>}
-            </div>
-          </form>
-        </CardContent>
-      </Card>
 
       {!isPremium && (
-        <Card className="mt-6">
+        <Card>
           <CardContent className="pt-6">
             <h3 className="text-sm font-semibold mb-3">Default Reasoning Effort</h3>
             <p className="text-sm text-muted-foreground mb-3">Controls how much effort the LLM spends thinking before responding. Higher effort may produce better results but takes longer.</p>
@@ -336,6 +291,10 @@ function ProfileSubTab({ profile, onSave, reasoningEffort, onChangeReasoningEffo
             </Select>
           </CardContent>
         </Card>
+      )}
+
+      {!profile && (
+        <p className="text-sm text-muted-foreground italic mt-4">No profile loaded.</p>
       )}
     </div>
   );
@@ -610,7 +569,7 @@ export default function SettingsPage({ provider, model, savedModels, onSave, onA
       {activeTab === 'account' && isPremium && <AccountTab />}
 
       {activeTab === 'profile' && (
-        <ProfileSubTab profile={profile} onSave={onSaveProfile} reasoningEffort={isPremium ? '' : reasoningEffort} onChangeReasoningEffort={onChangeReasoningEffort} isPremium={isPremium} />
+        <ProfileSubTab profile={profile} reasoningEffort={isPremium ? '' : reasoningEffort} onChangeReasoningEffort={onChangeReasoningEffort} isPremium={isPremium} />
       )}
 
       {activeTab === 'prompts' && (

@@ -18,14 +18,12 @@ class UserOut(BaseModel):
 
 # --- Profiles ---
 class ProfileCreate(BaseModel):
-    name: str
     is_default: bool = False
     system_prompt_parse: str | None = None
     system_prompt_chat: str | None = None
 
 
 class ProfileUpdate(BaseModel):
-    name: str | None = None
     is_default: bool | None = None
     system_prompt_parse: str | None = None
     system_prompt_chat: str | None = None
@@ -34,7 +32,6 @@ class ProfileUpdate(BaseModel):
 class ProfileOut(BaseModel):
     id: int
     user_id: int
-    name: str
     is_default: bool
     system_prompt_parse: str | None = None
     system_prompt_chat: str | None = None

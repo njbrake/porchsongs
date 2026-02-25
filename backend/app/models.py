@@ -46,7 +46,6 @@ class Profile(Base):
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id"), index=True, nullable=False
     )
-    name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))

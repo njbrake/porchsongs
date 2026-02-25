@@ -3,7 +3,6 @@
 export interface Profile {
   id: number;
   user_id: number;
-  name: string;
   is_default: boolean;
   system_prompt_parse?: string | null;
   system_prompt_chat?: string | null;

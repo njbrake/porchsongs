@@ -63,6 +63,7 @@ export interface ChatMessage {
   rawContent?: string;
   reasoning?: string;
   model?: string;
+  images?: string[];  // base64 data URLs for display in bubbles
 }
 
 export interface LlmSettings {

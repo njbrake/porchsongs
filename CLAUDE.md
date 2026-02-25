@@ -103,7 +103,7 @@ Auth tests in `tests/test_auth.py` use a separate `auth_client` fixture that doe
 
 ## Definition of Done
 
-Every feature or change must pass all lint and test checks before being considered complete:
+Every feature or change must include tests and pass all lint and test checks before being considered complete. Always write new tests alongside new features — do not defer testing to a separate step.
 
 ```bash
 uv run ruff check backend/                    # backend lint

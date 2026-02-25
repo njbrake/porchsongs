@@ -457,3 +457,88 @@ def test_chat_uses_custom_system_prompt(mock_acompletion, client):
     messages = mock_acompletion.call_args.kwargs.get("messages") or mock_acompletion.call_args[1].get("messages")
     # The system message should start with the custom prompt (song content is appended)
     assert messages[0]["content"].startswith(custom_prompt)
+
+
+# --- Multimodal (image) content tests ---
+
+
+@patch("app.services.llm_service.acompletion")
+def test_chat_multimodal_content_passthrough(mock_acompletion, client):
+    """Multimodal content (image + text) should be passed through to the LLM."""
+    _, song = _make_profile_and_song(client)
+
+    mock_acompletion.return_value = _fake_completion_response(
+        "I can see the chord chart. Looks like it's in the key of G."
+    )
+
+    multimodal_content = [
+        {"type": "text", "text": "What chords are in this image?"},
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBOR..."}},
+    ]
+
+    resp = client.post("/api/chat", json={
+        "song_id": song["id"],
+        "messages": [{"role": "user", "content": multimodal_content}],
+        **LLM_SETTINGS,
+    })
+    assert resp.status_code == 200
+
+    # Verify the multimodal content was passed through to the LLM
+    call_messages = (
+        mock_acompletion.call_args.kwargs.get("messages")
+        or mock_acompletion.call_args[1].get("messages")
+    )
+    # Last message should have the multimodal content array
+    user_msg = call_messages[-1]
+    assert user_msg["role"] == "user"
+    assert isinstance(user_msg["content"], list)
+    assert user_msg["content"][0]["type"] == "text"
+    assert user_msg["content"][1]["type"] == "image_url"
+
+
+@patch("app.services.llm_service.acompletion")
+def test_chat_multimodal_persists_text_only(mock_acompletion, client):
+    """When multimodal content is sent, only the text portion is persisted to DB."""
+    _, song = _make_profile_and_song(client)
+
+    mock_acompletion.return_value = _fake_completion_response(
+        "I can see the chord chart."
+    )
+
+    multimodal_content = [
+        {"type": "text", "text": "Describe this chord chart"},
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc123"}},
+    ]
+
+    client.post("/api/chat", json={
+        "song_id": song["id"],
+        "messages": [{"role": "user", "content": multimodal_content}],
+        **LLM_SETTINGS,
+    })
+
+    msgs = client.get(f"/api/songs/{song['id']}/messages").json()
+    assert len(msgs) == 2
+    # The persisted user message should be text-only, no base64 image data
+    assert msgs[0]["role"] == "user"
+    assert msgs[0]["content"] == "Describe this chord chart"
+    assert "base64" not in msgs[0]["content"]
+
+
+@patch("app.services.llm_service.acompletion")
+def test_chat_plain_string_still_works(mock_acompletion, client):
+    """Plain string content should still work after the multimodal change."""
+    _, song = _make_profile_and_song(client)
+
+    mock_acompletion.return_value = _fake_completion_response(
+        "Sure, here's some feedback."
+    )
+
+    resp = client.post("/api/chat", json={
+        "song_id": song["id"],
+        "messages": [{"role": "user", "content": "Give me feedback"}],
+        **LLM_SETTINGS,
+    })
+    assert resp.status_code == 200
+
+    msgs = client.get(f"/api/songs/{song['id']}/messages").json()
+    assert msgs[0]["content"] == "Give me feedback"

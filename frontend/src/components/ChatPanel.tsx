@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Markdown from 'react-markdown';
 import { cn } from '@/lib/utils';
 import api from '@/api';
@@ -11,6 +11,20 @@ import { StreamParser } from '@/lib/streamParser';
 import type { ChatMessage, LlmSettings, TokenUsage } from '@/types';
 
 const MAX_MESSAGES = 20;
+
+interface AttachedImage {
+  dataUrl: string;
+  name: string;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 /** Strip <content>...</content> and <original_song>...</original_song> XML blocks from text. */
 function stripXmlTags(text: string): string {
@@ -46,6 +60,13 @@ function ChatMessageBubble({ msg, isStreaming }: { msg: ChatMessage; isStreaming
             <pre className="whitespace-pre-wrap break-words text-xs m-0 mb-2 font-mono max-h-80 overflow-y-auto opacity-70">{msg.reasoning}</pre>
           )}
         </>
+      )}
+      {msg.images && msg.images.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-1.5">
+          {msg.images.map((src, idx) => (
+            <img key={idx} src={src} alt="Attached" className="h-12 w-12 rounded object-cover" />
+          ))}
+        </div>
       )}
       {isStreaming ? (
         <pre className="whitespace-pre-wrap break-words text-xs m-0 font-mono">{msg.content}</pre>
@@ -90,8 +111,76 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
   const [reasoningText, setReasoningText] = useState('');
   const [lastFailedInput, setLastFailedInput] = useState<string | null>(null);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage>({ input_tokens: 0, output_tokens: 0 });
+  const [images, setImages] = useState<AttachedImage[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const dragCounterRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  const processFiles = useCallback(async (files: FileList | File[]) => {
+    const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    const newImages: AttachedImage[] = [];
+    for (const file of imageFiles) {
+      const dataUrl = await fileToBase64(file);
+      newImages.push({ dataUrl, name: file.name });
+    }
+    if (newImages.length > 0) {
+      setImages(prev => [...prev, ...newImages]);
+    }
+  }, []);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.types.includes('Files')) {
+      setDragging(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setDragging(false);
+    if (e.dataTransfer.files.length > 0) {
+      processFiles(e.dataTransfer.files);
+    }
+  }, [processFiles]);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    const imageFiles: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item && item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) imageFiles.push(file);
+      }
+    }
+    if (imageFiles.length > 0) {
+      e.preventDefault();
+      processFiles(imageFiles);
+    }
+  }, [processFiles]);
+
+  const removeImage = useCallback((index: number) => {
+    setImages(prev => prev.filter((_, i) => i !== index));
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -138,12 +227,32 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
 
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || sending) return;
+    const hasImages = images.length > 0;
+    if ((!text && !hasImages) || sending) return;
+
+    // Capture and clear attached images
+    const attachedImages = [...images];
+    const attachedDataUrls = attachedImages.map(img => img.dataUrl);
+
+    // Build display text and the content payload for the API
+    const displayText = text || (hasImages ? '[Image attached]' : '');
+    let apiContent: string | Array<Record<string, unknown>>;
+    if (attachedImages.length > 0) {
+      const parts: Array<Record<string, unknown>> = [];
+      if (text) parts.push({ type: 'text', text });
+      for (const img of attachedImages) {
+        parts.push({ type: 'image_url', image_url: { url: img.dataUrl } });
+      }
+      apiContent = parts;
+    } else {
+      apiContent = text;
+    }
 
     let effectiveSongId = songId;
     if (!effectiveSongId && onBeforeSend) {
       setInput('');
-      const userMsg: ChatMessage = { role: 'user', content: text };
+      setImages([]);
+      const userMsg: ChatMessage = { role: 'user', content: displayText, images: attachedDataUrls.length > 0 ? attachedDataUrls : undefined };
       setMessages(prev => [...prev, userMsg].slice(-MAX_MESSAGES));
       setSending(true);
       try {
@@ -156,7 +265,8 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
       }
     } else {
       setInput('');
-      const userMsg: ChatMessage = { role: 'user', content: text };
+      setImages([]);
+      const userMsg: ChatMessage = { role: 'user', content: displayText, images: attachedDataUrls.length > 0 ? attachedDataUrls : undefined };
       setMessages(prev => [...prev, userMsg].slice(-MAX_MESSAGES));
     }
     if (!effectiveSongId) return;
@@ -171,7 +281,7 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
     const sentModel = llmSettings.model;
 
     try {
-      const apiMessages = [{ role: 'user' as const, content: text }];
+      const apiMessages = [{ role: 'user' as const, content: apiContent }];
 
       const result = await api.chatStream(
         {
@@ -312,17 +422,40 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
           </span>
         </div>
       )}
-      <div className="flex gap-3 px-4 py-3 border-t border-border">
+      {images.length > 0 && (
+        <div className="flex flex-wrap gap-2 px-4 py-2 border-t border-border">
+          {images.map((img, idx) => (
+            <div key={idx} className="relative group">
+              <img src={img.dataUrl} alt={img.name} className="h-12 w-12 rounded object-cover border border-border" />
+              <button
+                className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-danger text-white text-[10px] leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={() => removeImage(idx)}
+                aria-label={`Remove ${img.name}`}
+              >
+                &times;
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div
+        className={cn('flex gap-3 px-4 py-3 border-t border-border transition-colors', dragging && 'bg-primary/10 border-primary')}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
         <Input
           value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder="Tell the AI how to change the song..."
+          placeholder={dragging ? 'Drop image here...' : 'Tell the AI how to change the song...'}
           onKeyDown={e => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               handleSend();
             }
           }}
+          onPaste={handlePaste}
           disabled={sending || initialLoading}
           className="flex-1"
         />
@@ -331,7 +464,7 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
             Cancel
           </Button>
         ) : (
-          <Button onClick={handleSend} disabled={initialLoading || !input.trim() || (!songId && !onBeforeSend)}>
+          <Button onClick={handleSend} disabled={initialLoading || (!input.trim() && images.length === 0) || (!songId && !onBeforeSend)}>
             Send
           </Button>
         )}

@@ -103,13 +103,11 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
     setSaveStatus(null);
   }, [currentSongId]);
 
-  const needsProfile = !profile?.id;
+  const hasProfile = !!profile?.id;
   const hasModel = isPremium || (llmSettings.provider && llmSettings.model);
-  const canParse = !needsProfile && hasModel && !loading && input.trim().length > 0;
+  const canParse = hasProfile && hasModel && !loading && input.trim().length > 0;
 
-  const parseBlocker = needsProfile
-    ? 'Create a profile first'
-    : !hasModel
+  const parseBlocker = !hasModel
       ? 'Select a model'
       : input.trim().length === 0
         ? 'Paste some content above'
@@ -449,16 +447,6 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
 
   return (
     <div>
-      {needsProfile && (
-        <Alert variant="warning" className="mb-4">
-          <span>
-            Create a profile in the{' '}
-            <Button variant="link-inline" onClick={onOpenSettings}>Profile tab</Button>
-            {' '}to get started.
-          </span>
-        </Alert>
-      )}
-
       {error && (
         <Alert variant="error" className="mt-4 mb-4">
           <span>{error}</span>

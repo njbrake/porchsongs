@@ -322,7 +322,7 @@ def _parse_chat_response(raw: str) -> dict[str, str | None]:
 
 def _build_chat_kwargs(
     song: Song,
-    messages: list[dict[str, str]],
+    messages: list[dict[str, object]],
     provider: str,
     model: str,
     api_base: str | None = None,
@@ -334,7 +334,7 @@ def _build_chat_kwargs(
     system_content = system_prompt or CHAT_SYSTEM_PROMPT
     system_content += "\n\nORIGINAL SONG:\n" + song.original_content
 
-    llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_content}]
+    llm_messages: list[dict[str, object]] = [{"role": "system", "content": system_content}]
     for msg in messages:
         llm_messages.append({"role": msg["role"], "content": msg["content"]})
 
@@ -354,7 +354,7 @@ def _build_chat_kwargs(
 
 async def chat_edit_content(
     song: Song,
-    messages: list[dict[str, str]],
+    messages: list[dict[str, object]],
     provider: str,
     model: str,
     api_base: str | None = None,
@@ -395,7 +395,7 @@ async def chat_edit_content(
 
 async def chat_edit_content_stream(
     song: Song,
-    messages: list[dict[str, str]],
+    messages: list[dict[str, object]],
     provider: str,
     model: str,
     api_base: str | None = None,

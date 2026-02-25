@@ -162,7 +162,7 @@ class SongStatusUpdate(BaseModel):
 # --- Chat ---
 class ChatMessage(BaseModel):
     role: str  # "user" or "assistant"
-    content: str
+    content: str | list[dict[str, object]]
 
 
 class ChatMessageCreate(BaseModel):

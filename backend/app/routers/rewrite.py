@@ -212,11 +212,18 @@ async def parse_stream(
     )
 
 
+def _extract_text(content: str | list[dict[str, object]]) -> str:
+    """Extract plain text from a multimodal content value."""
+    if isinstance(content, str):
+        return content
+    return " ".join(str(p["text"]) for p in content if p.get("type") == "text")
+
+
 def _load_chat_messages(
     db: Session,
     song_id: int,
     req_messages: list[ChatMessage],
-) -> list[dict[str, str]]:
+) -> list[dict[str, object]]:
     """Load persisted chat history and append new request messages."""
     history_rows = (
         db.query(ChatMessageModel)
@@ -224,7 +231,7 @@ def _load_chat_messages(
         .order_by(ChatMessageModel.created_at)
         .all()
     )
-    history: list[dict[str, str]] = [
+    history: list[dict[str, object]] = [
         {"role": row.role, "content": row.content} for row in history_rows
     ]
     return history + [{"role": m.role, "content": m.content} for m in req_messages]
@@ -262,7 +269,10 @@ def _persist_chat_result(
     if last_user_msg and last_user_msg.role == "user":
         db.add(
             ChatMessageModel(
-                song_id=song.id, role="user", content=last_user_msg.content, is_note=False
+                song_id=song.id,
+                role="user",
+                content=_extract_text(last_user_msg.content),
+                is_note=False,
             )
         )
     db.add(

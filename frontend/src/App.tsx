@@ -14,20 +14,23 @@ import LoginPage from '@/components/LoginPage';
 import type { Profile, RewriteResult, RewriteMeta, ChatMessage, Song, AuthConfig, AuthUser } from '@/types';
 
 const TAB_KEYS = ['rewrite', 'library', 'settings'];
-const SETTINGS_SUB_TABS_ALL = ['account', 'profile', 'prompts', 'providers'];
+const SETTINGS_SUB_TABS_ALL = ['account', 'models', 'prompts'];
 
 function tabFromPath(pathname: string): string {
   const seg = pathname.replace(/^\//, '').split('/')[0]!.toLowerCase();
   return TAB_KEYS.includes(seg) ? seg : 'rewrite';
 }
 
-function settingsTabFromPath(pathname: string): string {
+function settingsTabFromPath(pathname: string, isPremiumMode?: boolean): string {
   const parts = pathname.replace(/^\//, '').split('/');
   if (parts[0]?.toLowerCase() === 'settings' && SETTINGS_SUB_TABS_ALL.includes(parts[1]?.toLowerCase() ?? '')) {
-    const sub = parts[1]!.toLowerCase();
-    return sub === 'prompts' ? 'profile' : sub;
+    return parts[1]!.toLowerCase();
   }
-  return 'profile';
+  // Legacy URL support: map old tab keys to new ones
+  const legacy = parts[1]?.toLowerCase();
+  if (legacy === 'providers') return 'models';
+  if (legacy === 'profile') return 'prompts';
+  return isPremiumMode ? 'account' : 'models';
 }
 
 function songIdFromPath(pathname: string): number | null {
@@ -103,7 +106,7 @@ export default function App() {
   // Wrapper that updates both state and URL
   const setTab = useCallback((key: string, subTab?: string) => {
     if (key === 'settings') {
-      const sub = subTab || settingsTab || (isPremium ? 'account' : 'profile');
+      const sub = subTab || settingsTab || (isPremium ? 'account' : 'models');
       setActiveTab('settings');
       setSettingsTab(sub);
       const target = `/settings/${sub}`;
@@ -316,7 +319,7 @@ export default function App() {
             reasoningEffort={reasoningEffort}
             onChangeReasoningEffort={setReasoningEffort}
             savedModels={savedModels}
-            onOpenSettings={() => setTab('settings', 'providers')}
+            onOpenSettings={() => setTab('settings', 'models')}
             isPremium={isPremium}
           />
         </div>

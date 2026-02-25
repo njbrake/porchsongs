@@ -1,407 +1,12 @@
-import { useState, useEffect, useCallback, type ChangeEvent } from 'react';
+import { useState, useEffect } from 'react';
 import api from '@/api';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-
-import type { Profile, SavedModel, ProviderConnection, Provider, SubscriptionInfo, PlanInfo } from '@/types';
-
-interface ProviderCardProps {
-  conn: ProviderConnection;
-  providerModels: SavedModel[];
-  activeProvider: string;
-  activeModel: string;
-  onActivate: (provider: string, model: string) => void;
-  onAddModel: (provider: string, model: string) => Promise<SavedModel | undefined>;
-  onRemoveModel: (id: number) => Promise<void>;
-  onDisconnect: (id: number) => void;
-}
-
-function ProviderCard({ conn, providerModels, activeProvider, activeModel, onActivate, onAddModel, onRemoveModel, onDisconnect }: ProviderCardProps) {
-  const [models, setModels] = useState<string[]>([]);
-  const [selectedModel, setSelectedModel] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [showAdd, setShowAdd] = useState(false);
-
-  const loadModels = () => {
-    setLoading(true);
-    setError('');
-    api.listProviderModels(conn.provider, conn.api_base || undefined)
-      .then(list => {
-        setModels(list);
-        // Pre-select first model not already saved
-        const savedNames = new Set(providerModels.map(m => m.model));
-        const first = list.find(m => !savedNames.has(m)) || list[0] || '';
-        setSelectedModel(first);
-      })
-      .catch(err => { setError((err as Error).message); setModels([]); })
-      .finally(() => setLoading(false));
-  };
-
-  const handleShowAdd = () => {
-    setShowAdd(true);
-    loadModels();
-  };
-
-  const handleAdd = async () => {
-    if (!selectedModel) return;
-    setError('');
-    try {
-      await onAddModel(conn.provider, selectedModel);
-      onActivate(conn.provider, selectedModel);
-      setShowAdd(false);
-      setSelectedModel('');
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  };
-
-  const handleDelete = async (sm: SavedModel) => {
-    try {
-      await onRemoveModel(sm.id);
-      if (sm.provider === activeProvider && sm.model === activeModel) {
-        const remaining = providerModels.filter(m => m.id !== sm.id);
-        if (remaining.length > 0) {
-          onActivate(remaining[0]!.provider, remaining[0]!.model);
-        } else {
-          onActivate('', '');
-        }
-      }
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  };
-
-  return (
-    <Card>
-      <CardContent className="pt-5">
-        {/* Provider header */}
-        <div className="flex items-center justify-between mb-3 pb-1.5 border-b border-border">
-          <div className="flex items-baseline gap-2">
-            <h3 className="text-sm font-semibold text-foreground">{conn.provider}</h3>
-            {conn.api_base && <span className="text-xs text-muted-foreground">@ {conn.api_base}</span>}
-          </div>
-          <button
-            className="text-xs text-muted-foreground hover:text-danger transition-colors cursor-pointer bg-transparent border-0"
-            onClick={() => onDisconnect(conn.id)}
-          >
-            Disconnect
-          </button>
-        </div>
-
-        {/* Models list */}
-        {providerModels.length === 0 && !showAdd && (
-          <p className="text-sm text-muted-foreground italic mb-3">No models added yet.</p>
-        )}
-        {providerModels.length > 0 && (
-          <div className="flex flex-col gap-1.5 mb-3">
-            {providerModels.map(sm => {
-              const isActive = sm.provider === activeProvider && sm.model === activeModel;
-              return (
-                <div key={sm.id} className={cn(
-                  'flex items-center border border-border rounded-md overflow-hidden transition-colors',
-                  isActive && 'border-primary bg-selected-bg'
-                )}>
-                  <button
-                    className="flex-1 flex items-center justify-between bg-transparent border-0 px-3 py-2 cursor-pointer text-left text-sm text-foreground hover:bg-panel transition-colors"
-                    onClick={() => onActivate(sm.provider, sm.model)}
-                  >
-                    <span className="text-muted-foreground">{sm.model}</span>
-                    {isActive && <Badge variant="active">Active</Badge>}
-                  </button>
-                  <button
-                    className="bg-transparent border-0 border-l border-border px-2.5 py-2 text-lg text-muted-foreground cursor-pointer leading-none hover:text-danger hover:bg-error-bg transition-colors"
-                    onClick={() => handleDelete(sm)}
-                    title="Remove model"
-                  >
-                    &times;
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Add model inline */}
-        {showAdd ? (
-          <div className="flex items-end gap-2">
-            <div className="flex-1">
-              <Label>Model</Label>
-              <Select value={selectedModel} onChange={(e: ChangeEvent<HTMLSelectElement>) => setSelectedModel(e.target.value)} disabled={loading}>
-                {loading && <option value="">Loading...</option>}
-                {!loading && models.length === 0 && <option value="">No models found</option>}
-                {!loading && models.map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </Select>
-            </div>
-            <Button onClick={handleAdd} disabled={!selectedModel || loading}>Add</Button>
-            <Button variant="secondary" onClick={() => { setShowAdd(false); setError(''); }}>Cancel</Button>
-          </div>
-        ) : (
-          <Button variant="secondary" size="sm" onClick={handleShowAdd}>+ Add Model</Button>
-        )}
-        {error && <p className="text-sm text-danger mt-2">{error}</p>}
-      </CardContent>
-    </Card>
-  );
-}
-
-interface LLMProvidersTabProps {
-  provider: string;
-  model: string;
-  savedModels: SavedModel[];
-  onSave: (provider: string, model: string) => void;
-  onAddModel: (provider: string, model: string) => Promise<SavedModel | undefined>;
-  onRemoveModel: (id: number) => Promise<void>;
-  connections: ProviderConnection[];
-  onAddConnection: (provider: string, apiBase?: string | null) => Promise<ProviderConnection | null>;
-  onRemoveConnection: (id: number) => void;
-  reasoningEffort: string;
-  onChangeReasoningEffort: (value: string) => void;
-}
-
-function LLMProvidersTab({ provider, model, savedModels, onSave, onAddModel, onRemoveModel, connections, onAddConnection, onRemoveConnection, reasoningEffort, onChangeReasoningEffort }: LLMProvidersTabProps) {
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [platformAvailable, setPlatformAvailable] = useState(false);
-  const [connProvider, setConnProvider] = useState('');
-  const [connApiBase, setConnApiBase] = useState('');
-  const [connVerifying, setConnVerifying] = useState(false);
-  const [connError, setConnError] = useState('');
-
-  useEffect(() => {
-    api.listProviders()
-      .then(res => { setProviders(res.providers); setPlatformAvailable(res.platform_enabled); })
-      .catch(() => setProviders([]));
-  }, []);
-
-  const isLocalProvider = (name: string) => providers.find(p => p.name === name)?.local;
-  const connectedProviderNames = new Set(connections.map(c => c.provider));
-  const availableProviders = providers.filter(p => !connectedProviderNames.has(p.name));
-  const isLocal = isLocalProvider(connProvider);
-
-  const handleAddConnection = async () => {
-    if (!connProvider) return;
-
-    setConnVerifying(true);
-    setConnError('');
-    try {
-      await api.listProviderModels(connProvider, connApiBase || undefined);
-      const result = await onAddConnection(connProvider, connApiBase || null);
-      if (!result) {
-        setConnError('Create a profile first (Profile tab) before adding providers.');
-        return;
-      }
-      setConnProvider('');
-      setConnApiBase('');
-    } catch (err) {
-      setConnError(isLocalProvider(connProvider)
-        ? 'Could not connect. Check the base URL and that the server is running.'
-        : (err as Error).message);
-    } finally {
-      setConnVerifying(false);
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-4">
-      {/* Reasoning effort */}
-      <Card>
-        <CardContent className="pt-5">
-          <h3 className="text-sm font-semibold mb-2">Default Reasoning Effort</h3>
-          <p className="text-sm text-muted-foreground mb-3">Controls how much effort the LLM spends thinking before responding.</p>
-          <Select value={reasoningEffort} onChange={(e: ChangeEvent<HTMLSelectElement>) => onChangeReasoningEffort(e.target.value)}>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </Select>
-        </CardContent>
-      </Card>
-
-      {/* One card per connected provider */}
-      {connections.map(conn => (
-        <ProviderCard
-          key={conn.id}
-          conn={conn}
-          providerModels={savedModels.filter(m => m.provider === conn.provider)}
-          activeProvider={provider}
-          activeModel={model}
-          onActivate={onSave}
-          onAddModel={onAddModel}
-          onRemoveModel={onRemoveModel}
-          onDisconnect={onRemoveConnection}
-        />
-      ))}
-
-      {/* Add Provider */}
-      <Card>
-        <CardContent className="pt-5">
-          <h3 className="text-xs uppercase tracking-wide text-muted-foreground mb-3 pb-1.5 border-b border-border">Add Provider</h3>
-          {availableProviders.length === 0 && providers.length > 0 ? (
-            <p className="text-sm text-muted-foreground italic">All available providers are connected.</p>
-          ) : (
-            <>
-              <div className="mb-3">
-                <Label>Provider</Label>
-                <Select value={connProvider} onChange={(e: ChangeEvent<HTMLSelectElement>) => { setConnProvider(e.target.value); setConnApiBase(''); setConnError(''); }}>
-                  <option value="">Select provider...</option>
-                  {availableProviders.map(p => (
-                    <option key={p.name} value={p.name}>{p.name}</option>
-                  ))}
-                </Select>
-              </div>
-              {connProvider && isLocal && (
-                <div className="mb-3">
-                  <Label>Base URL</Label>
-                  <Input
-                    value={connApiBase}
-                    onChange={e => setConnApiBase(e.target.value)}
-                    placeholder="http://localhost:11434"
-                  />
-                </div>
-              )}
-              {connError && <p className="text-sm text-danger mb-3">{connError}</p>}
-              <Button
-                onClick={handleAddConnection}
-                disabled={!connProvider || connVerifying || (!!isLocal && !connApiBase)}
-              >
-                {connVerifying ? 'Verifying...' : 'Connect'}
-              </Button>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {platformAvailable && (
-        <p className="text-xs text-muted-foreground text-center">
-          Using{' '}
-          <a href="https://any-llm.ai" target="_blank" rel="noopener noreferrer" className="underline font-medium">
-            any-llm.ai
-          </a>
-          {' '}for key management and access
-        </p>
-      )}
-    </div>
-  );
-}
-
-interface ProfileSubTabProps {
-  profile: Profile | null;
-}
-
-function ProfileSubTab({ profile }: ProfileSubTabProps) {
-  if (!profile) {
-    return <p className="text-sm text-muted-foreground italic">No profile loaded.</p>;
-  }
-  return null;
-}
-
-interface SystemPromptsTabProps {
-  profile: Profile | null;
-  onSaveProfile: (data: Partial<Profile>) => Promise<Profile>;
-}
-
-function SystemPromptsTab({ profile, onSaveProfile }: SystemPromptsTabProps) {
-  const [defaults, setDefaults] = useState<{ parse: string; chat: string } | null>(null);
-  const [parsePrompt, setParsePrompt] = useState('');
-  const [chatPrompt, setChatPrompt] = useState('');
-  const [status, setStatus] = useState('');
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.getDefaultPrompts()
-      .then(setDefaults)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (profile) {
-      setParsePrompt(profile.system_prompt_parse ?? '');
-      setChatPrompt(profile.system_prompt_chat ?? '');
-    }
-  }, [profile]);
-
-  const handleSave = useCallback(async () => {
-    if (!profile) return;
-    try {
-      await onSaveProfile({
-        system_prompt_parse: parsePrompt || null,
-        system_prompt_chat: chatPrompt || null,
-      });
-      setStatus('Saved!');
-      setTimeout(() => setStatus(''), 2000);
-    } catch (err) {
-      setStatus('Error: ' + (err as Error).message);
-    }
-  }, [profile, parsePrompt, chatPrompt, onSaveProfile]);
-
-  if (loading) return null;
-
-  return (
-    <div>
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-1">System Prompts</h2>
-        <p className="text-muted-foreground">Customize the system prompts used for LLM calls. Leave empty to use the built-in defaults.</p>
-      </div>
-
-      <Card className="mb-6">
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-between mb-2">
-            <Label htmlFor="parse-prompt">Parse Prompt</Label>
-            {parsePrompt && (
-              <Button variant="ghost" size="sm" onClick={() => setParsePrompt('')}>
-                Reset to Default
-              </Button>
-            )}
-          </div>
-          <p className="text-sm text-muted-foreground mb-2">Used when cleaning up pasted song input.</p>
-          <Textarea
-            id="parse-prompt"
-            value={parsePrompt}
-            onChange={e => setParsePrompt(e.target.value)}
-            placeholder={defaults?.parse ?? ''}
-            rows={10}
-            className="font-mono text-code"
-          />
-        </CardContent>
-      </Card>
-
-      <Card className="mb-6">
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-between mb-2">
-            <Label htmlFor="chat-prompt">Chat Prompt</Label>
-            {chatPrompt && (
-              <Button variant="ghost" size="sm" onClick={() => setChatPrompt('')}>
-                Reset to Default
-              </Button>
-            )}
-          </div>
-          <p className="text-sm text-muted-foreground mb-2">Used for chat-based song editing.</p>
-          <Textarea
-            id="chat-prompt"
-            value={chatPrompt}
-            onChange={e => setChatPrompt(e.target.value)}
-            placeholder={defaults?.chat ?? ''}
-            rows={10}
-            className="font-mono text-code"
-          />
-        </CardContent>
-      </Card>
-
-      <div className="flex items-center gap-4">
-        <Button onClick={handleSave} disabled={!profile}>Save</Button>
-        {status && <span className="text-sm text-success">{status}</span>}
-      </div>
-    </div>
-  );
-}
+import ModelsTab from '@/components/settings/ModelsTab';
+import SystemPromptsTab from '@/components/settings/SystemPromptsTab';
+import type { Profile, SavedModel, ProviderConnection, SubscriptionInfo, PlanInfo } from '@/types';
 
 function AccountTab() {
   const [sub, setSub] = useState<SubscriptionInfo | null>(null);
@@ -460,8 +65,6 @@ function AccountTab() {
             <h3 className="text-sm font-semibold">Current Plan</h3>
             <Badge>{currentPlan?.display_name ?? sub.plan}</Badge>
           </div>
-
-          {/* Usage bar */}
           <div className="mb-1 flex justify-between text-sm text-muted-foreground">
             <span>Rewrites this month</span>
             <span>
@@ -479,7 +82,6 @@ function AccountTab() {
         </CardContent>
       </Card>
 
-      {/* Upgrade options */}
       {upgradePlans.length > 0 && (
         <Card className="mb-4">
           <CardContent className="pt-6">
@@ -506,7 +108,6 @@ function AccountTab() {
         </Card>
       )}
 
-      {/* Manage billing */}
       {sub.stripe_customer_id && (
         <Button variant="secondary" onClick={handleManageBilling} disabled={actionLoading}>
           Manage Billing
@@ -517,8 +118,8 @@ function AccountTab() {
 }
 
 const SETTINGS_TABS = [
-  { key: 'profile', label: 'Profile & Prompts' },
-  { key: 'providers', label: 'LLM Providers' },
+  { key: 'models', label: 'Models' },
+  { key: 'prompts', label: 'System Prompts' },
 ] as const;
 
 interface SettingsPageProps {
@@ -537,13 +138,29 @@ interface SettingsPageProps {
   onChangeTab: (tab: string) => void;
   reasoningEffort: string;
   onChangeReasoningEffort: (value: string) => void;
-  /** When true, LLM providers are managed by the platform — hide the providers tab. */
   isPremium?: boolean;
 }
 
-export default function SettingsPage({ provider, model, savedModels, onSave, onAddModel, onRemoveModel, connections, onAddConnection, onRemoveConnection, profile, onSaveProfile, activeTab, onChangeTab, reasoningEffort, onChangeReasoningEffort, isPremium }: SettingsPageProps) {
+export default function SettingsPage({
+  provider,
+  model,
+  savedModels,
+  onSave,
+  onAddModel,
+  onRemoveModel,
+  connections,
+  onAddConnection,
+  onRemoveConnection,
+  profile,
+  onSaveProfile,
+  activeTab,
+  onChangeTab,
+  reasoningEffort,
+  onChangeReasoningEffort,
+  isPremium,
+}: SettingsPageProps) {
   const visibleTabs = isPremium
-    ? [{ key: 'account', label: 'Account' }, ...SETTINGS_TABS.filter(t => t.key !== 'providers')]
+    ? [{ key: 'account', label: 'Account' }, ...SETTINGS_TABS.filter(t => t.key !== 'models')]
     : SETTINGS_TABS;
 
   return (
@@ -569,15 +186,8 @@ export default function SettingsPage({ provider, model, savedModels, onSave, onA
 
       {activeTab === 'account' && isPremium && <AccountTab />}
 
-      {activeTab === 'profile' && (
-        <div className="flex flex-col gap-8">
-          <ProfileSubTab profile={profile} />
-          <SystemPromptsTab profile={profile} onSaveProfile={onSaveProfile} />
-        </div>
-      )}
-
-      {activeTab === 'providers' && !isPremium && (
-        <LLMProvidersTab
+      {activeTab === 'models' && !isPremium && (
+        <ModelsTab
           provider={provider}
           model={model}
           savedModels={savedModels}
@@ -590,6 +200,10 @@ export default function SettingsPage({ provider, model, savedModels, onSave, onA
           reasoningEffort={reasoningEffort}
           onChangeReasoningEffort={onChangeReasoningEffort}
         />
+      )}
+
+      {activeTab === 'prompts' && (
+        <SystemPromptsTab profile={profile} onSaveProfile={onSaveProfile} />
       )}
     </div>
   );

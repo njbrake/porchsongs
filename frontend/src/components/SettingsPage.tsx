@@ -160,7 +160,7 @@ export default function SettingsPage({
   isPremium,
 }: SettingsPageProps) {
   const visibleTabs = isPremium
-    ? [{ key: 'account', label: 'Account' }, ...SETTINGS_TABS.filter(t => t.key !== 'models')]
+    ? [{ key: 'account', label: 'Account' }]
     : SETTINGS_TABS;
 
   return (
@@ -202,7 +202,7 @@ export default function SettingsPage({
         />
       )}
 
-      {activeTab === 'prompts' && (
+      {activeTab === 'prompts' && !isPremium && (
         <SystemPromptsTab profile={profile} onSaveProfile={onSaveProfile} />
       )}
     </div>

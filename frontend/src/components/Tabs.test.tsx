@@ -1,27 +1,24 @@
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { screen } from '@testing-library/react';
+import { renderWithRouter } from '@/test/test-utils';
 import Tabs from '@/components/Tabs';
 
 describe('Tabs', () => {
   it('renders all three tab labels', () => {
-    render(<Tabs active="rewrite" onChange={vi.fn()} />);
+    renderWithRouter(<Tabs />, { route: '/app/rewrite' });
     expect(screen.getByText('Rewrite')).toBeInTheDocument();
     expect(screen.getByText('Library')).toBeInTheDocument();
     expect(screen.getByText('Settings')).toBeInTheDocument();
   });
 
-  it('marks the active tab', () => {
-    render(<Tabs active="library" onChange={vi.fn()} />);
+  it('marks the active tab based on URL', () => {
+    renderWithRouter(<Tabs />, { route: '/app/library' });
     const libraryTab = screen.getByText('Library');
     expect(libraryTab).toHaveAttribute('data-state', 'active');
     expect(screen.getByText('Rewrite')).toHaveAttribute('data-state', 'inactive');
   });
 
-  it('calls onChange when a tab is clicked', async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(<Tabs active="rewrite" onChange={onChange} />);
-    await user.click(screen.getByText('Library'));
-    expect(onChange).toHaveBeenCalledWith('library');
+  it('defaults to rewrite tab for unknown paths', () => {
+    renderWithRouter(<Tabs />, { route: '/app/unknown' });
+    expect(screen.getByText('Rewrite')).toHaveAttribute('data-state', 'active');
   });
 });

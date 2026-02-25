@@ -4,6 +4,7 @@ repos:
     hooks:
       - id: check-added-large-files
       - id: check-json
+        exclude: tsconfig\.json$
       - id: check-yaml
       - id: check-toml
       - id: check-merge-conflict
@@ -22,7 +23,7 @@ repos:
       - id: openapi-types
         name: openapi types freshness
         language: system
-        entry: sh -c 'uv run python scripts/export_openapi.py frontend/openapi.json && cd frontend && npm run generate:api && git diff --exit-code frontend/src/generated/api.d.ts'
+        entry: sh -c 'uv run python scripts/export_openapi.py frontend/openapi.json && cd frontend && npm run generate:api && git diff --exit-code -- frontend/src/generated/api.d.ts'
         pass_filenames: false
         files: ^backend/app/(schemas\.py|routers/.+\.py|main\.py)$
 

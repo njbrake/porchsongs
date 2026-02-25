@@ -1,9 +1,12 @@
 """Tests for endpoints that call the LLM, using mocked acompletion/list_models."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
+from fastapi.testclient import TestClient
 
-def _fake_completion_response(content):
+
+def _fake_completion_response(content: str) -> MagicMock:
     """Build a mock object that looks like a ChatCompletion response."""
     msg = MagicMock()
     msg.content = content
@@ -14,7 +17,7 @@ def _fake_completion_response(content):
     return resp
 
 
-def _make_profile_and_song(client):
+def _make_profile_and_song(client: TestClient) -> tuple[dict[str, Any], dict[str, Any]]:
     """Helper: create a profile and a song, return (profile, song)."""
     profile = client.post(
         "/api/profiles",
@@ -46,7 +49,7 @@ LLM_SETTINGS = {
 
 
 @patch("app.services.llm_service.acompletion")
-def test_parse_endpoint(mock_acompletion, client):
+def test_parse_endpoint(mock_acompletion: MagicMock, client: TestClient) -> None:
     profile = client.post(
         "/api/profiles",
         json={
@@ -82,7 +85,7 @@ def test_parse_endpoint(mock_acompletion, client):
 
 
 @patch("app.services.llm_service.acompletion")
-def test_parse_unknown_title_artist(mock_acompletion, client):
+def test_parse_unknown_title_artist(mock_acompletion: MagicMock, client: TestClient) -> None:
     """Parse with UNKNOWN title/artist should return null."""
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
 
@@ -106,7 +109,7 @@ def test_parse_unknown_title_artist(mock_acompletion, client):
     assert "Original line one" in data["original_content"]
 
 
-def test_parse_profile_not_found(client):
+def test_parse_profile_not_found(client: TestClient) -> None:
     resp = client.post(
         "/api/parse",
         json={
@@ -119,7 +122,7 @@ def test_parse_profile_not_found(client):
 
 
 @patch("app.services.llm_service.acompletion")
-def test_parse_llm_error(mock_acompletion, client):
+def test_parse_llm_error(mock_acompletion: MagicMock, client: TestClient) -> None:
     """LLM throwing an exception should return 502."""
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
     mock_acompletion.side_effect = RuntimeError("API rate limit exceeded")
@@ -140,7 +143,7 @@ def test_parse_llm_error(mock_acompletion, client):
 
 
 @patch("app.services.llm_service.acompletion")
-def test_chat_endpoint(mock_acompletion, client):
+def test_chat_endpoint(mock_acompletion: MagicMock, client: TestClient) -> None:
     _, song = _make_profile_and_song(client)
 
     mock_acompletion.return_value = _fake_completion_response(
@@ -167,7 +170,7 @@ def test_chat_endpoint(mock_acompletion, client):
 
 
 @patch("app.services.llm_service.acompletion")
-def test_chat_persists_changes(mock_acompletion, client):
+def test_chat_persists_changes(mock_acompletion: MagicMock, client: TestClient) -> None:
     """Chat edits should be persisted to the song and create a revision."""
     _, song = _make_profile_and_song(client)
 
@@ -195,7 +198,7 @@ def test_chat_persists_changes(mock_acompletion, client):
 
 
 @patch("app.services.llm_service.acompletion")
-def test_chat_persists_messages(mock_acompletion, client):
+def test_chat_persists_messages(mock_acompletion: MagicMock, client: TestClient) -> None:
     """POST /api/chat should create ChatMessage rows for user + assistant."""
     _, song = _make_profile_and_song(client)
 
@@ -223,7 +226,7 @@ def test_chat_persists_messages(mock_acompletion, client):
 
 
 @patch("app.services.llm_service.acompletion")
-def test_chat_conversational_no_content(mock_acompletion, client):
+def test_chat_conversational_no_content(mock_acompletion: MagicMock, client: TestClient) -> None:
     """When the LLM responds without <content> tags, no version bump or revision is created."""
     _, song = _make_profile_and_song(client)
     original_version = song["current_version"]
@@ -258,7 +261,7 @@ def test_chat_conversational_no_content(mock_acompletion, client):
 
 
 @patch("app.services.llm_service.acompletion")
-def test_chat_stores_full_raw_response(mock_acompletion, client):
+def test_chat_stores_full_raw_response(mock_acompletion: MagicMock, client: TestClient) -> None:
     """The assistant ChatMessage stored in DB should be the full raw LLM response."""
     _, song = _make_profile_and_song(client)
 
@@ -286,7 +289,9 @@ def test_chat_stores_full_raw_response(mock_acompletion, client):
 
 
 @patch("app.services.llm_service.acompletion")
-def test_chat_conversational_stores_messages(mock_acompletion, client):
+def test_chat_conversational_stores_messages(
+    mock_acompletion: MagicMock, client: TestClient
+) -> None:
     """Conversational (no-content) responses should still persist chat messages."""
     _, song = _make_profile_and_song(client)
 
@@ -309,7 +314,7 @@ def test_chat_conversational_stores_messages(mock_acompletion, client):
     assert msgs[1]["content"] == conversational_response
 
 
-def test_chat_song_not_found(client):
+def test_chat_song_not_found(client: TestClient) -> None:
     resp = client.post(
         "/api/chat",
         json={
@@ -325,7 +330,7 @@ def test_chat_song_not_found(client):
 
 
 @patch("app.services.llm_service.alist_models")
-def test_list_provider_models_success(mock_list_models, client):
+def test_list_provider_models_success(mock_list_models: MagicMock, client: TestClient) -> None:
     mock_model = MagicMock()
     mock_model.id = "gpt-4o"
     mock_list_models.return_value = [mock_model]
@@ -337,7 +342,7 @@ def test_list_provider_models_success(mock_list_models, client):
 
 
 @patch("app.services.llm_service.alist_models")
-def test_list_provider_models_failure(mock_list_models, client):
+def test_list_provider_models_failure(mock_list_models: MagicMock, client: TestClient) -> None:
     mock_list_models.side_effect = RuntimeError("Invalid API key")
 
     resp = client.get("/api/providers/openai/models")
@@ -349,7 +354,7 @@ def test_list_provider_models_failure(mock_list_models, client):
 
 
 @patch("app.services.llm_service.acompletion")
-def test_parse_passes_api_base(mock_acompletion, client):
+def test_parse_passes_api_base(mock_acompletion: MagicMock, client: TestClient) -> None:
     """When a ProfileModel has api_base set, the parse call should pass it to acompletion."""
     profile = client.post(
         "/api/profiles",
@@ -388,7 +393,9 @@ def test_parse_passes_api_base(mock_acompletion, client):
 
 
 @patch("app.services.llm_service.acompletion")
-def test_parse_no_api_base_when_no_profile_model(mock_acompletion, client):
+def test_parse_no_api_base_when_no_profile_model(
+    mock_acompletion: MagicMock, client: TestClient
+) -> None:
     """When no ProfileModel exists, api_base should not be passed."""
     profile = client.post(
         "/api/profiles",
@@ -416,7 +423,7 @@ def test_parse_no_api_base_when_no_profile_model(mock_acompletion, client):
 
 
 @patch("app.services.llm_service.alist_models")
-def test_list_models_with_api_base(mock_list_models, client):
+def test_list_models_with_api_base(mock_list_models: MagicMock, client: TestClient) -> None:
     """GET /providers/{provider}/models?api_base= should pass api_base to alist_models."""
     mock_model = MagicMock()
     mock_model.id = "llama3"
@@ -434,7 +441,7 @@ def test_list_models_with_api_base(mock_list_models, client):
 # --- GET /api/prompts/defaults ---
 
 
-def test_get_default_prompts(client):
+def test_get_default_prompts(client: TestClient) -> None:
     resp = client.get("/api/prompts/defaults")
     assert resp.status_code == 200
     data = resp.json()
@@ -447,7 +454,7 @@ def test_get_default_prompts(client):
 # --- System prompt fields on profiles ---
 
 
-def test_profile_system_prompt_fields_roundtrip(client):
+def test_profile_system_prompt_fields_roundtrip(client: TestClient) -> None:
     """Creating and updating profiles with system prompt fields."""
     profile = client.post(
         "/api/profiles",
@@ -472,7 +479,7 @@ def test_profile_system_prompt_fields_roundtrip(client):
 
 
 @patch("app.services.llm_service.acompletion")
-def test_parse_uses_custom_system_prompt(mock_acompletion, client):
+def test_parse_uses_custom_system_prompt(mock_acompletion: MagicMock, client: TestClient) -> None:
     """When a profile has a custom parse prompt, it should be used in the LLM call."""
     custom_prompt = "You are a CUSTOM parse assistant."
     profile = client.post(
@@ -503,7 +510,7 @@ def test_parse_uses_custom_system_prompt(mock_acompletion, client):
 
 
 @patch("app.services.llm_service.acompletion")
-def test_chat_uses_custom_system_prompt(mock_acompletion, client):
+def test_chat_uses_custom_system_prompt(mock_acompletion: MagicMock, client: TestClient) -> None:
     """When a profile has a custom chat prompt, it should be used in the LLM call."""
     custom_prompt = "You are a CUSTOM chat assistant."
     profile = client.post(
@@ -544,7 +551,9 @@ def test_chat_uses_custom_system_prompt(mock_acompletion, client):
 
 
 @patch("app.services.llm_service.acompletion")
-def test_chat_multimodal_content_passthrough(mock_acompletion, client):
+def test_chat_multimodal_content_passthrough(
+    mock_acompletion: MagicMock, client: TestClient
+) -> None:
     """Multimodal content (image + text) should be passed through to the LLM."""
     _, song = _make_profile_and_song(client)
 
@@ -580,7 +589,9 @@ def test_chat_multimodal_content_passthrough(mock_acompletion, client):
 
 
 @patch("app.services.llm_service.acompletion")
-def test_chat_multimodal_persists_text_only(mock_acompletion, client):
+def test_chat_multimodal_persists_text_only(
+    mock_acompletion: MagicMock, client: TestClient
+) -> None:
     """When multimodal content is sent, only the text portion is persisted to DB."""
     _, song = _make_profile_and_song(client)
 
@@ -609,7 +620,7 @@ def test_chat_multimodal_persists_text_only(mock_acompletion, client):
 
 
 @patch("app.services.llm_service.acompletion")
-def test_chat_plain_string_still_works(mock_acompletion, client):
+def test_chat_plain_string_still_works(mock_acompletion: MagicMock, client: TestClient) -> None:
     """Plain string content should still work after the multimodal change."""
     _, song = _make_profile_and_song(client)
 

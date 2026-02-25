@@ -53,6 +53,8 @@ _static_dir = (
 if _static_dir is not None:
     _index_html = _static_dir / "index.html"
 
+    @app.get("/app")
+    @app.get("/app/{rest:path}")
     @app.get("/rewrite")
     @app.get("/library")
     @app.get("/library/{rest:path}")

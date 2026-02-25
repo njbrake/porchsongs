@@ -1,28 +1,29 @@
+import { Link } from 'react-router-dom';
 import useWakeLock from '@/hooks/useWakeLock';
 import { cn } from '@/lib/utils';
 import type { AuthUser } from '@/types';
 
 interface HeaderProps {
-  onHomeClick: () => void;
   user: AuthUser | null;
   authRequired: boolean;
   onLogout: () => void;
+  isPremium?: boolean;
 }
 
-export default function Header({ onHomeClick, user, authRequired, onLogout }: HeaderProps) {
+export default function Header({ user, authRequired, onLogout, isPremium }: HeaderProps) {
   const wakeLock = useWakeLock();
+  const logoTo = isPremium ? '/' : '/app/rewrite';
 
   return (
     <header className="flex justify-between items-center px-3 sm:px-8 py-1 sm:py-1.5 bg-linear-to-br from-header-bg-from to-header-bg-to text-header-text shadow-md">
       <div className="flex items-baseline gap-0 min-w-0">
-        <a
+        <Link
           className="flex items-baseline gap-0 no-underline text-inherit cursor-pointer shrink-0"
-          href="/"
-          onClick={e => { e.preventDefault(); onHomeClick(); }}
+          to={logoTo}
         >
           <img src="/logo.svg" alt="" className="w-7 h-7 sm:w-9 sm:h-9 mr-2 sm:mr-2.5 self-center" />
           <h1 className="text-lg sm:text-2xl font-bold tracking-tight">porchsongs</h1>
-        </a>
+        </Link>
         <span className="text-sm opacity-70 ml-4 hidden md:inline">Make every song yours</span>
       </div>
       <div className="flex items-center gap-2 shrink-0">

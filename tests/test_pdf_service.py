@@ -1,8 +1,10 @@
 """Tests for PDF generation service."""
 
+from fastapi.testclient import TestClient
 from fpdf import FPDF
+from sqlalchemy.orm import Session
 
-from app.models import Profile, Song
+from app.models import Profile, Song, User
 from app.services.pdf_service import (
     _fit_font_size,
     _sanitize_for_latin1,
@@ -12,7 +14,7 @@ from app.services.pdf_service import (
 # ── Unit tests for generate_song_pdf ─────────────────────────────────────────
 
 
-def test_basic_pdf_returns_valid_bytes():
+def test_basic_pdf_returns_valid_bytes() -> None:
     """Generated PDF is non-empty and starts with %PDF header."""
     result = generate_song_pdf("My Song", "Artist", "Am  C  G\nHello world")
     assert isinstance(result, bytes)
@@ -20,7 +22,7 @@ def test_basic_pdf_returns_valid_bytes():
     assert result[:5] == b"%PDF-"
 
 
-def test_title_and_artist_produce_larger_pdf():
+def test_title_and_artist_produce_larger_pdf() -> None:
     """PDF with title and artist is larger than one without (content is compressed)."""
     with_artist = generate_song_pdf("Amazing Grace", "John Newton", "G  C  G\nAmazing grace")
     without_artist = generate_song_pdf("Amazing Grace", None, "G  C  G\nAmazing grace")
@@ -29,14 +31,14 @@ def test_title_and_artist_produce_larger_pdf():
     assert len(with_artist) > len(without_artist)
 
 
-def test_no_artist_still_works():
+def test_no_artist_still_works() -> None:
     """artist=None produces a valid PDF without crashing."""
     result = generate_song_pdf("Solo Song", None, "Dm  Am\nJust chords")
     assert result[:5] == b"%PDF-"
     assert len(result) > 100
 
 
-def test_empty_title_defaults_to_untitled():
+def test_empty_title_defaults_to_untitled() -> None:
     """Empty or blank title doesn't crash — falls back to 'Untitled' internally."""
     result = generate_song_pdf("", None, "some content")
     assert result[:5] == b"%PDF-"
@@ -53,7 +55,7 @@ def test_empty_title_defaults_to_untitled():
 # ── Unit tests for _sanitize_for_latin1 ──────────────────────────────────────
 
 
-def test_unicode_sanitization():
+def test_unicode_sanitization() -> None:
     """Curly quotes, em dashes, and ellipsis are replaced with ASCII equivalents."""
     text = "\u201cHello\u201d \u2018world\u2019 \u2014 test\u2026"
     result = _sanitize_for_latin1(text)
@@ -65,7 +67,7 @@ def test_unicode_sanitization():
     assert "..." in result
 
 
-def test_non_latin1_characters_replaced():
+def test_non_latin1_characters_replaced() -> None:
     """Characters outside latin-1 (e.g. emoji) get replaced with '?'."""
     result = _sanitize_for_latin1("Hello \U0001f3b5 World")
     assert "\U0001f3b5" not in result
@@ -75,7 +77,7 @@ def test_non_latin1_characters_replaced():
 # ── Unit tests for _fit_font_size ─────────────────────────────────────────────
 
 
-def test_short_lines_get_large_font():
+def test_short_lines_get_large_font() -> None:
     """Short lines that easily fit should use 10pt."""
     pdf = FPDF(orientation="P", unit="mm", format="A4")
     pdf.add_page()
@@ -84,7 +86,7 @@ def test_short_lines_get_large_font():
     assert size == 10.0
 
 
-def test_very_long_lines_get_small_font():
+def test_very_long_lines_get_small_font() -> None:
     """Very long lines should shrink the font to 6pt minimum."""
     pdf = FPDF(orientation="P", unit="mm", format="A4")
     pdf.add_page()
@@ -97,7 +99,7 @@ def test_very_long_lines_get_small_font():
 # ── Multi-page content ───────────────────────────────────────────────────────
 
 
-def test_multi_page_content_does_not_crash():
+def test_multi_page_content_does_not_crash() -> None:
     """Many lines of content should produce a valid multi-page PDF."""
     content = "\n".join(f"Line {i}: Am  C  G  D" for i in range(200))
     result = generate_song_pdf("Long Song", "Prolific Artist", content)
@@ -108,7 +110,7 @@ def test_multi_page_content_does_not_crash():
 # ── Endpoint test (song PDF download) ────────────────────────────────────────
 
 
-def test_song_pdf_endpoint(client, db_session, test_user):
+def test_song_pdf_endpoint(client: TestClient, db_session: Session, test_user: User) -> None:
     """GET /api/songs/{id}/pdf returns PDF with correct headers."""
     profile = Profile(user_id=test_user.id, is_default=True)
     db_session.add(profile)

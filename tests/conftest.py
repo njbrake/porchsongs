@@ -1,11 +1,12 @@
 """Shared fixtures for tests."""
 
+from collections.abc import Generator
 from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.auth.dependencies import get_current_user
@@ -15,7 +16,7 @@ from app.models import User
 
 
 @pytest.fixture()
-def db_session():
+def db_session() -> Generator[Session]:
     """Create an in-memory SQLite database for each test."""
     engine = create_engine(
         "sqlite:///:memory:",
@@ -23,8 +24,8 @@ def db_session():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(bind=engine)
-    Session = sessionmaker(bind=engine)
-    session = Session()
+    TestSession = sessionmaker(bind=engine)
+    session = TestSession()
     try:
         yield session
     finally:
@@ -32,7 +33,7 @@ def db_session():
 
 
 @pytest.fixture()
-def test_user(db_session):
+def test_user(db_session: Session) -> User:
     """Create a test user and return it."""
     user = User(
         email="test@porchsongs.local",
@@ -48,16 +49,16 @@ def test_user(db_session):
 
 
 @pytest.fixture()
-def client(db_session, test_user):
+def client(db_session: Session, test_user: User) -> Generator[TestClient]:
     """FastAPI test client with overridden DB dependency and auth."""
 
-    def _override_get_db():
+    def _override_get_db() -> Generator[Session]:
         try:
             yield db_session
         finally:
             pass
 
-    def _override_get_current_user():
+    def _override_get_current_user() -> User:
         return test_user
 
     app.dependency_overrides[get_db] = _override_get_db

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { STORAGE_KEYS } from '@/api';
 import ComparisonView from '@/components/ComparisonView';
@@ -14,6 +15,7 @@ import Spinner from '@/components/ui/spinner';
 import StreamingPre from '@/components/ui/streaming-pre';
 import { Alert } from '@/components/ui/alert';
 import { cn, copyToClipboard } from '@/lib/utils';
+import type { AppShellContext } from '@/layouts/AppShell';
 import type { Profile, Song, RewriteResult, RewriteMeta, ChatMessage, LlmSettings, SavedModel, ParseResult } from '@/types';
 
 interface RewriteTabProps {
@@ -37,25 +39,27 @@ interface RewriteTabProps {
   isPremium?: boolean;
 }
 
-export default function RewriteTab({
-  profile,
-  llmSettings,
-  rewriteResult,
-  rewriteMeta,
-  currentSongId,
-  chatMessages,
-  setChatMessages,
-  onNewRewrite,
-  onSongSaved,
-  onContentUpdated,
-  onChangeProvider,
-  onChangeModel,
-  reasoningEffort,
-  onChangeReasoningEffort,
-  savedModels,
-  onOpenSettings,
-  isPremium,
-}: RewriteTabProps) {
+export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
+  const ctx = useOutletContext<AppShellContext>();
+  const {
+    profile,
+    llmSettings,
+    rewriteResult,
+    rewriteMeta,
+    currentSongId,
+    chatMessages,
+    setChatMessages,
+    onNewRewrite,
+    onSongSaved,
+    onContentUpdated,
+    onChangeProvider,
+    onChangeModel,
+    reasoningEffort,
+    onChangeReasoningEffort,
+    savedModels,
+    onOpenSettings,
+    isPremium,
+  } = { ...ctx, ...directProps } as RewriteTabProps;
   const [input, setInputRaw] = useState(
     () => sessionStorage.getItem(STORAGE_KEYS.DRAFT_INPUT) || ''
   );

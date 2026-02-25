@@ -1,290 +1,32 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Toaster } from 'sonner';
-import api, { STORAGE_KEYS } from '@/api';
-import useLocalStorage from '@/hooks/useLocalStorage';
-import useProviderConnections from '@/hooks/useProviderConnections';
-import useSavedModels from '@/hooks/useSavedModels';
+import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import Spinner from '@/components/ui/spinner';
-import Header from '@/components/Header';
-import Tabs from '@/components/Tabs';
+import LoginPage from '@/components/LoginPage';
+import AppShell from '@/layouts/AppShell';
 import RewriteTab from '@/components/RewriteTab';
 import LibraryTab from '@/components/LibraryTab';
 import SettingsPage from '@/components/SettingsPage';
-import LoginPage from '@/components/LoginPage';
-import type { Profile, RewriteResult, RewriteMeta, ChatMessage, Song, AuthConfig, AuthUser } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  getPremiumRouteElements,
+  getDefaultSettingsTab,
+  getCatchAllRedirect,
+  shouldRedirectRootToApp,
+} from '@/extensions';
 
-const TAB_KEYS = ['rewrite', 'library', 'settings'];
-const SETTINGS_SUB_TABS_ALL = ['account', 'models', 'prompts'];
-
-function tabFromPath(pathname: string): string {
-  const seg = pathname.replace(/^\//, '').split('/')[0]!.toLowerCase();
-  return TAB_KEYS.includes(seg) ? seg : 'rewrite';
+function CatchAll() {
+  const { isPremium } = useAuth();
+  return <Navigate to={getCatchAllRedirect(isPremium)} replace />;
 }
 
-function settingsTabFromPath(pathname: string, isPremiumMode?: boolean): string {
-  const parts = pathname.replace(/^\//, '').split('/');
-  if (parts[0]?.toLowerCase() === 'settings' && SETTINGS_SUB_TABS_ALL.includes(parts[1]?.toLowerCase() ?? '')) {
-    return parts[1]!.toLowerCase();
-  }
-  // Legacy URL support: map old tab keys to new ones
-  const legacy = parts[1]?.toLowerCase();
-  if (legacy === 'providers') return 'models';
-  if (legacy === 'profile') return 'prompts';
-  return isPremiumMode ? 'account' : 'models';
-}
-
-function songIdFromPath(pathname: string): number | null {
-  const parts = pathname.replace(/^\//, '').split('/');
-  if (parts[0]?.toLowerCase() === 'library' && parts[1]) {
-    const id = parseInt(parts[1], 10);
-    return Number.isFinite(id) ? id : null;
-  }
-  return null;
+/** Redirects legacy routes like /library/:id to /app/library/:id */
+function LegacyRedirect({ prefix }: { prefix: string }) {
+  const params = useParams();
+  const suffix = params['*'] ?? Object.values(params)[0] ?? '';
+  return <Navigate to={`${prefix}/${suffix}`} replace />;
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState(() => tabFromPath(window.location.pathname));
-  const [settingsTab, setSettingsTab] = useState(() => settingsTabFromPath(window.location.pathname));
-  const [initialSongId, setInitialSongId] = useState(() => songIdFromPath(window.location.pathname));
-  const [libraryResetKey, setLibraryResetKey] = useState(0);
-  // Auth state: "loading" | "login" | "ready"
-  const [authState, setAuthState] = useState<'loading' | 'login' | 'ready'>('loading');
-  const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null);
-  const [currentAuthUser, setCurrentAuthUser] = useState<AuthUser | null>(null);
-
-  // Check auth requirement on mount
-  useEffect(() => {
-    api.getAuthConfig()
-      .then((config) => {
-        setAuthConfig(config);
-        if (!config.required) {
-          setAuthState('ready');
-        } else {
-          // Try to restore session from refresh token
-          api.tryRestoreSession().then((user) => {
-            if (user) {
-              setCurrentAuthUser(user);
-              setAuthState('ready');
-            } else {
-              setAuthState('login');
-            }
-          });
-        }
-      })
-      .catch(() => {
-        // If we can't reach the server, proceed without auth
-        setAuthState('ready');
-      });
-  }, []);
-
-  // Listen for logout events (e.g. 401 from expired/changed token)
-  useEffect(() => {
-    const handler = () => {
-      if (authConfig?.required) {
-        api.logout();
-        setCurrentAuthUser(null);
-        setAuthState('login');
-      }
-    };
-    window.addEventListener('porchsongs-logout', handler);
-    return () => window.removeEventListener('porchsongs-logout', handler);
-  }, [authConfig]);
-
-  // Sync tab from URL on back/forward navigation
-  useEffect(() => {
-    const onPopState = () => {
-      setActiveTab(tabFromPath(window.location.pathname));
-      setSettingsTab(settingsTabFromPath(window.location.pathname));
-      setInitialSongId(songIdFromPath(window.location.pathname));
-    };
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
-  }, []);
-
-  const isPremium = authConfig?.method === 'oauth_google';
-
-  // When premium mode is detected after auth config loads, fix the settings sub-tab
-  useEffect(() => {
-    if (isPremium && settingsTab !== 'account') {
-      setSettingsTab('account');
-    }
-  }, [isPremium, settingsTab]);
-
-  // Wrapper that updates both state and URL
-  const setTab = useCallback((key: string, subTab?: string) => {
-    if (key === 'settings') {
-      const sub = subTab || settingsTab || (isPremium ? 'account' : 'models');
-      setActiveTab('settings');
-      setSettingsTab(sub);
-      const target = `/settings/${sub}`;
-      if (window.location.pathname !== target) {
-        window.history.pushState(null, '', target);
-      }
-    } else {
-      if (key === 'library' && activeTab === 'library') {
-        setLibraryResetKey(k => k + 1);
-      }
-      setActiveTab(key);
-      const target = key === 'rewrite' ? '/' : `/${key}`;
-      if (window.location.pathname !== target) {
-        window.history.pushState(null, '', target);
-      }
-    }
-  }, [settingsTab, activeTab, isPremium]);
-
-  // Profile state
-  const [profile, setProfile] = useState<Profile | null>(null);
-
-  // LLM settings (persisted in localStorage)
-  const [provider, setProvider] = useLocalStorage(STORAGE_KEYS.PROVIDER, '');
-  const [model, setModel] = useLocalStorage(STORAGE_KEYS.MODEL, '');
-  const [reasoningEffort, setReasoningEffort] = useLocalStorage(STORAGE_KEYS.REASONING_EFFORT, 'high');
-
-  // Provider connections and saved models for current profile
-  // In premium mode, skip these calls — the platform manages LLM config and the endpoints return 403.
-  const { connections, addConnection, removeConnection } = useProviderConnections(profile?.id, isPremium);
-  const { savedModels, addModel, removeModel, refresh: refreshModels } = useSavedModels(profile?.id, isPremium);
-
-  // Rewrite state (shared between RewriteTab, comparison, chat)
-  const [rewriteResult, setRewriteResult] = useState<RewriteResult | null>(null);
-  const [rewriteMeta, setRewriteMeta] = useState<RewriteMeta | null>(null);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-
-  // Persist currentSongId to localStorage so it survives page refresh
-  const [currentSongId, setCurrentSongIdRaw] = useState<number | null>(() => {
-    const stored = localStorage.getItem(STORAGE_KEYS.CURRENT_SONG_ID);
-    if (stored) {
-      const id = parseInt(stored, 10);
-      return Number.isFinite(id) ? id : null;
-    }
-    return null;
-  });
-  const setCurrentSongId = useCallback((id: number | null) => {
-    setCurrentSongIdRaw(id);
-    if (id != null) {
-      localStorage.setItem(STORAGE_KEYS.CURRENT_SONG_ID, String(id));
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.CURRENT_SONG_ID);
-    }
-  }, []);
-
-  const llmSettings = { provider, model, reasoning_effort: reasoningEffort };
-
-  // Load profile on mount (only when ready); auto-create if none exist
-  useEffect(() => {
-    if (authState !== 'ready') return;
-    api.listProfiles().then(async profiles => {
-      const def = profiles.find(p => p.is_default) || profiles[0];
-      if (def) {
-        setProfile(def);
-      } else {
-        const created = await api.createProfile({ is_default: true });
-        setProfile(created);
-      }
-    }).catch(() => {});
-  }, [authState]);
-
-  // Auto-restore active song on mount (page refresh recovery)
-  useEffect(() => {
-    if (authState !== 'ready' || rewriteResult || !currentSongId) return;
-    api.getSong(currentSongId).then(async (song: Song) => {
-      setRewriteResult({
-        original_content: song.original_content,
-        rewritten_content: song.rewritten_content,
-        changes_summary: song.changes_summary || '',
-      });
-      setRewriteMeta({
-        title: song.title ?? undefined,
-        artist: song.artist ?? undefined,
-        source_url: song.source_url ?? undefined,
-        profile_id: song.profile_id,
-        llm_provider: song.llm_provider ?? undefined,
-        llm_model: song.llm_model ?? undefined,
-      });
-      try {
-        const history = await api.getChatHistory(song.id);
-        setChatMessages(history.map(row => ({
-          role: row.role as 'user' | 'assistant',
-          content: row.content,
-          isNote: row.is_note,
-        })));
-      } catch {
-        setChatMessages([]);
-      }
-    }).catch(() => {
-      setCurrentSongId(null);
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authState]);
-
-  const handleSaveProfile = useCallback(async (data: Partial<Profile>) => {
-    let saved: Profile;
-    if (profile?.id) {
-      saved = await api.updateProfile(profile.id, data);
-    } else {
-      saved = await api.createProfile(data);
-    }
-    setProfile(saved);
-    return saved;
-  }, [profile]);
-
-  const handleNewRewrite = useCallback((result: RewriteResult | null, meta: RewriteMeta | null) => {
-    setRewriteResult(result);
-    setRewriteMeta(meta);
-    if (!result) {
-      setChatMessages([]);
-      setCurrentSongId(null);
-    }
-  }, [setCurrentSongId]);
-
-  const handleSongSaved = useCallback((songId: number) => {
-    setCurrentSongId(songId);
-  }, [setCurrentSongId]);
-
-  const handleContentUpdated = useCallback((newContent: string) => {
-    setRewriteResult(prev => prev ? { ...prev, rewritten_content: newContent } : prev);
-  }, []);
-
-  const handleLoadSong = useCallback(async (song: Song) => {
-    setRewriteResult({
-      original_content: song.original_content,
-      rewritten_content: song.rewritten_content,
-      changes_summary: song.changes_summary || '',
-    });
-    setRewriteMeta({
-      title: song.title ?? undefined,
-      artist: song.artist ?? undefined,
-      source_url: song.source_url ?? undefined,
-      profile_id: song.profile_id,
-      llm_provider: song.llm_provider ?? undefined,
-      llm_model: song.llm_model ?? undefined,
-    });
-    setCurrentSongId(song.id);
-    setTab('rewrite');
-
-    // Restore chat history
-    try {
-      const history = await api.getChatHistory(song.id);
-      setChatMessages(history.map(row => ({
-        role: row.role as 'user' | 'assistant',
-        content: row.content,
-        isNote: row.is_note,
-      })));
-    } catch {
-      setChatMessages([]);
-    }
-  }, [setTab, setCurrentSongId]);
-
-  const handleLogout = useCallback(() => {
-    api.logout();
-    setCurrentAuthUser(null);
-    setAuthState('login');
-  }, []);
-
-  const handleLogin = useCallback(async (user: AuthUser) => {
-    setCurrentAuthUser(user);
-    setAuthState('ready');
-  }, []);
+  const { authState, isPremium } = useAuth();
 
   if (authState === 'loading') {
     return (
@@ -295,81 +37,36 @@ export default function App() {
     );
   }
 
-  if (authState === 'login') {
-    return <LoginPage authConfig={authConfig} onLogin={handleLogin} />;
-  }
-
   return (
-    <>
-      <Header
-        onHomeClick={() => setTab('rewrite')}
-        user={currentAuthUser}
-        authRequired={authConfig?.required ?? false}
-        onLogout={handleLogout}
-      />
-      <Tabs active={activeTab} onChange={setTab} />
-      <main className="max-w-[1800px] mx-auto px-2 sm:px-4 py-4">
-        <div style={{ display: activeTab === 'rewrite' ? undefined : 'none' }}>
-          <RewriteTab
-            profile={profile}
-            llmSettings={llmSettings}
-            rewriteResult={rewriteResult}
-            rewriteMeta={rewriteMeta}
-            currentSongId={currentSongId}
-            chatMessages={chatMessages}
-            setChatMessages={setChatMessages}
-            onNewRewrite={handleNewRewrite}
-            onSongSaved={handleSongSaved}
-            onContentUpdated={handleContentUpdated}
-            onChangeProvider={setProvider}
-            onChangeModel={setModel}
-            reasoningEffort={reasoningEffort}
-            onChangeReasoningEffort={setReasoningEffort}
-            savedModels={savedModels}
-            onOpenSettings={() => setTab('settings', 'models')}
-            isPremium={isPremium}
-          />
-        </div>
-        {activeTab === 'library' && (
-          <LibraryTab onLoadSong={handleLoadSong} initialSongId={initialSongId} onInitialSongConsumed={() => setInitialSongId(null)} resetKey={libraryResetKey} />
-        )}
-        {activeTab === 'settings' && (
-          <SettingsPage
-            provider={provider}
-            model={model}
-            savedModels={savedModels}
-            onSave={(p, m) => { setProvider(p); setModel(m); }}
-            onAddModel={addModel}
-            onRemoveModel={removeModel}
-            connections={connections}
-            onAddConnection={addConnection}
-            onRemoveConnection={async (connId) => {
-              const conn = connections.find(c => c.id === connId);
-              await removeConnection(connId);
-              // Clean up active selection if it was from the removed provider
-              if (conn && conn.provider === provider) {
-                const remaining = savedModels.filter(m => m.provider !== conn.provider);
-                if (remaining.length > 0) {
-                  setProvider(remaining[0]!.provider);
-                  setModel(remaining[0]!.model);
-                } else {
-                  setProvider('');
-                  setModel('');
-                }
-              }
-              refreshModels();
-            }}
-            profile={profile}
-            onSaveProfile={handleSaveProfile}
-            activeTab={settingsTab}
-            onChangeTab={(sub) => setTab('settings', sub)}
-            reasoningEffort={reasoningEffort}
-            onChangeReasoningEffort={setReasoningEffort}
-            isPremium={isPremium}
-          />
-        )}
-      </main>
-      <Toaster position="bottom-right" richColors />
-    </>
+    <Routes>
+      {/* Premium route elements (marketing pages, etc.) */}
+      {getPremiumRouteElements()}
+
+      {/* Login */}
+      <Route path="/app/login" element={<LoginPage />} />
+
+      {/* Authenticated app */}
+      <Route path="/app" element={<AppShell />}>
+        <Route index element={<Navigate to="/app/rewrite" replace />} />
+        <Route path="rewrite" element={<RewriteTab />} />
+        <Route path="library" element={<LibraryTab />} />
+        <Route path="library/:id" element={<LibraryTab />} />
+        <Route path="settings/:tab" element={<SettingsPage />} />
+        <Route path="settings" element={<Navigate to={`/app/settings/${getDefaultSettingsTab(isPremium)}`} replace />} />
+      </Route>
+
+      {/* OSS root redirects to app; premium root handled by extension routes */}
+      {shouldRedirectRootToApp(isPremium) && <Route path="/" element={<Navigate to="/app" replace />} />}
+
+      {/* Legacy routes redirect to new paths */}
+      <Route path="/rewrite" element={<Navigate to="/app/rewrite" replace />} />
+      <Route path="/library" element={<Navigate to="/app/library" replace />} />
+      <Route path="/library/:id" element={<LegacyRedirect prefix="/app/library" />} />
+      <Route path="/settings" element={<Navigate to="/app/settings" replace />} />
+      <Route path="/settings/:tab" element={<LegacyRedirect prefix="/app/settings" />} />
+
+      {/* Catch-all */}
+      <Route path="*" element={<CatchAll />} />
+    </Routes>
   );
 }

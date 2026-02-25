@@ -590,7 +590,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/admin/users": {
+    "/app/{rest}": {
         parameters: {
             query?: never;
             header?: never;
@@ -598,10 +598,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Users
-         * @description List all users with subscription info (admin only).
+         * Spa Fallback
+         * @description Serve index.html for SPA client-side routes.
          */
-        get: operations["list_users_api_admin_users_get"];
+        get: operations["_spa_fallback_app__rest__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -610,7 +610,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/admin/stats": {
+    "/app": {
         parameters: {
             query?: never;
             header?: never;
@@ -618,307 +618,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Admin Stats
-         * @description Get admin dashboard statistics.
+         * Spa Fallback
+         * @description Serve index.html for SPA client-side routes.
          */
-        get: operations["admin_stats_api_admin_stats_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/admin/users/{user_id}/reset-quota": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Reset User Quota
-         * @description Reset a user's current-month rewrite count to zero.
-         */
-        post: operations["reset_user_quota_api_admin_users__user_id__reset_quota_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/admin/users/{user_id}/deactivate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Deactivate User
-         * @description Deactivate a user (admin only).
-         */
-        post: operations["deactivate_user_api_admin_users__user_id__deactivate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/admin/users/{user_id}/activate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Activate User
-         * @description Activate a user (admin only).
-         */
-        post: operations["activate_user_api_admin_users__user_id__activate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/billing/checkout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Checkout
-         * @description Create a Stripe Checkout session to subscribe to a paid plan.
-         */
-        post: operations["checkout_api_billing_checkout_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/billing/portal": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Portal
-         * @description Create a Stripe Customer Portal session for managing billing.
-         */
-        post: operations["portal_api_billing_portal_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/billing/webhooks/stripe": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Stripe Webhook
-         * @description Handle incoming Stripe webhook events.
-         *
-         *     This endpoint is called by Stripe, not by the frontend.
-         *     No authentication required — verified via webhook signature.
-         *     Rate limited to prevent DoS via invalid signature verification.
-         */
-        post: operations["stripe_webhook_api_billing_webhooks_stripe_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/subscriptions/plans": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Plans
-         * @description List all available subscription plans.
-         */
-        get: operations["list_plans_api_subscriptions_plans_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/subscriptions/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * My Subscription
-         * @description Get the current user's subscription and usage.
-         */
-        get: operations["my_subscription_api_subscriptions_me_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/subscriptions/usage": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * My Usage
-         * @description Get the current month's usage quota.
-         */
-        get: operations["my_usage_api_subscriptions_usage_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/invites": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Invites
-         * @description List invite codes. Admins see all; users see their own.
-         */
-        get: operations["list_invites_api_invites_get"];
-        put?: never;
-        /**
-         * Create Invite
-         * @description Create an invite code.
-         *
-         *     Admins can always create invites. Regular users need a plan that allows it.
-         */
-        post: operations["create_invite_api_invites_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/invites/{invite_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Invite
-         * @description Delete an invite code. Admins can delete any; users their own.
-         */
-        delete: operations["delete_invite_api_invites__invite_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/invites/redeem": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Redeem Invite
-         * @description Redeem an invite code to activate a new account.
-         *
-         *     Called after OAuth signup to validate the invite code.
-         *     Rate limited to prevent brute-force guessing.
-         */
-        post: operations["redeem_invite_api_invites_redeem_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/oauth/google": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Oauth Google Login
-         * @description Redirect to Google's authorization endpoint to start the OAuth flow.
-         */
-        get: operations["oauth_google_login_api_auth_oauth_google_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/oauth/google/callback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Oauth Google Callback
-         * @description Handle the OAuth callback from Google.
-         *
-         *     Exchanges the authorization code for user info, creates/gets the user,
-         *     issues JWT + refresh tokens, stores the refresh token in localStorage
-         *     via a small HTML page, then redirects to the app.
-         */
-        get: operations["oauth_google_callback_api_auth_oauth_google_callback_get"];
+        get: operations["_spa_fallback_app_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -931,59 +634,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /**
-         * AdminStatsOut
-         * @description Admin dashboard statistics.
-         */
-        AdminStatsOut: {
-            /** Total Users */
-            total_users: number;
-            /** Active Users */
-            active_users: number;
-            /** Total Subscriptions */
-            total_subscriptions: number;
-            /** Plan Breakdown */
-            plan_breakdown: {
-                [key: string]: number;
-            };
-            /** Total Rewrites This Month */
-            total_rewrites_this_month: number;
-            /** Revenue Cents Monthly */
-            revenue_cents_monthly: number;
-        };
-        /**
-         * AdminUserDetail
-         * @description Extended user info for admin views.
-         */
-        AdminUserDetail: {
-            /** Id */
-            id: number;
-            /** Email */
-            email: string;
-            /** Name */
-            name?: string | null;
-            /** Role */
-            role: string;
-            /** Is Active */
-            is_active: boolean;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Plan
-             * @default free
-             */
-            plan: string;
-            /**
-             * Rewrites Used
-             * @default 0
-             */
-            rewrites_used: number;
-            /** Stripe Customer Id */
-            stripe_customer_id?: string | null;
-        };
         /** ChatMessage */
         ChatMessage: {
             /** Role */
@@ -1052,22 +702,6 @@ export interface components {
             reasoning?: string | null;
             usage?: components["schemas"]["TokenUsage"] | null;
         };
-        /**
-         * CheckoutRequest
-         * @description Request to create a Stripe checkout session.
-         */
-        CheckoutRequest: {
-            /** Plan */
-            plan: string;
-        };
-        /**
-         * CheckoutResponse
-         * @description Response with Stripe checkout URL.
-         */
-        CheckoutResponse: {
-            /** Checkout Url */
-            checkout_url: string;
-        };
         /** DefaultPromptsResponse */
         DefaultPromptsResponse: {
             /** Parse */
@@ -1086,62 +720,6 @@ export interface components {
             status: string;
             /** Version */
             version: string;
-        };
-        /**
-         * InviteCodeCreate
-         * @description Request to create an invite code.
-         */
-        InviteCodeCreate: {
-            /**
-             * Max Uses
-             * @default 1
-             */
-            max_uses: number;
-            /** Note */
-            note?: string | null;
-        };
-        /**
-         * InviteCodeOut
-         * @description Invite code response.
-         */
-        InviteCodeOut: {
-            /** Id */
-            id: number;
-            /** Code */
-            code: string;
-            /** Created By */
-            created_by: number;
-            /** Max Uses */
-            max_uses: number;
-            /** Uses */
-            uses: number;
-            /** Note */
-            note?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Expires At */
-            expires_at?: string | null;
-        };
-        /**
-         * InviteRedeemRequest
-         * @description Request to redeem an invite code during registration.
-         */
-        InviteRedeemRequest: {
-            /** Code */
-            code: string;
-        };
-        /**
-         * InviteRedeemResponse
-         * @description Response after redeeming an invite code.
-         */
-        InviteRedeemResponse: {
-            /** Ok */
-            ok: boolean;
-            /** Message */
-            message: string;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -1183,38 +761,6 @@ export interface components {
             artist?: string | null;
             /** Reasoning */
             reasoning?: string | null;
-        };
-        /**
-         * PlanInfo
-         * @description Public info about a plan tier.
-         */
-        PlanInfo: {
-            /** Name */
-            name: string;
-            /** Display Name */
-            display_name: string;
-            /** Price Cents */
-            price_cents: number;
-            /** Rewrites Per Month */
-            rewrites_per_month: number;
-            /** Max Profiles */
-            max_profiles: number;
-            /** Max Songs */
-            max_songs: number;
-            /** Can Create Invites */
-            can_create_invites: boolean;
-            /** Max Input Chars */
-            max_input_chars: number;
-            /** Max Output Tokens */
-            max_output_tokens: number;
-        };
-        /**
-         * PortalResponse
-         * @description Response with Stripe customer portal URL.
-         */
-        PortalResponse: {
-            /** Portal Url */
-            portal_url: string;
         };
         /** ProfileCreate */
         ProfileCreate: {
@@ -1457,36 +1003,6 @@ export interface components {
             /** Folder */
             folder?: string | null;
         };
-        /**
-         * SubscriptionOut
-         * @description Current user's subscription info.
-         */
-        SubscriptionOut: {
-            /** Plan */
-            plan: string;
-            /** Is Active */
-            is_active: boolean;
-            /** Stripe Customer Id */
-            stripe_customer_id?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Expires At */
-            expires_at?: string | null;
-            /** Rewrites Per Month */
-            rewrites_per_month: number;
-            /**
-             * Rewrites Used
-             * @default 0
-             */
-            rewrites_used: number;
-            /** Max Profiles */
-            max_profiles: number;
-            /** Max Songs */
-            max_songs: number;
-        };
         /** TokenResponse */
         TokenResponse: {
             /** Access Token */
@@ -1507,18 +1023,6 @@ export interface components {
              * @default 0
              */
             output_tokens: number;
-        };
-        /**
-         * UsageOut
-         * @description Current month's usage quota.
-         */
-        UsageOut: {
-            /** Month */
-            month: string;
-            /** Rewrites Used */
-            rewrites_used: number;
-            /** Rewrites Limit */
-            rewrites_limit: number;
         };
         /** UserOut */
         UserOut: {
@@ -2743,398 +2247,7 @@ export interface operations {
             };
         };
     };
-    list_users_api_admin_users_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AdminUserDetail"][];
-                };
-            };
-        };
-    };
-    admin_stats_api_admin_stats_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AdminStatsOut"];
-                };
-            };
-        };
-    };
-    reset_user_quota_api_admin_users__user_id__reset_quota_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                user_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: boolean;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    deactivate_user_api_admin_users__user_id__deactivate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                user_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: boolean;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    activate_user_api_admin_users__user_id__activate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                user_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: boolean;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    checkout_api_billing_checkout_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CheckoutRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CheckoutResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    portal_api_billing_portal_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PortalResponse"];
-                };
-            };
-        };
-    };
-    stripe_webhook_api_billing_webhooks_stripe_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-        };
-    };
-    list_plans_api_subscriptions_plans_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PlanInfo"][];
-                };
-            };
-        };
-    };
-    my_subscription_api_subscriptions_me_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SubscriptionOut"];
-                };
-            };
-        };
-    };
-    my_usage_api_subscriptions_usage_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UsageOut"];
-                };
-            };
-        };
-    };
-    list_invites_api_invites_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InviteCodeOut"][];
-                };
-            };
-        };
-    };
-    create_invite_api_invites_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InviteCodeCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InviteCodeOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_invite_api_invites__invite_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                invite_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: boolean;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    redeem_invite_api_invites_redeem_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InviteRedeemRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InviteRedeemResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    oauth_google_login_api_auth_oauth_google_get: {
+    _spa_fallback_app__rest__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -3154,18 +2267,12 @@ export interface operations {
             };
         };
     };
-    oauth_google_callback_api_auth_oauth_google_callback_get: {
+    _spa_fallback_app_get: {
         parameters: {
-            query?: {
-                code?: string | null;
-                state?: string | null;
-                error?: string | null;
-            };
+            query?: never;
             header?: never;
             path?: never;
-            cookie?: {
-                oauth_state?: string | null;
-            };
+            cookie?: never;
         };
         requestBody?: never;
         responses: {
@@ -3176,15 +2283,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

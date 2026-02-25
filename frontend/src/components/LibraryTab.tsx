@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, type DragEvent } from 'react';
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
 import api from '@/api';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ import ConfirmDialog from '@/components/ui/confirm-dialog';
 import PromptDialog, { type PromptField } from '@/components/ui/prompt-dialog';
 import { cn } from '@/lib/utils';
 import useAutoFontSize from '@/hooks/useAutoFontSize';
+import type { AppShellContext } from '@/layouts/AppShell';
 import type { Song, SongRevision } from '@/types';
 
 /**
@@ -302,14 +304,12 @@ type DialogState =
   | { kind: 'rename'; song: Song }
   | { kind: 'newFolder'; song?: Song };
 
-interface LibraryTabProps {
-  onLoadSong: (song: Song) => void;
-  initialSongId: number | null;
-  onInitialSongConsumed: () => void;
-  resetKey?: number;
-}
-
-export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongConsumed, resetKey }: LibraryTabProps) {
+export default function LibraryTab() {
+  const ctx = useOutletContext<AppShellContext>();
+  const onLoadSong = ctx.onLoadSong;
+  const { id: idParam } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const initialSongId = idParam ? parseInt(idParam, 10) : null;
   const [songs, setSongs] = useState<Song[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [viewingSong, setViewingSong] = useState<Song | null>(null);
@@ -387,28 +387,13 @@ export default function LibraryTab({ onLoadSong, initialSongId, onInitialSongCon
         setShowDetails(false);
         setRevisions([]);
       }
-      onInitialSongConsumed?.();
     }
-  }, [initialSongId, loaded, songs, onInitialSongConsumed]);
+  }, [initialSongId, loaded, songs]);
 
   const pushSongUrl = useCallback((songId: number | null) => {
-    const target = songId ? `/library/${songId}` : '/library';
-    if (window.location.pathname !== target) {
-      window.history.pushState(null, '', target);
-    }
-  }, []);
-
-  // Reset to song list when the Library tab is re-clicked
-  const prevResetKey = useRef(resetKey);
-  useEffect(() => {
-    if (resetKey !== prevResetKey.current) {
-      prevResetKey.current = resetKey;
-      if (viewingSong) {
-        setViewingSong(null);
-        pushSongUrl(null);
-      }
-    }
-  }, [resetKey, viewingSong, pushSongUrl]);
+    const target = songId ? `/app/library/${songId}` : '/app/library';
+    navigate(target, { replace: true });
+  }, [navigate]);
 
   const handleView = (song: Song) => {
     setViewingSong(song);

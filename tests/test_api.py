@@ -1,24 +1,27 @@
 """Integration tests for API endpoints using FastAPI TestClient."""
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
+
+from fastapi.testclient import TestClient
 
 # --- Profile CRUD ---
 
 
-def test_create_profile(client):
+def test_create_profile(client: TestClient) -> None:
     resp = client.post("/api/profiles", json={})
     assert resp.status_code == 201
     data = resp.json()
     assert data["is_default"] is True  # first profile becomes default
 
 
-def test_list_profiles_empty(client):
+def test_list_profiles_empty(client: TestClient) -> None:
     resp = client.get("/api/profiles")
     assert resp.status_code == 200
     assert resp.json() == []
 
 
-def test_get_profile(client):
+def test_get_profile(client: TestClient) -> None:
     create = client.post("/api/profiles", json={})
     pid = create.json()["id"]
 
@@ -27,12 +30,12 @@ def test_get_profile(client):
     assert resp.json()["id"] == pid
 
 
-def test_get_profile_404(client):
+def test_get_profile_404(client: TestClient) -> None:
     resp = client.get("/api/profiles/9999")
     assert resp.status_code == 404
 
 
-def test_update_profile(client):
+def test_update_profile(client: TestClient) -> None:
     create = client.post("/api/profiles", json={})
     pid = create.json()["id"]
 
@@ -46,7 +49,7 @@ def test_update_profile(client):
     assert resp.json()["is_default"] is True
 
 
-def test_delete_profile(client):
+def test_delete_profile(client: TestClient) -> None:
     create = client.post("/api/profiles", json={})
     pid = create.json()["id"]
 
@@ -62,7 +65,7 @@ def test_delete_profile(client):
 # --- Songs ---
 
 
-def test_create_and_list_songs(client):
+def test_create_and_list_songs(client: TestClient) -> None:
     # Need a profile first
     profile = client.post("/api/profiles", json={}).json()
 
@@ -89,7 +92,7 @@ def test_create_and_list_songs(client):
     assert songs[0]["id"] == song["id"]
 
 
-def test_get_song(client):
+def test_get_song(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     song = client.post(
         "/api/songs",
@@ -105,12 +108,12 @@ def test_get_song(client):
     assert resp.json()["original_content"] == "Hello"
 
 
-def test_get_song_404(client):
+def test_get_song_404(client: TestClient) -> None:
     resp = client.get("/api/songs/9999")
     assert resp.status_code == 404
 
 
-def test_update_song_title(client):
+def test_update_song_title(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     song = client.post(
         "/api/songs",
@@ -131,12 +134,12 @@ def test_update_song_title(client):
     assert resp.json()["title"] == "My Song"
 
 
-def test_update_song_not_found(client):
+def test_update_song_not_found(client: TestClient) -> None:
     resp = client.put("/api/songs/9999", json={"title": "Nope"})
     assert resp.status_code == 404
 
 
-def test_delete_song(client):
+def test_delete_song(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     song = client.post(
         "/api/songs",
@@ -154,7 +157,7 @@ def test_delete_song(client):
     assert resp.status_code == 404
 
 
-def test_update_song_status(client):
+def test_update_song_status(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     song = client.post(
         "/api/songs",
@@ -170,7 +173,7 @@ def test_update_song_status(client):
     assert resp.json()["status"] == "completed"
 
 
-def test_update_song_status_invalid(client):
+def test_update_song_status_invalid(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     song = client.post(
         "/api/songs",
@@ -188,7 +191,7 @@ def test_update_song_status_invalid(client):
 # --- Duplicate Song ---
 
 
-def test_duplicate_song(client):
+def test_duplicate_song(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     song = client.post(
         "/api/songs",
@@ -219,7 +222,7 @@ def test_duplicate_song(client):
     assert revs[0]["version"] == 1
 
 
-def test_duplicate_song_no_title(client):
+def test_duplicate_song_no_title(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     song = client.post(
         "/api/songs",
@@ -236,7 +239,7 @@ def test_duplicate_song_no_title(client):
     assert resp.json()["title"] == "Untitled (Copy)"
 
 
-def test_duplicate_song_not_found(client):
+def test_duplicate_song_not_found(client: TestClient) -> None:
     resp = client.post("/api/songs/9999/duplicate")
     assert resp.status_code == 404
 
@@ -244,7 +247,7 @@ def test_duplicate_song_not_found(client):
 # --- Song Revisions ---
 
 
-def test_song_revisions(client):
+def test_song_revisions(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     song = client.post(
         "/api/songs",
@@ -267,7 +270,7 @@ def test_song_revisions(client):
 # --- Providers ---
 
 
-def test_list_providers(client):
+def test_list_providers(client: TestClient) -> None:
     resp = client.get("/api/providers")
     assert resp.status_code == 200
     data = resp.json()
@@ -282,7 +285,7 @@ def test_list_providers(client):
 # --- Chat Messages ---
 
 
-def _make_song(client):
+def _make_song(client: TestClient) -> dict[str, Any]:
     """Helper: create a profile + song and return the song dict."""
     profile = client.post("/api/profiles", json={}).json()
     song = client.post(
@@ -297,7 +300,7 @@ def _make_song(client):
     return song
 
 
-def test_save_chat_messages(client):
+def test_save_chat_messages(client: TestClient) -> None:
     song = _make_song(client)
     messages = [
         {"role": "user", "content": "Pasted lyrics here", "is_note": True},
@@ -312,7 +315,7 @@ def test_save_chat_messages(client):
     assert data[1]["role"] == "assistant"
 
 
-def test_get_chat_messages(client):
+def test_get_chat_messages(client: TestClient) -> None:
     song = _make_song(client)
     messages = [
         {"role": "user", "content": "First message", "is_note": True},
@@ -332,12 +335,12 @@ def test_get_chat_messages(client):
     assert data[0]["id"] < data[3]["id"]
 
 
-def test_get_chat_messages_song_not_found(client):
+def test_get_chat_messages_song_not_found(client: TestClient) -> None:
     resp = client.get("/api/songs/9999/messages")
     assert resp.status_code == 404
 
 
-def test_save_chat_messages_song_not_found(client):
+def test_save_chat_messages_song_not_found(client: TestClient) -> None:
     resp = client.post(
         "/api/songs/9999/messages",
         json=[
@@ -347,7 +350,7 @@ def test_save_chat_messages_song_not_found(client):
     assert resp.status_code == 404
 
 
-def test_delete_song_deletes_messages(client):
+def test_delete_song_deletes_messages(client: TestClient) -> None:
     song = _make_song(client)
     client.post(
         f"/api/songs/{song['id']}/messages",
@@ -371,14 +374,14 @@ def test_delete_song_deletes_messages(client):
 # --- Profile Models ---
 
 
-def test_list_profile_models_empty(client):
+def test_list_profile_models_empty(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     resp = client.get(f"/api/profiles/{profile['id']}/models")
     assert resp.status_code == 200
     assert resp.json() == []
 
 
-def test_add_profile_model(client):
+def test_add_profile_model(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     resp = client.post(
         f"/api/profiles/{profile['id']}/models",
@@ -395,7 +398,7 @@ def test_add_profile_model(client):
     assert data["api_base"] is None
 
 
-def test_add_profile_model_upsert(client):
+def test_add_profile_model_upsert(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     pid = profile["id"]
 
@@ -422,7 +425,7 @@ def test_add_profile_model_upsert(client):
     assert models[0]["api_base"] == "http://localhost:8080"
 
 
-def test_add_profile_model_profile_not_found(client):
+def test_add_profile_model_profile_not_found(client: TestClient) -> None:
     resp = client.post(
         "/api/profiles/9999/models",
         json={
@@ -433,7 +436,7 @@ def test_add_profile_model_profile_not_found(client):
     assert resp.status_code == 404
 
 
-def test_delete_profile_model(client):
+def test_delete_profile_model(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     pid = profile["id"]
     pm = client.post(
@@ -452,7 +455,7 @@ def test_delete_profile_model(client):
     assert resp.json() == []
 
 
-def test_delete_profile_cascades_models(client):
+def test_delete_profile_cascades_models(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     pid = profile["id"]
     client.post(
@@ -471,7 +474,7 @@ def test_delete_profile_cascades_models(client):
     assert resp.status_code == 404
 
 
-def test_list_profile_models_multiple(client):
+def test_list_profile_models_multiple(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     pid = profile["id"]
     client.post(
@@ -495,11 +498,11 @@ def test_list_profile_models_multiple(client):
     assert len(models) == 2
 
 
-def test_parse_uses_env_credentials(client):
+def test_parse_uses_env_credentials(client: TestClient) -> None:
     """POST /parse should call acompletion without api_key (uses env vars)."""
     profile = client.post("/api/profiles", json={}).json()
 
-    def _make_resp(content):
+    def _make_resp(content: str) -> MagicMock:
         r = MagicMock()
         r.choices = [MagicMock()]
         r.choices[0].message.content = content
@@ -525,11 +528,11 @@ def test_parse_uses_env_credentials(client):
         assert "api_key" not in mock_ac.call_args.kwargs
 
 
-def test_parse_returns_title_artist(client):
+def test_parse_returns_title_artist(client: TestClient) -> None:
     """POST /parse with META section should return title and artist."""
     profile = client.post("/api/profiles", json={}).json()
 
-    def _make_resp(content):
+    def _make_resp(content: str) -> MagicMock:
         r = MagicMock()
         r.choices = [MagicMock()]
         r.choices[0].message.content = content
@@ -556,11 +559,11 @@ def test_parse_returns_title_artist(client):
         assert "Rock me mama" in data["original_content"]
 
 
-def test_parse_unknown_title_artist(client):
+def test_parse_unknown_title_artist(client: TestClient) -> None:
     """POST /parse with UNKNOWN in META should return null title/artist."""
     profile = client.post("/api/profiles", json={}).json()
 
-    def _make_resp(content):
+    def _make_resp(content: str) -> MagicMock:
         r = MagicMock()
         r.choices = [MagicMock()]
         r.choices[0].message.content = content
@@ -585,7 +588,7 @@ def test_parse_unknown_title_artist(client):
         assert data["artist"] is None
 
 
-def test_health(client):
+def test_health(client: TestClient) -> None:
     resp = client.get("/api/health")
     assert resp.status_code == 200
     data = resp.json()
@@ -593,11 +596,11 @@ def test_health(client):
     assert "version" in data
 
 
-def test_parse_missing_tags_fallback(client):
+def test_parse_missing_tags_fallback(client: TestClient) -> None:
     """When LLM returns no XML tags, original_content should fall back to raw input."""
     profile = client.post("/api/profiles", json={}).json()
 
-    def _make_resp(content):
+    def _make_resp(content: str) -> MagicMock:
         r = MagicMock()
         r.choices = [MagicMock()]
         r.choices[0].message.content = content
@@ -624,14 +627,14 @@ def test_parse_missing_tags_fallback(client):
 # --- Provider Connections ---
 
 
-def test_list_connections_empty(client):
+def test_list_connections_empty(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     resp = client.get(f"/api/profiles/{profile['id']}/connections")
     assert resp.status_code == 200
     assert resp.json() == []
 
 
-def test_add_connection(client):
+def test_add_connection(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     resp = client.post(
         f"/api/profiles/{profile['id']}/connections",
@@ -646,7 +649,7 @@ def test_add_connection(client):
     assert data["profile_id"] == profile["id"]
 
 
-def test_add_connection_with_api_base(client):
+def test_add_connection_with_api_base(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     resp = client.post(
         f"/api/profiles/{profile['id']}/connections",
@@ -661,7 +664,7 @@ def test_add_connection_with_api_base(client):
     assert data["api_base"] == "http://localhost:11434"
 
 
-def test_add_connection_upsert(client):
+def test_add_connection_upsert(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     pid = profile["id"]
 
@@ -681,12 +684,12 @@ def test_add_connection_upsert(client):
     assert conns[0]["api_base"] == "http://localhost:11434"
 
 
-def test_add_connection_profile_not_found(client):
+def test_add_connection_profile_not_found(client: TestClient) -> None:
     resp = client.post("/api/profiles/9999/connections", json={"provider": "openai"})
     assert resp.status_code == 404
 
 
-def test_delete_connection(client):
+def test_delete_connection(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     pid = profile["id"]
     conn = client.post(
@@ -703,7 +706,7 @@ def test_delete_connection(client):
     assert resp.json() == []
 
 
-def test_delete_connection_cascades_models(client):
+def test_delete_connection_cascades_models(client: TestClient) -> None:
     """Deleting a connection should also delete ProfileModel rows for that provider."""
     profile = client.post("/api/profiles", json={}).json()
     pid = profile["id"]
@@ -748,7 +751,7 @@ def test_delete_connection_cascades_models(client):
     assert models[0]["provider"] == "anthropic"
 
 
-def test_delete_profile_cascades_connections(client):
+def test_delete_profile_cascades_connections(client: TestClient) -> None:
     """Deleting a profile should also delete its connections."""
     profile = client.post("/api/profiles", json={}).json()
     pid = profile["id"]
@@ -761,7 +764,7 @@ def test_delete_profile_cascades_connections(client):
     assert resp.status_code == 404
 
 
-def test_lookup_api_base_prefers_connection(client):
+def test_lookup_api_base_prefers_connection(client: TestClient) -> None:
     """Parse should use api_base from ProviderConnection over ProfileModel."""
     profile = client.post("/api/profiles", json={}).json()
     pid = profile["id"]
@@ -786,9 +789,9 @@ def test_lookup_api_base_prefers_connection(client):
 
     mock_response = MagicMock()
     mock_response.choices = [MagicMock()]
-    mock_response.choices[0].message.content = (
-        "<meta>\nTitle: T\nArtist: A\n</meta>\n<original>\nHello\n</original>"
-    )
+    mock_response.choices[
+        0
+    ].message.content = "<meta>\nTitle: T\nArtist: A\n</meta>\n<original>\nHello\n</original>"
 
     with patch(
         "app.services.llm_service.acompletion", new_callable=AsyncMock, return_value=mock_response
@@ -807,12 +810,12 @@ def test_lookup_api_base_prefers_connection(client):
         assert call_kwargs.get("api_base") == "http://connection-base:8080"
 
 
-def test_list_connections_not_found(client):
+def test_list_connections_not_found(client: TestClient) -> None:
     resp = client.get("/api/profiles/9999/connections")
     assert resp.status_code == 404
 
 
-def test_delete_connection_not_found(client):
+def test_delete_connection_not_found(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     resp = client.delete(f"/api/profiles/{profile['id']}/connections/9999")
     assert resp.status_code == 404

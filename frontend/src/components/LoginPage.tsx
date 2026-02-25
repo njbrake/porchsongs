@@ -1,16 +1,14 @@
 import { useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '@/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import type { AuthConfig, AuthUser } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
 
-interface LoginPageProps {
-  authConfig: AuthConfig | null;
-  onLogin: (user: AuthUser) => void;
-}
-
-export default function LoginPage({ authConfig, onLogin }: LoginPageProps) {
+export default function LoginPage() {
+  const { authConfig, handleLogin } = useAuth();
+  const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,7 +22,8 @@ export default function LoginPage({ authConfig, onLogin }: LoginPageProps) {
     setLoading(true);
     try {
       const { user } = await api.login(password);
-      onLogin(user);
+      handleLogin(user);
+      navigate('/app/rewrite', { replace: true });
     } catch {
       setError('Wrong password. Please try again.');
     } finally {

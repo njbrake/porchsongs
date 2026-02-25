@@ -1,12 +1,13 @@
 """Tests for auth endpoints and data isolation."""
 
+from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.auth.dependencies import get_current_user
@@ -18,7 +19,7 @@ from app.models import RefreshToken, User
 
 
 @pytest.fixture()
-def _auth_db():
+def _auth_db() -> Generator[Session]:
     """Separate DB for auth tests (no auto-user override)."""
     engine = create_engine(
         "sqlite:///:memory:",
@@ -26,8 +27,8 @@ def _auth_db():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(bind=engine)
-    Session = sessionmaker(bind=engine)
-    session = Session()
+    TestSession = sessionmaker(bind=engine)
+    session = TestSession()
     try:
         yield session
     finally:
@@ -35,10 +36,10 @@ def _auth_db():
 
 
 @pytest.fixture()
-def auth_client(_auth_db):
+def auth_client(_auth_db: Session) -> Generator[TestClient]:
     """Client WITHOUT auto-auth override (for testing login flow)."""
 
-    def _override_get_db():
+    def _override_get_db() -> Generator[Session]:
         try:
             yield _auth_db
         finally:
@@ -57,7 +58,7 @@ def auth_client(_auth_db):
 # --- GET /api/auth/config ---
 
 
-def test_auth_config_no_secret(auth_client):
+def test_auth_config_no_secret(auth_client: TestClient) -> None:
     """Without APP_SECRET, auth should not be required."""
     with patch("app.auth.app_secret.settings") as mock_settings:
         mock_settings.app_secret = None
@@ -72,7 +73,7 @@ def test_auth_config_no_secret(auth_client):
     reset_auth_backend()
 
 
-def test_auth_config_with_secret(auth_client):
+def test_auth_config_with_secret(auth_client: TestClient) -> None:
     """With APP_SECRET, auth should be required."""
     with patch("app.auth.app_secret.settings") as mock_settings:
         mock_settings.app_secret = "test-secret"
@@ -90,7 +91,7 @@ def test_auth_config_with_secret(auth_client):
 # --- POST /api/auth/login ---
 
 
-def test_login_success(auth_client, _auth_db):
+def test_login_success(auth_client: TestClient, _auth_db: Session) -> None:
     """Login with correct password returns tokens."""
     with (
         patch("app.auth.app_secret.settings") as mock_app_settings,
@@ -112,7 +113,7 @@ def test_login_success(auth_client, _auth_db):
     reset_auth_backend()
 
 
-def test_login_wrong_password(auth_client):
+def test_login_wrong_password(auth_client: TestClient) -> None:
     """Login with wrong password returns 401."""
     with (
         patch("app.auth.app_secret.settings") as mock_app_settings,
@@ -133,7 +134,7 @@ def test_login_wrong_password(auth_client):
 # --- POST /api/auth/refresh ---
 
 
-def test_refresh_token_rotation(_auth_db, auth_client):
+def test_refresh_token_rotation(_auth_db: Session, auth_client: TestClient) -> None:
     """Refreshing returns new tokens and revokes the old one."""
     # Create a user and a refresh token
     user = User(
@@ -167,7 +168,7 @@ def test_refresh_token_rotation(_auth_db, auth_client):
     assert rt.revoked is True
 
 
-def test_refresh_expired_token(_auth_db, auth_client):
+def test_refresh_expired_token(_auth_db: Session, auth_client: TestClient) -> None:
     """Expired refresh token returns 401."""
     user = User(
         email="expired@test.com",
@@ -196,7 +197,7 @@ def test_refresh_expired_token(_auth_db, auth_client):
 # --- POST /api/auth/logout ---
 
 
-def test_logout_revokes_token(_auth_db, auth_client):
+def test_logout_revokes_token(_auth_db: Session, auth_client: TestClient) -> None:
     """Logout revokes the refresh token."""
     user = User(
         email="logout@test.com",
@@ -228,7 +229,7 @@ def test_logout_revokes_token(_auth_db, auth_client):
 # --- GET /api/auth/me ---
 
 
-def test_me_with_valid_token(_auth_db, auth_client):
+def test_me_with_valid_token(_auth_db: Session, auth_client: TestClient) -> None:
     """GET /auth/me with valid JWT returns user info."""
     user = User(
         email="me@test.com",
@@ -262,7 +263,7 @@ def test_me_with_valid_token(_auth_db, auth_client):
     reset_auth_backend()
 
 
-def test_me_without_token(auth_client):
+def test_me_without_token(auth_client: TestClient) -> None:
     """GET /auth/me without token returns 401 (when APP_SECRET is set)."""
     with (
         patch("app.auth.dependencies.settings") as mock_dep_settings,
@@ -286,7 +287,7 @@ def test_me_without_token(auth_client):
 # --- Data Isolation ---
 
 
-def test_data_isolation_profiles():
+def test_data_isolation_profiles() -> None:
     """User A cannot see User B's profiles."""
     engine = create_engine(
         "sqlite:///:memory:",
@@ -294,8 +295,8 @@ def test_data_isolation_profiles():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(bind=engine)
-    Session = sessionmaker(bind=engine)
-    db = Session()
+    TestSession = sessionmaker(bind=engine)
+    db = TestSession()
 
     user_a = User(
         email="a@test.com", name="A", role="user", is_active=True, created_at=datetime.now(UTC)
@@ -308,7 +309,7 @@ def test_data_isolation_profiles():
     db.refresh(user_a)
     db.refresh(user_b)
 
-    def _override_get_db():
+    def _override_get_db() -> Generator[Session]:
         try:
             yield db
         finally:
@@ -336,7 +337,7 @@ def test_data_isolation_profiles():
     db.close()
 
 
-def test_data_isolation_songs():
+def test_data_isolation_songs() -> None:
     """User A cannot see User B's songs."""
     engine = create_engine(
         "sqlite:///:memory:",
@@ -344,8 +345,8 @@ def test_data_isolation_songs():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(bind=engine)
-    Session = sessionmaker(bind=engine)
-    db = Session()
+    TestSession = sessionmaker(bind=engine)
+    db = TestSession()
 
     user_a = User(
         email="a@test.com", name="A", role="user", is_active=True, created_at=datetime.now(UTC)
@@ -358,7 +359,7 @@ def test_data_isolation_songs():
     db.refresh(user_a)
     db.refresh(user_b)
 
-    def _override_get_db():
+    def _override_get_db() -> Generator[Session]:
         try:
             yield db
         finally:

@@ -23,7 +23,7 @@ def _make_request(ip: str = "1.2.3.4", forwarded: str | None = None) -> MagicMoc
     return request
 
 
-def test_requests_under_limit_pass():
+def test_requests_under_limit_pass() -> None:
     """Requests below the max_attempts threshold should pass without error."""
     limiter = RateLimiter(max_attempts=5, window_seconds=60)
     request = _make_request()
@@ -32,7 +32,7 @@ def test_requests_under_limit_pass():
         limiter.check(request)  # should not raise
 
 
-def test_request_at_limit_raises_429():
+def test_request_at_limit_raises_429() -> None:
     """The request that exceeds max_attempts should raise 429."""
     limiter = RateLimiter(max_attempts=3, window_seconds=60)
     request = _make_request()
@@ -45,7 +45,7 @@ def test_request_at_limit_raises_429():
     assert exc_info.value.status_code == 429
 
 
-def test_old_attempts_pruned_after_window(monkeypatch):
+def test_old_attempts_pruned_after_window(monkeypatch: pytest.MonkeyPatch) -> None:
     """Requests pass again after the sliding window expires."""
     limiter = RateLimiter(max_attempts=2, window_seconds=1)
     request = _make_request()
@@ -66,7 +66,7 @@ def test_old_attempts_pruned_after_window(monkeypatch):
     limiter.check(request)
 
 
-def test_x_forwarded_for_used():
+def test_x_forwarded_for_used() -> None:
     """X-Forwarded-For header is used for IP extraction."""
     limiter = RateLimiter(max_attempts=1, window_seconds=60)
 
@@ -82,7 +82,7 @@ def test_x_forwarded_for_used():
     limiter.check(req2)  # different forwarded IP → passes
 
 
-def test_missing_client_falls_back_to_unknown():
+def test_missing_client_falls_back_to_unknown() -> None:
     """When request.client is None, IP falls back to 'unknown'."""
     limiter = RateLimiter(max_attempts=1, window_seconds=60)
     request = MagicMock()
@@ -95,7 +95,7 @@ def test_missing_client_falls_back_to_unknown():
         limiter.check(request)  # second attempt from "unknown" → blocked
 
 
-def test_independent_ips_have_independent_limits():
+def test_independent_ips_have_independent_limits() -> None:
     """Different IPs have separate rate limit counters."""
     limiter = RateLimiter(max_attempts=2, window_seconds=60)
 

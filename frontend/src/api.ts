@@ -3,17 +3,13 @@ import type {
   AuthUser,
   ChatHistoryRow,
   ChatResult,
-  CheckoutResponse,
   ParseResult,
-  PlanInfo,
-  PortalResponse,
   Profile,
   ProviderConnection,
   ProvidersResponse,
   SavedModel,
   Song,
   SongRevision,
-  SubscriptionInfo,
   TokenResponse,
 } from '@/types';
 import client, {
@@ -391,30 +387,6 @@ const api = {
     });
     if (error) _throwApiError(error, 'Failed to list models');
     return data as string[];
-  },
-
-  // Premium: Subscriptions & Billing
-  getSubscription: async () => {
-    const { data, error } = await client.GET('/api/subscriptions/me');
-    if (error) _throwApiError(error, 'Failed to get subscription');
-    return data as SubscriptionInfo;
-  },
-  listPlans: async () => {
-    const { data, error } = await client.GET('/api/subscriptions/plans');
-    if (error) _throwApiError(error, 'Failed to list plans');
-    return data as PlanInfo[];
-  },
-  createCheckout: async (plan: string) => {
-    const { data, error } = await client.POST('/api/billing/checkout', {
-      body: { plan } as never,
-    });
-    if (error) _throwApiError(error, 'Failed to create checkout');
-    return data as CheckoutResponse;
-  },
-  createPortal: async () => {
-    const { data, error } = await client.POST('/api/billing/portal');
-    if (error) _throwApiError(error, 'Failed to create portal');
-    return data as PortalResponse;
   },
 };
 

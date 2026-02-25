@@ -11,7 +11,7 @@ from app.services.llm_service import (
 # --- _build_chat_kwargs ---
 
 
-def test_build_chat_kwargs_system_prompt():
+def test_build_chat_kwargs_system_prompt() -> None:
     """System prompt contains ORIGINAL SONG but NOT EDITED SONG."""
     song = SimpleNamespace(
         original_content="G  Am\nHello world",
@@ -37,21 +37,21 @@ def test_build_chat_kwargs_system_prompt():
 # --- _parse_chat_response ---
 
 
-def test_parse_chat_with_xml_tags():
+def test_parse_chat_with_xml_tags() -> None:
     raw = "<content>\nHello world\nSecond line\n</content>\nI changed the first word."
     result = _parse_chat_response(raw)
     assert result["content"] == "Hello world\nSecond line"
     assert "changed" in result["explanation"]
 
 
-def test_parse_chat_with_xml_tags_no_explanation():
+def test_parse_chat_with_xml_tags_no_explanation() -> None:
     raw = "<content>\nHello\n</content>"
     result = _parse_chat_response(raw)
     assert result["content"] == "Hello"
     assert result["explanation"] == ""
 
 
-def test_parse_chat_no_markers():
+def test_parse_chat_no_markers() -> None:
     """Without <content> tags the response is conversational — no content update."""
     raw = "Just some text without markers"
     result = _parse_chat_response(raw)
@@ -62,7 +62,7 @@ def test_parse_chat_no_markers():
 # --- _parse_clean_response ---
 
 
-def test_parse_clean_basic():
+def test_parse_clean_basic() -> None:
     raw = (
         "<meta>\nTitle: Wagon Wheel\nArtist: Old Crow\n</meta>\n"
         "<original>\nG  Am\nHello world\n</original>"
@@ -73,14 +73,14 @@ def test_parse_clean_basic():
     assert result["original"] == "G  Am\nHello world"
 
 
-def test_parse_clean_unknown_maps_to_none():
+def test_parse_clean_unknown_maps_to_none() -> None:
     raw = "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n<original>\nHello\n</original>"
     result = _parse_clean_response(raw, "fallback")
     assert result["title"] is None
     assert result["artist"] is None
 
 
-def test_parse_clean_missing_tags_fallback():
+def test_parse_clean_missing_tags_fallback() -> None:
     raw = "Just some text without XML tags"
     result = _parse_clean_response(raw, "fallback original")
     assert result["original"] == "fallback original"

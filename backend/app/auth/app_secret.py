@@ -25,11 +25,6 @@ def _verify_password(plain: str, stored: str) -> bool:
     return hmac.compare_digest(plain, stored)
 
 
-def hash_password(plain: str) -> str:
-    """Hash a password with bcrypt."""
-    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
-
-
 class AppSecretBackend(AuthBackend):
     """OSS single-user auth backend gated by APP_SECRET env var."""
 

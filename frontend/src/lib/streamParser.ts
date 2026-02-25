@@ -15,9 +15,9 @@ const CLOSE_TAG = '</content>';
 const ORIG_OPEN_TAG = '<original_song>';
 const ORIG_CLOSE_TAG = '</original_song>';
 
-export type Phase = 'before' | 'content' | 'between' | 'original_song' | 'after';
+type Phase = 'before' | 'content' | 'between' | 'original_song' | 'after';
 
-export interface TokenResult {
+interface TokenResult {
   chatDelta: string;
   contentDelta: string;
   originalSongDelta: string;

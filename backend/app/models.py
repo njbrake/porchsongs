@@ -12,7 +12,6 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
-    password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     role: Mapped[str] = mapped_column(String, default="user")  # "admin" or "user"
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
@@ -46,7 +45,6 @@ class Profile(Base):
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id"), index=True, nullable=False
     )
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
     system_prompt_parse: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -97,7 +95,7 @@ class SongRevision(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     rewritten_content: Mapped[str] = mapped_column(Text, nullable=False)
     changes_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    edit_type: Mapped[str] = mapped_column(String, default="full")  # "full", "line", or "chat"
+    edit_type: Mapped[str] = mapped_column(String, default="full")  # "full" or "chat"
     edit_context: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 

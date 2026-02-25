@@ -12,7 +12,6 @@ import type {
   ChatHistoryRow,
   ParseResult,
   SubscriptionInfo,
-  UsageInfo,
   PlanInfo,
 } from '@/types';
 
@@ -272,28 +271,20 @@ async function tryRestoreSession(): Promise<AuthUser | null> {
   }
 }
 
-async function getCurrentUser(): Promise<AuthUser> {
-  return _fetch<AuthUser>('/auth/me');
-}
-
 const api = {
   getAuthConfig,
   login,
   logout,
   tryRestoreSession,
-  getCurrentUser,
   // Profiles
   listProfiles: () => _fetch<Profile[]>('/profiles'),
   createProfile: (data: Partial<Profile>) => _fetch<Profile>('/profiles', { method: 'POST', body: JSON.stringify(data) }),
-  getProfile: (id: number) => _fetch<Profile>(`/profiles/${id}`),
   updateProfile: (id: number, data: Partial<Profile>) => _fetch<Profile>(`/profiles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteProfile: (id: number) => _fetch<void>(`/profiles/${id}`, { method: 'DELETE' }),
 
   // Prompts
   getDefaultPrompts: () => _fetch<{ parse: string; chat: string }>('/prompts/defaults'),
 
   // Parse
-  parse: (data: Record<string, unknown>, signal?: AbortSignal) => _fetch<ParseResult>('/parse', { method: 'POST', body: JSON.stringify(data), signal }),
   parseStream: (
     data: Record<string, unknown>,
     onToken: (token: string) => void,
@@ -306,7 +297,6 @@ const api = {
     const query = profileId ? `?profile_id=${profileId}` : '';
     return _fetch<Song[]>(`/songs${query}`);
   },
-  listFolders: () => _fetch<string[]>('/songs/folders'),
   getSong: (id: number) => _fetch<Song>(`/songs/${id}`),
   saveSong: (data: Partial<Song>) => _fetch<Song>('/songs', { method: 'POST', body: JSON.stringify(data) }),
   updateSong: (id: number, data: Partial<Song>) => _fetch<Song>(`/songs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -315,7 +305,6 @@ const api = {
   getSongRevisions: (id: number) => _fetch<SongRevision[]>(`/songs/${id}/revisions`),
 
   // Chat
-  chat: (data: Record<string, unknown>, signal?: AbortSignal) => _fetch<ChatResult>('/chat', { method: 'POST', body: JSON.stringify(data), signal }),
   chatStream: (
     data: Record<string, unknown>,
     onToken: (token: string) => void,
@@ -323,8 +312,6 @@ const api = {
     onReasoning?: (token: string) => void,
   ): Promise<ChatResult & { version: number }> => _streamSse<ChatResult & { version: number }>('/chat/stream', data, onToken, signal, onReasoning),
   getChatHistory: (songId: number) => _fetch<ChatHistoryRow[]>(`/songs/${songId}/messages`),
-  saveChatMessages: (songId: number, messages: { role: string; content: string; is_note: boolean }[]) =>
-    _fetch<void>(`/songs/${songId}/messages`, { method: 'POST', body: JSON.stringify(messages) }),
 
   // Profile Models (saved provider+model combos)
   listProfileModels: (profileId: number) => _fetch<SavedModel[]>(`/profiles/${profileId}/models`),
@@ -366,7 +353,6 @@ const api = {
 
   // Premium: Subscriptions & Billing
   getSubscription: () => _fetch<SubscriptionInfo>('/subscriptions/me'),
-  getUsage: () => _fetch<UsageInfo>('/subscriptions/usage'),
   listPlans: () => _fetch<PlanInfo[]>('/subscriptions/plans'),
   createCheckout: (plan: string) => _fetch<{ checkout_url: string }>('/billing/checkout', { method: 'POST', body: JSON.stringify({ plan }) }),
   createPortal: () => _fetch<{ portal_url: string }>('/billing/portal', { method: 'POST' }),

@@ -27,7 +27,6 @@
   --color-secondary-hover: #e8cbb8;
   --color-danger-hover: #eecccc;
   --color-selected-bg: #fdf8f4;
-  --color-selected-line: #dbeafe;
   --color-focus-bg: #fdfcfa;
 
   --text-code: 0.82rem;
@@ -38,7 +37,6 @@
 
   --radius-sm: 4px;
   --radius-md: 8px;
-  --radius-lg: 12px;
   --radius-full: 9999px;
 
   --shadow-sm: 0 2px 8px rgba(58, 46, 31, 0.08);
@@ -60,25 +58,6 @@
     min-height: 100vh;
     line-height: 1.5;
     overflow-x: hidden;
-  }
-
-  /* Chord coloring in lyrics */
-  .line-chord {
-    color: var(--color-primary);
-    font-weight: 600;
-  }
-
-  .line-changed {
-    background: var(--color-warning-bg);
-    margin: 0 -0.75rem;
-    padding: 0 0.75rem;
-  }
-
-  @media (min-width: 640px) {
-    .line-changed {
-      margin: 0 -1rem;
-      padding: 0 1rem;
-    }
   }
 
   /* Markdown inside chat bubbles */

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
@@ -224,8 +225,6 @@ async def parse_content_stream(
 
 def _extract_xml_section(raw: str, tag: str) -> str | None:
     """Extract content between <tag> and </tag>, or None if not found."""
-    import re
-
     pattern = re.compile(rf"<{tag}>\s*(.*?)\s*</{tag}>", re.DOTALL)
     m = pattern.search(raw)
     return m.group(1).strip() if m else None
@@ -282,8 +281,6 @@ def _parse_chat_response(raw: str) -> dict[str, str | None]:
         explanation = after[1].strip() if len(after) > 1 else ""
         # Strip any <original_song> tags from the explanation
         if original_content is not None and "</original_song>" in explanation:
-            import re
-
             explanation = re.sub(
                 r"<original_song>.*?</original_song>", "", explanation, flags=re.DOTALL
             ).strip()
@@ -296,8 +293,6 @@ def _parse_chat_response(raw: str) -> dict[str, str | None]:
     # No <content> tags — check if there's an original_song update alone
     explanation = raw.strip()
     if original_content is not None:
-        import re
-
         explanation = re.sub(
             r"<original_song>.*?</original_song>", "", explanation, flags=re.DOTALL
         ).strip()

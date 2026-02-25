@@ -115,16 +115,6 @@ export interface TokenResponse {
   user: AuthUser;
 }
 
-// API request types
-
-export interface ChatRequest {
-  song_id: number;
-  messages: { role: string; content: string }[];
-  provider: string;
-  model: string;
-  reasoning_effort?: string | null;
-}
-
 // API response types
 
 export interface TokenUsage {
@@ -166,12 +156,6 @@ export interface SubscriptionInfo {
   rewrites_used: number;
   max_profiles: number;
   max_songs: number;
-}
-
-export interface UsageInfo {
-  month: string;
-  rewrites_used: number;
-  rewrites_limit: number;
 }
 
 export interface PlanInfo {

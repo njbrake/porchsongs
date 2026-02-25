@@ -69,26 +69,21 @@ PostgreSQL in production, in-memory SQLite for tests. Alembic handles migrations
 
 All LLM calls go through `any-llm-sdk` which supports 38+ providers. API keys are read from server-side environment variables (e.g. `OPENAI_API_KEY`) — the SDK resolves them automatically. The frontend never handles or stores API keys. `GET /api/providers` returns only providers whose env var is set. All LLM-calling functions are `async` and must use `acompletion`/`alist_models` (not the sync versions), because FastAPI async endpoints run on the event loop.
 
-Three LLM interaction modes:
-- **Full rewrite** (`POST /api/rewrite`) — rewrites entire song at once; supports `?stream=true` for SSE streaming
-- **Line workshop** (`POST /api/workshop-line`) — generates 3 alternatives for a single line
-- **Chat** (`POST /api/chat`) — multi-turn conversation for iterative edits, persists each edit as a `SongRevision`
+Two LLM interaction modes:
+- **Parse** (`POST /api/parse`, `POST /api/parse/stream`) — cleans up raw pasted input, identifies title/artist; streaming version uses SSE
+- **Chat** (`POST /api/chat`, `POST /api/chat/stream`) — multi-turn conversation for iterative edits, persists each edit as a `SongRevision`; streaming version uses SSE
 
 ### SSE Streaming
 
-`POST /api/rewrite?stream=true` uses Server-Sent Events. The auth middleware in `main.py` (`OptionalBearerAuth`) is implemented as **pure ASGI** (`__call__(self, scope, receive, send)`) — not Starlette's `BaseHTTPMiddleware`, which buffers the entire response body and silently breaks `StreamingResponse`/SSE. Always add `Cache-Control: no-cache` and `X-Accel-Buffering: no` headers to SSE responses to prevent reverse proxy buffering.
-
-### Chord Processing
-
-`chord_parser.py` handles the core music logic. Chords sit on lines above their corresponding lyric lines ("above-line" format). When the LLM rewrites lyrics, chords are stripped before sending to the LLM, then proportionally remapped onto the rewritten text using `realign_chords()`. This snaps chord positions to word boundaries and avoids overlaps.
+Streaming endpoints use Server-Sent Events. Always add `Cache-Control: no-cache` and `X-Accel-Buffering: no` headers to SSE responses to prevent reverse proxy buffering. Avoid Starlette's `BaseHTTPMiddleware` for SSE routes — it buffers the entire response body and silently breaks `StreamingResponse`.
 
 ### Profile & Prompt Building
 
-Profiles have a freeform `description` field (not structured fields). The description is inserted into the LLM prompt as-is. `build_user_prompt()` in `llm_service.py` assembles the full prompt from: profile description, learned substitution patterns, a recent completed example, optional user instructions, and the lyrics.
+Profiles have optional `system_prompt_parse` and `system_prompt_chat` fields for custom LLM system prompts. When not set, the defaults from `llm_service.py` (`CLEAN_SYSTEM_PROMPT`, `CHAT_SYSTEM_PROMPT`) are used.
 
 ### Song Lifecycle
 
-Paste lyrics → rewrite → auto-saved as "draft" → iterate via chat/workshop → mark "completed" → patterns extracted by LLM and saved to `substitution_patterns` table → future rewrites for that profile include learned patterns. Songs can be organized into folders.
+Paste lyrics → parse (clean up + identify title/artist) → auto-saved as "draft" → iterate via chat → mark "completed". Songs can be organized into folders.
 
 ### PDF Export
 
@@ -137,7 +132,7 @@ All Tailwind utilities live in `@layer utilities`. Any custom CSS **not** inside
 ### Use UI primitives from `src/components/ui/`
 - **Always use** `Button`, `Input`, `Select`, `Textarea`, `Card`, `Checkbox`, `Badge`, `Spinner`, `Alert`, `Dialog`, `DropdownMenu`, `Label` instead of raw HTML elements.
 - All UI primitives use `forwardRef`, accept `className`, and merge classes via `cn()`.
-- Use existing `Button` variants (`default`, `secondary`, `danger`, `danger-outline`, `ghost`, `link`, `link-inline`, `icon`) and sizes (`default`, `sm`, `lg`, `icon`) rather than styling raw `<button>` elements.
+- Use existing `Button` variants (`default`, `secondary`, `danger`, `danger-outline`, `ghost`, `link-inline`) and sizes (`default`, `sm`) rather than styling raw `<button>` elements.
 
 ### Class names: use `cn()`, not template literals
 - Import `cn` from `@/lib/utils` for all conditional or composed class strings.
@@ -171,6 +166,6 @@ All Tailwind utilities live in `@layer utilities`. Any custom CSS **not** inside
 - **Ruff rules**: `E, F, I, UP, B, SIM, ANN, RUF` with `B008` ignored (FastAPI `Depends()` pattern). All backend code requires type annotations.
 - **Config**: `Settings` in `config.py` uses `extra="ignore"` so arbitrary env vars (like `OPENAI_API_KEY`) don't crash startup.
 - **Migrations**: Alembic manages database migrations. Migration files live in `alembic/versions/`. Run `alembic upgrade head` to apply.
-- **Schemas**: `source_url`, `title`, and `artist` are all optional on `RewriteRequest` and `SongCreate`. The frontend sends only `lyrics` + `instruction` + LLM settings.
+- **Schemas**: `source_url`, `title`, and `artist` are all optional on `SongCreate`. The frontend sends only `lyrics` + `instruction` + LLM settings.
 - **Auth**: Every data endpoint requires `Depends(get_current_user)`. Profile and Song models have `user_id` FK. Use `get_user_profile()` / `get_user_song()` from `auth/scoping.py` for ownership checks.
 - **Frontend auth**: Access token stored in memory (not localStorage). Refresh token in localStorage. Auto-refresh on 401 with deduplication.

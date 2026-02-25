@@ -7,8 +7,6 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        draft: 'bg-warning-bg text-warning-text',
-        completed: 'bg-success-bg text-success-text',
         active: 'bg-primary-light text-primary',
         default: 'bg-panel text-muted-foreground',
       },
@@ -30,5 +28,4 @@ const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
 );
 Badge.displayName = 'Badge';
 
-export { Badge, badgeVariants };
-export type { BadgeProps };
+export { Badge };

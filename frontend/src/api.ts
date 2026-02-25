@@ -282,13 +282,6 @@ const api = {
     });
     if (error) _throwApiError(error, 'Failed to delete song');
   },
-  duplicateSong: async (id: number) => {
-    const { data, error } = await client.POST('/api/songs/{song_id}/duplicate', {
-      params: { path: { song_id: id } },
-    });
-    if (error) _throwApiError(error, 'Failed to duplicate song');
-    return data as Song;
-  },
   getSongRevisions: async (id: number) => {
     const { data, error } = await client.GET('/api/songs/{song_id}/revisions', {
       params: { path: { song_id: id } },

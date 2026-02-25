@@ -255,46 +255,6 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
     }
   };
 
-  const handleSaveAs = async () => {
-    if (!currentSongId || !rewriteResult) return;
-    setSaveStatus('saving');
-    try {
-      // Save current state first
-      await api.updateSong(currentSongId, {
-        title: songTitle || null,
-        artist: songArtist || null,
-        rewritten_content: rewriteResult.rewritten_content,
-        original_content: rewriteResult.original_content,
-      } as Partial<Song>);
-      // Duplicate
-      const copy = await api.duplicateSong(currentSongId);
-      setSaveStatus(null);
-      // Switch to editing the copy
-      setSongTitle(copy.title || '');
-      setSongArtist(copy.artist || '');
-      setChatMessages([]);
-      onNewRewrite(
-        {
-          original_content: copy.original_content,
-          rewritten_content: copy.rewritten_content,
-          changes_summary: copy.changes_summary || '',
-        },
-        {
-          profile_id: copy.profile_id,
-          title: copy.title || undefined,
-          artist: copy.artist || undefined,
-          llm_provider: copy.llm_provider || undefined,
-          llm_model: copy.llm_model || undefined,
-        },
-      );
-      onSongSaved(copy.id);
-      toast.success('Saved as copy');
-    } catch (err) {
-      setError('Failed to save as copy: ' + (err as Error).message);
-      setSaveStatus(null);
-    }
-  };
-
   const handleTitleChange = useCallback((val: string) => {
     setSongTitle(val);
   }, []);
@@ -606,13 +566,6 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
                   >
                     {saveStatus === 'saved' ? 'Saved!' :
                      saveStatus === 'saving' ? 'Saving...' : 'Save'}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={handleSaveAs}
-                    disabled={saveStatus === 'saving' || !currentSongId}
-                  >
-                    Save As Copy
                   </Button>
                   <Button
                     variant="secondary"

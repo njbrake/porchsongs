@@ -83,6 +83,7 @@ class ParseRequest(BaseModel):
     model: str
     reasoning_effort: str | None = None
     instruction: str | None = None
+    max_tokens: int | None = None
 
 
 class ParseResponse(BaseModel):
@@ -184,6 +185,7 @@ class ChatRequest(BaseModel):
     provider: str
     model: str
     reasoning_effort: str | None = None
+    max_tokens: int | None = None
 
 
 class TokenUsage(BaseModel):

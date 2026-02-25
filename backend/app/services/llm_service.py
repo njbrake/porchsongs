@@ -132,6 +132,7 @@ def _build_parse_kwargs(
     reasoning_effort: str | None = None,
     instruction: str | None = None,
     system_prompt: str | None = None,
+    max_tokens: int | None = None,
 ) -> dict[str, object]:
     """Build the common kwargs dict for parse LLM calls."""
     user_text = "Clean up this pasted input. Identify the title and artist."
@@ -151,6 +152,8 @@ def _build_parse_kwargs(
         kwargs["api_base"] = api_base
     if reasoning_effort:
         kwargs["reasoning_effort"] = reasoning_effort
+    if max_tokens is not None:
+        kwargs["max_tokens"] = max_tokens
     return kwargs
 
 
@@ -173,13 +176,14 @@ async def parse_content(
     reasoning_effort: str | None = None,
     instruction: str | None = None,
     system_prompt: str | None = None,
+    max_tokens: int | None = None,
 ) -> dict[str, str | None]:
     """Clean up raw pasted content and identify title/artist (non-streaming).
 
     Returns dict with: original_content, title, artist, reasoning
     """
     kwargs = _build_parse_kwargs(
-        content, provider, model, api_base, reasoning_effort, instruction, system_prompt
+        content, provider, model, api_base, reasoning_effort, instruction, system_prompt, max_tokens
     )
     clean_response = await acompletion(**kwargs)
     clean_result = _parse_clean_response(_get_content(clean_response), content)
@@ -201,13 +205,14 @@ async def parse_content_stream(
     reasoning_effort: str | None = None,
     instruction: str | None = None,
     system_prompt: str | None = None,
+    max_tokens: int | None = None,
 ) -> AsyncIterator[tuple[str, str]]:
     """Stream parse tokens as ``(type, text)`` tuples.
 
     Types: ``"token"`` for content, ``"reasoning"`` for reasoning/thinking.
     """
     kwargs = _build_parse_kwargs(
-        content, provider, model, api_base, reasoning_effort, instruction, system_prompt
+        content, provider, model, api_base, reasoning_effort, instruction, system_prompt, max_tokens
     )
     response = await acompletion(stream=True, **kwargs)
 
@@ -308,6 +313,7 @@ def _build_chat_kwargs(
     api_base: str | None = None,
     reasoning_effort: str | None = None,
     system_prompt: str | None = None,
+    max_tokens: int | None = None,
 ) -> dict[str, object]:
     """Build the common kwargs dict for chat LLM calls."""
     system_content = system_prompt or CHAT_SYSTEM_PROMPT
@@ -326,6 +332,8 @@ def _build_chat_kwargs(
         kwargs["api_base"] = api_base
     if reasoning_effort:
         kwargs["reasoning_effort"] = reasoning_effort
+    if max_tokens is not None:
+        kwargs["max_tokens"] = max_tokens
     return kwargs
 
 
@@ -337,6 +345,7 @@ async def chat_edit_content(
     api_base: str | None = None,
     reasoning_effort: str | None = None,
     system_prompt: str | None = None,
+    max_tokens: int | None = None,
 ) -> dict[str, str | None]:
     """Process a chat-based content edit (non-streaming).
 
@@ -347,7 +356,7 @@ async def chat_edit_content(
     without ``<content>`` tags.
     """
     kwargs = _build_chat_kwargs(
-        song, messages, provider, model, api_base, reasoning_effort, system_prompt
+        song, messages, provider, model, api_base, reasoning_effort, system_prompt, max_tokens
     )
     response = await acompletion(**kwargs)
 
@@ -377,6 +386,7 @@ async def chat_edit_content_stream(
     api_base: str | None = None,
     reasoning_effort: str | None = None,
     system_prompt: str | None = None,
+    max_tokens: int | None = None,
 ) -> AsyncIterator[tuple[str, str]]:
     """Stream a chat-based content edit token by token as ``(type, text)`` tuples.
 
@@ -384,7 +394,7 @@ async def chat_edit_content_stream(
     ``"usage"`` for final token usage JSON.
     """
     kwargs = _build_chat_kwargs(
-        song, messages, provider, model, api_base, reasoning_effort, system_prompt
+        song, messages, provider, model, api_base, reasoning_effort, system_prompt, max_tokens
     )
     if provider == "openai":
         kwargs["stream_options"] = {"include_usage": True}

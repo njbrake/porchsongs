@@ -1,0 +1,5 @@
+{
+  "name": "porchsongs-e2e",
+  "private": true,
+  "description": "E2E test fixtures and specs. Dependencies installed at root package.json; run `npx playwright test` from project root."
+}

@@ -5,3 +5,7 @@ __pycache__/
 .env
 node_modules/
 frontend/openapi.json
+
+# Playwright
+playwright-report/
+test-results/

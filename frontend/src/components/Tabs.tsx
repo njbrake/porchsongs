@@ -1,33 +1,40 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Tabs as TabsRoot, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useAuth } from '@/contexts/AuthContext';
+import { getDefaultSettingsTab } from '@/extensions';
 
-const TAB_ITEMS = [
-  { key: 'rewrite', path: '/app/rewrite', label: 'Rewrite' },
-  { key: 'library', path: '/app/library', label: 'Library' },
-  { key: 'settings', path: '/app/settings', label: 'Settings' },
-] as const;
+function buildTabItems(isPremium: boolean) {
+  return [
+    { key: 'rewrite', path: '/app/rewrite', label: 'Rewrite' },
+    { key: 'library', path: '/app/library', label: 'Library' },
+    { key: 'settings', path: `/app/settings/${getDefaultSettingsTab(isPremium)}`, label: 'Settings' },
+  ] as const;
+}
+
+const MATCH_PREFIXES = ['/app/rewrite', '/app/library', '/app/settings'] as const;
 
 function activeKeyFromPath(pathname: string): string {
-  for (const t of TAB_ITEMS) {
-    if (pathname.startsWith(t.path)) return t.key;
-  }
+  if (pathname.startsWith(MATCH_PREFIXES[1])) return 'library';
+  if (pathname.startsWith(MATCH_PREFIXES[2])) return 'settings';
   return 'rewrite';
 }
 
 export default function Tabs() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const { isPremium } = useAuth();
+  const tabItems = buildTabItems(isPremium);
   const active = activeKeyFromPath(pathname);
 
   const handleChange = (key: string) => {
-    const tab = TAB_ITEMS.find(t => t.key === key);
+    const tab = tabItems.find(t => t.key === key);
     if (tab) navigate(tab.path);
   };
 
   return (
     <TabsRoot value={active} onValueChange={handleChange}>
       <TabsList>
-        {TAB_ITEMS.map(t => (
+        {tabItems.map(t => (
           <TabsTrigger
             key={t.key}
             value={t.key}

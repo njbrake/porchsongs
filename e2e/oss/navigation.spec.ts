@@ -9,27 +9,27 @@ test.describe('OSS Navigation', () => {
 
   test('tab switching updates URL', async ({ page }) => {
     // Start on rewrite (default)
-    expect(page.url()).toMatch(/\/$/);
+    await expect(page).toHaveURL(/\/app\/rewrite$/);
 
     await navigateToTab(page, 'Library');
-    await expect(page).toHaveURL(/\/library$/);
+    await expect(page).toHaveURL(/\/app\/library$/);
 
     await navigateToTab(page, 'Settings');
-    await expect(page).toHaveURL(/\/settings\/models$/);
+    await expect(page).toHaveURL(/\/app\/settings\/models$/);
 
     await navigateToTab(page, 'Rewrite');
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/app\/rewrite$/);
   });
 
   test('direct URL navigation works', async ({ page }) => {
-    await page.goto('/library');
+    await page.goto('/app/library');
     await waitForAppReady(page);
     await expect(page.getByRole('tab', { name: 'Library' })).toHaveAttribute(
       'data-state',
       'active'
     );
 
-    await page.goto('/settings/prompts');
+    await page.goto('/app/settings/prompts');
     await waitForAppReady(page);
     await expect(page.getByRole('tab', { name: 'Settings' })).toHaveAttribute(
       'data-state',
@@ -39,33 +39,33 @@ test.describe('OSS Navigation', () => {
 
   test('settings sub-tabs (models, prompts)', async ({ page }) => {
     await navigateToTab(page, 'Settings');
-    await expect(page).toHaveURL(/\/settings\/models$/);
+    await expect(page).toHaveURL(/\/app\/settings\/models$/);
 
     // Click "System Prompts" sub-tab
     await page.getByRole('button', { name: 'System Prompts' }).click();
-    await expect(page).toHaveURL(/\/settings\/prompts$/);
+    await expect(page).toHaveURL(/\/app\/settings\/prompts$/);
 
     // Click "Models" sub-tab
     await page.getByRole('button', { name: 'Models' }).click();
-    await expect(page).toHaveURL(/\/settings\/models$/);
+    await expect(page).toHaveURL(/\/app\/settings\/models$/);
   });
 
   test('browser back/forward preserves state', async ({ page }) => {
     await navigateToTab(page, 'Library');
-    await expect(page).toHaveURL(/\/library$/);
+    await expect(page).toHaveURL(/\/app\/library$/);
 
     await navigateToTab(page, 'Settings');
-    await expect(page).toHaveURL(/\/settings\/models$/);
+    await expect(page).toHaveURL(/\/app\/settings\/models$/);
 
     await page.goBack();
-    await expect(page).toHaveURL(/\/library$/);
+    await expect(page).toHaveURL(/\/app\/library$/);
     await expect(page.getByRole('tab', { name: 'Library' })).toHaveAttribute(
       'data-state',
       'active'
     );
 
     await page.goForward();
-    await expect(page).toHaveURL(/\/settings\/models$/);
+    await expect(page).toHaveURL(/\/app\/settings\/models$/);
     await expect(page.getByRole('tab', { name: 'Settings' })).toHaveAttribute(
       'data-state',
       'active'

@@ -2,6 +2,10 @@ import { screen } from '@testing-library/react';
 import { renderWithRouter } from '@/test/test-utils';
 import Tabs from '@/components/Tabs';
 
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => ({ isPremium: false }),
+}));
+
 describe('Tabs', () => {
   it('renders all three tab labels', () => {
     renderWithRouter(<Tabs />, { route: '/app/rewrite' });

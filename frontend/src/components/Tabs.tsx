@@ -26,19 +26,19 @@ export default function Tabs() {
   const tabItems = buildTabItems(isPremium);
   const active = activeKeyFromPath(pathname);
 
-  const handleChange = (key: string) => {
+  const handleTabClick = (key: string) => {
     const tab = tabItems.find(t => t.key === key);
     if (tab) navigate(tab.path);
   };
 
   return (
-    <TabsRoot value={active} onValueChange={handleChange}>
+    <TabsRoot value={active}>
       <TabsList>
         {tabItems.map(t => (
           <TabsTrigger
             key={t.key}
             value={t.key}
-            onClick={() => { if (t.key === active) handleChange(t.key); }}
+            onClick={() => handleTabClick(t.key)}
           >
             {t.label}
           </TabsTrigger>

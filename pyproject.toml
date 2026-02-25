@@ -22,6 +22,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "pre-commit>=4.2",
     "pytest>=9.0.2",
     "ruff>=0.11",
     "ty>=0.0.17",

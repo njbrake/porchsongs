@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+For tips about running in a sandbox environment (worktree git setup, pre-commit hooks, ephemeral dirs), see [tips/sandbox.md](tips/sandbox.md).
+
 ## Build & Run Commands
 
 ```bash

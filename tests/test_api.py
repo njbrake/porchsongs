@@ -2,7 +2,6 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-
 # --- Profile CRUD ---
 
 
@@ -37,9 +36,12 @@ def test_update_profile(client):
     create = client.post("/api/profiles", json={})
     pid = create.json()["id"]
 
-    resp = client.put(f"/api/profiles/{pid}", json={
-        "is_default": True,
-    })
+    resp = client.put(
+        f"/api/profiles/{pid}",
+        json={
+            "is_default": True,
+        },
+    )
     assert resp.status_code == 200
     assert resp.json()["is_default"] is True
 
@@ -89,11 +91,14 @@ def test_create_and_list_songs(client):
 
 def test_get_song(client):
     profile = client.post("/api/profiles", json={}).json()
-    song = client.post("/api/songs", json={
-        "profile_id": profile["id"],
-        "original_content": "Hello",
-        "rewritten_content": "Hi",
-    }).json()
+    song = client.post(
+        "/api/songs",
+        json={
+            "profile_id": profile["id"],
+            "original_content": "Hello",
+            "rewritten_content": "Hi",
+        },
+    ).json()
 
     resp = client.get(f"/api/songs/{song['id']}")
     assert resp.status_code == 200
@@ -107,11 +112,14 @@ def test_get_song_404(client):
 
 def test_update_song_title(client):
     profile = client.post("/api/profiles", json={}).json()
-    song = client.post("/api/songs", json={
-        "profile_id": profile["id"],
-        "original_content": "Hello",
-        "rewritten_content": "Hi",
-    }).json()
+    song = client.post(
+        "/api/songs",
+        json={
+            "profile_id": profile["id"],
+            "original_content": "Hello",
+            "rewritten_content": "Hi",
+        },
+    ).json()
     assert song["title"] is None
 
     resp = client.put(f"/api/songs/{song['id']}", json={"title": "My Song"})
@@ -130,11 +138,14 @@ def test_update_song_not_found(client):
 
 def test_delete_song(client):
     profile = client.post("/api/profiles", json={}).json()
-    song = client.post("/api/songs", json={
-        "profile_id": profile["id"],
-        "original_content": "Hello",
-        "rewritten_content": "Hi",
-    }).json()
+    song = client.post(
+        "/api/songs",
+        json={
+            "profile_id": profile["id"],
+            "original_content": "Hello",
+            "rewritten_content": "Hi",
+        },
+    ).json()
 
     resp = client.delete(f"/api/songs/{song['id']}")
     assert resp.status_code == 200
@@ -145,11 +156,14 @@ def test_delete_song(client):
 
 def test_update_song_status(client):
     profile = client.post("/api/profiles", json={}).json()
-    song = client.post("/api/songs", json={
-        "profile_id": profile["id"],
-        "original_content": "Hello",
-        "rewritten_content": "Hi",
-    }).json()
+    song = client.post(
+        "/api/songs",
+        json={
+            "profile_id": profile["id"],
+            "original_content": "Hello",
+            "rewritten_content": "Hi",
+        },
+    ).json()
 
     resp = client.put(f"/api/songs/{song['id']}/status", json={"status": "completed"})
     assert resp.status_code == 200
@@ -158,11 +172,14 @@ def test_update_song_status(client):
 
 def test_update_song_status_invalid(client):
     profile = client.post("/api/profiles", json={}).json()
-    song = client.post("/api/songs", json={
-        "profile_id": profile["id"],
-        "original_content": "Hello",
-        "rewritten_content": "Hi",
-    }).json()
+    song = client.post(
+        "/api/songs",
+        json={
+            "profile_id": profile["id"],
+            "original_content": "Hello",
+            "rewritten_content": "Hi",
+        },
+    ).json()
 
     resp = client.put(f"/api/songs/{song['id']}/status", json={"status": "invalid"})
     assert resp.status_code == 422
@@ -173,14 +190,17 @@ def test_update_song_status_invalid(client):
 
 def test_duplicate_song(client):
     profile = client.post("/api/profiles", json={}).json()
-    song = client.post("/api/songs", json={
-        "profile_id": profile["id"],
-        "title": "My Song",
-        "artist": "Artist",
-        "original_content": "Hello world",
-        "rewritten_content": "Hi world",
-        "changes_summary": "Changed hello to hi",
-    }).json()
+    song = client.post(
+        "/api/songs",
+        json={
+            "profile_id": profile["id"],
+            "title": "My Song",
+            "artist": "Artist",
+            "original_content": "Hello world",
+            "rewritten_content": "Hi world",
+            "changes_summary": "Changed hello to hi",
+        },
+    ).json()
 
     resp = client.post(f"/api/songs/{song['id']}/duplicate")
     assert resp.status_code == 201
@@ -201,11 +221,14 @@ def test_duplicate_song(client):
 
 def test_duplicate_song_no_title(client):
     profile = client.post("/api/profiles", json={}).json()
-    song = client.post("/api/songs", json={
-        "profile_id": profile["id"],
-        "original_content": "Hello",
-        "rewritten_content": "Hi",
-    }).json()
+    song = client.post(
+        "/api/songs",
+        json={
+            "profile_id": profile["id"],
+            "original_content": "Hello",
+            "rewritten_content": "Hi",
+        },
+    ).json()
     assert song["title"] is None
 
     resp = client.post(f"/api/songs/{song['id']}/duplicate")
@@ -223,12 +246,15 @@ def test_duplicate_song_not_found(client):
 
 def test_song_revisions(client):
     profile = client.post("/api/profiles", json={}).json()
-    song = client.post("/api/songs", json={
-        "profile_id": profile["id"],
-        "original_content": "Hello",
-        "rewritten_content": "Hi",
-        "changes_summary": "Initial",
-    }).json()
+    song = client.post(
+        "/api/songs",
+        json={
+            "profile_id": profile["id"],
+            "original_content": "Hello",
+            "rewritten_content": "Hi",
+            "changes_summary": "Initial",
+        },
+    ).json()
 
     resp = client.get(f"/api/songs/{song['id']}/revisions")
     assert resp.status_code == 200
@@ -253,19 +279,21 @@ def test_list_providers(client):
     assert "name" in providers[0]
 
 
-
 # --- Chat Messages ---
 
 
 def _make_song(client):
     """Helper: create a profile + song and return the song dict."""
     profile = client.post("/api/profiles", json={}).json()
-    song = client.post("/api/songs", json={
-        "profile_id": profile["id"],
-        "original_content": "Hello world",
-        "rewritten_content": "Hi world",
-        "changes_summary": "Changed hello to hi",
-    }).json()
+    song = client.post(
+        "/api/songs",
+        json={
+            "profile_id": profile["id"],
+            "original_content": "Hello world",
+            "rewritten_content": "Hi world",
+            "changes_summary": "Changed hello to hi",
+        },
+    ).json()
     return song
 
 
@@ -310,17 +338,23 @@ def test_get_chat_messages_song_not_found(client):
 
 
 def test_save_chat_messages_song_not_found(client):
-    resp = client.post("/api/songs/9999/messages", json=[
-        {"role": "user", "content": "hello"},
-    ])
+    resp = client.post(
+        "/api/songs/9999/messages",
+        json=[
+            {"role": "user", "content": "hello"},
+        ],
+    )
     assert resp.status_code == 404
 
 
 def test_delete_song_deletes_messages(client):
     song = _make_song(client)
-    client.post(f"/api/songs/{song['id']}/messages", json=[
-        {"role": "user", "content": "test message"},
-    ])
+    client.post(
+        f"/api/songs/{song['id']}/messages",
+        json=[
+            {"role": "user", "content": "test message"},
+        ],
+    )
 
     # Verify messages exist
     resp = client.get(f"/api/songs/{song['id']}/messages")
@@ -346,10 +380,13 @@ def test_list_profile_models_empty(client):
 
 def test_add_profile_model(client):
     profile = client.post("/api/profiles", json={}).json()
-    resp = client.post(f"/api/profiles/{profile['id']}/models", json={
-        "provider": "openai",
-        "model": "gpt-4",
-    })
+    resp = client.post(
+        f"/api/profiles/{profile['id']}/models",
+        json={
+            "provider": "openai",
+            "model": "gpt-4",
+        },
+    )
     assert resp.status_code == 201
     data = resp.json()
     assert data["provider"] == "openai"
@@ -362,13 +399,22 @@ def test_add_profile_model_upsert(client):
     profile = client.post("/api/profiles", json={}).json()
     pid = profile["id"]
 
-    client.post(f"/api/profiles/{pid}/models", json={
-        "provider": "openai", "model": "gpt-4",
-    })
+    client.post(
+        f"/api/profiles/{pid}/models",
+        json={
+            "provider": "openai",
+            "model": "gpt-4",
+        },
+    )
     # Same provider+model — should update, not create a second row
-    client.post(f"/api/profiles/{pid}/models", json={
-        "provider": "openai", "model": "gpt-4", "api_base": "http://localhost:8080",
-    })
+    client.post(
+        f"/api/profiles/{pid}/models",
+        json={
+            "provider": "openai",
+            "model": "gpt-4",
+            "api_base": "http://localhost:8080",
+        },
+    )
 
     resp = client.get(f"/api/profiles/{pid}/models")
     models = resp.json()
@@ -377,18 +423,26 @@ def test_add_profile_model_upsert(client):
 
 
 def test_add_profile_model_profile_not_found(client):
-    resp = client.post("/api/profiles/9999/models", json={
-        "provider": "openai", "model": "gpt-4",
-    })
+    resp = client.post(
+        "/api/profiles/9999/models",
+        json={
+            "provider": "openai",
+            "model": "gpt-4",
+        },
+    )
     assert resp.status_code == 404
 
 
 def test_delete_profile_model(client):
     profile = client.post("/api/profiles", json={}).json()
     pid = profile["id"]
-    pm = client.post(f"/api/profiles/{pid}/models", json={
-        "provider": "openai", "model": "gpt-4",
-    }).json()
+    pm = client.post(
+        f"/api/profiles/{pid}/models",
+        json={
+            "provider": "openai",
+            "model": "gpt-4",
+        },
+    ).json()
 
     resp = client.delete(f"/api/profiles/{pid}/models/{pm['id']}")
     assert resp.status_code == 200
@@ -401,9 +455,13 @@ def test_delete_profile_model(client):
 def test_delete_profile_cascades_models(client):
     profile = client.post("/api/profiles", json={}).json()
     pid = profile["id"]
-    client.post(f"/api/profiles/{pid}/models", json={
-        "provider": "openai", "model": "gpt-4",
-    })
+    client.post(
+        f"/api/profiles/{pid}/models",
+        json={
+            "provider": "openai",
+            "model": "gpt-4",
+        },
+    )
 
     # Delete the profile
     client.delete(f"/api/profiles/{pid}")
@@ -416,12 +474,20 @@ def test_delete_profile_cascades_models(client):
 def test_list_profile_models_multiple(client):
     profile = client.post("/api/profiles", json={}).json()
     pid = profile["id"]
-    client.post(f"/api/profiles/{pid}/models", json={
-        "provider": "openai", "model": "gpt-4",
-    })
-    client.post(f"/api/profiles/{pid}/models", json={
-        "provider": "anthropic", "model": "claude-3-opus",
-    })
+    client.post(
+        f"/api/profiles/{pid}/models",
+        json={
+            "provider": "openai",
+            "model": "gpt-4",
+        },
+    )
+    client.post(
+        f"/api/profiles/{pid}/models",
+        json={
+            "provider": "anthropic",
+            "model": "claude-3-opus",
+        },
+    )
 
     resp = client.get(f"/api/profiles/{pid}/models")
     assert resp.status_code == 200
@@ -444,12 +510,15 @@ def test_parse_uses_env_credentials(client):
             "<meta>\nTitle: Hello Song\nArtist: Test Artist\n</meta>\n"
             "<original>\nHello world\n</original>"
         )
-        resp = client.post("/api/parse", json={
-            "profile_id": profile["id"],
-            "content": "Hello world",
-            "provider": "openai",
-            "model": "gpt-4",
-        })
+        resp = client.post(
+            "/api/parse",
+            json={
+                "profile_id": profile["id"],
+                "content": "Hello world",
+                "provider": "openai",
+                "model": "gpt-4",
+            },
+        )
         assert resp.status_code == 200
         # Verify acompletion was called without api_key
         assert mock_ac.call_count == 1
@@ -471,12 +540,15 @@ def test_parse_returns_title_artist(client):
             "<meta>\nTitle: Wagon Wheel\nArtist: Old Crow Medicine Show\n</meta>\n"
             "<original>\nRock me mama\n</original>"
         )
-        resp = client.post("/api/parse", json={
-            "profile_id": profile["id"],
-            "content": "Rock me mama",
-            "provider": "openai",
-            "model": "gpt-4",
-        })
+        resp = client.post(
+            "/api/parse",
+            json={
+                "profile_id": profile["id"],
+                "content": "Rock me mama",
+                "provider": "openai",
+                "model": "gpt-4",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["title"] == "Wagon Wheel"
@@ -496,15 +568,17 @@ def test_parse_unknown_title_artist(client):
 
     with patch("app.services.llm_service.acompletion", new_callable=AsyncMock) as mock_ac:
         mock_ac.return_value = _make_resp(
-            "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
-            "<original>\nSome lyrics\n</original>"
+            "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n<original>\nSome lyrics\n</original>"
         )
-        resp = client.post("/api/parse", json={
-            "profile_id": profile["id"],
-            "content": "Some lyrics",
-            "provider": "openai",
-            "model": "gpt-4",
-        })
+        resp = client.post(
+            "/api/parse",
+            json={
+                "profile_id": profile["id"],
+                "content": "Some lyrics",
+                "provider": "openai",
+                "model": "gpt-4",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["title"] is None
@@ -531,12 +605,15 @@ def test_parse_missing_tags_fallback(client):
 
     with patch("app.services.llm_service.acompletion", new_callable=AsyncMock) as mock_ac:
         mock_ac.return_value = _make_resp("Just some text without XML tags")
-        resp = client.post("/api/parse", json={
-            "profile_id": profile["id"],
-            "content": "My raw lyrics",
-            "provider": "openai",
-            "model": "gpt-4",
-        })
+        resp = client.post(
+            "/api/parse",
+            json={
+                "profile_id": profile["id"],
+                "content": "My raw lyrics",
+                "provider": "openai",
+                "model": "gpt-4",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["original_content"] == "My raw lyrics"
@@ -556,9 +633,12 @@ def test_list_connections_empty(client):
 
 def test_add_connection(client):
     profile = client.post("/api/profiles", json={}).json()
-    resp = client.post(f"/api/profiles/{profile['id']}/connections", json={
-        "provider": "openai",
-    })
+    resp = client.post(
+        f"/api/profiles/{profile['id']}/connections",
+        json={
+            "provider": "openai",
+        },
+    )
     assert resp.status_code == 201
     data = resp.json()
     assert data["provider"] == "openai"
@@ -568,10 +648,13 @@ def test_add_connection(client):
 
 def test_add_connection_with_api_base(client):
     profile = client.post("/api/profiles", json={}).json()
-    resp = client.post(f"/api/profiles/{profile['id']}/connections", json={
-        "provider": "ollama",
-        "api_base": "http://localhost:11434",
-    })
+    resp = client.post(
+        f"/api/profiles/{profile['id']}/connections",
+        json={
+            "provider": "ollama",
+            "api_base": "http://localhost:11434",
+        },
+    )
     assert resp.status_code == 201
     data = resp.json()
     assert data["provider"] == "ollama"
@@ -584,10 +667,13 @@ def test_add_connection_upsert(client):
 
     client.post(f"/api/profiles/{pid}/connections", json={"provider": "ollama"})
     # Same provider — should update api_base
-    client.post(f"/api/profiles/{pid}/connections", json={
-        "provider": "ollama",
-        "api_base": "http://localhost:11434",
-    })
+    client.post(
+        f"/api/profiles/{pid}/connections",
+        json={
+            "provider": "ollama",
+            "api_base": "http://localhost:11434",
+        },
+    )
 
     resp = client.get(f"/api/profiles/{pid}/connections")
     conns = resp.json()
@@ -603,9 +689,12 @@ def test_add_connection_profile_not_found(client):
 def test_delete_connection(client):
     profile = client.post("/api/profiles", json={}).json()
     pid = profile["id"]
-    conn = client.post(f"/api/profiles/{pid}/connections", json={
-        "provider": "openai",
-    }).json()
+    conn = client.post(
+        f"/api/profiles/{pid}/connections",
+        json={
+            "provider": "openai",
+        },
+    ).json()
 
     resp = client.delete(f"/api/profiles/{pid}/connections/{conn['id']}")
     assert resp.status_code == 200
@@ -620,19 +709,34 @@ def test_delete_connection_cascades_models(client):
     pid = profile["id"]
 
     # Add connection + two models for same provider
-    conn = client.post(f"/api/profiles/{pid}/connections", json={
-        "provider": "openai",
-    }).json()
-    client.post(f"/api/profiles/{pid}/models", json={
-        "provider": "openai", "model": "gpt-4",
-    })
-    client.post(f"/api/profiles/{pid}/models", json={
-        "provider": "openai", "model": "gpt-3.5-turbo",
-    })
+    conn = client.post(
+        f"/api/profiles/{pid}/connections",
+        json={
+            "provider": "openai",
+        },
+    ).json()
+    client.post(
+        f"/api/profiles/{pid}/models",
+        json={
+            "provider": "openai",
+            "model": "gpt-4",
+        },
+    )
+    client.post(
+        f"/api/profiles/{pid}/models",
+        json={
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+        },
+    )
     # Add a model for a different provider (should survive)
-    client.post(f"/api/profiles/{pid}/models", json={
-        "provider": "anthropic", "model": "claude-3-opus",
-    })
+    client.post(
+        f"/api/profiles/{pid}/models",
+        json={
+            "provider": "anthropic",
+            "model": "claude-3-opus",
+        },
+    )
 
     # Delete the openai connection
     client.delete(f"/api/profiles/{pid}/connections/{conn['id']}")
@@ -663,31 +767,41 @@ def test_lookup_api_base_prefers_connection(client):
     pid = profile["id"]
 
     # Set up connection with a specific api_base
-    client.post(f"/api/profiles/{pid}/connections", json={
-        "provider": "openai",
-        "api_base": "http://connection-base:8080",
-    })
+    client.post(
+        f"/api/profiles/{pid}/connections",
+        json={
+            "provider": "openai",
+            "api_base": "http://connection-base:8080",
+        },
+    )
     # ProfileModel has a different api_base (legacy)
-    client.post(f"/api/profiles/{pid}/models", json={
-        "provider": "openai",
-        "model": "gpt-4",
-        "api_base": "http://model-base:9090",
-    })
+    client.post(
+        f"/api/profiles/{pid}/models",
+        json={
+            "provider": "openai",
+            "model": "gpt-4",
+            "api_base": "http://model-base:9090",
+        },
+    )
 
     mock_response = MagicMock()
     mock_response.choices = [MagicMock()]
     mock_response.choices[0].message.content = (
-        "<meta>\nTitle: T\nArtist: A\n</meta>\n"
-        "<original>\nHello\n</original>"
+        "<meta>\nTitle: T\nArtist: A\n</meta>\n<original>\nHello\n</original>"
     )
 
-    with patch("app.services.llm_service.acompletion", new_callable=AsyncMock, return_value=mock_response) as mock_ac:
-        resp = client.post("/api/parse", json={
-            "profile_id": pid,
-            "content": "Hello",
-            "provider": "openai",
-            "model": "gpt-4",
-        })
+    with patch(
+        "app.services.llm_service.acompletion", new_callable=AsyncMock, return_value=mock_response
+    ) as mock_ac:
+        resp = client.post(
+            "/api/parse",
+            json={
+                "profile_id": pid,
+                "content": "Hello",
+                "provider": "openai",
+                "model": "gpt-4",
+            },
+        )
         assert resp.status_code == 200
         call_kwargs = mock_ac.call_args.kwargs
         assert call_kwargs.get("api_base") == "http://connection-base:8080"

@@ -4,6 +4,7 @@
   "version": "0.2.4",
   "type": "module",
   "scripts": {
+    "generate:api": "openapi-typescript openapi.json -o src/generated/api.d.ts",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
@@ -22,6 +23,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "nosleep.js": "^0.12.0",
+    "openapi-fetch": "^0.17.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
@@ -42,6 +44,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "globals": "^17.3.0",
     "jsdom": "^28.1.0",
+    "openapi-typescript": "^7.13.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.0",
     "vite": "^6.0.0",

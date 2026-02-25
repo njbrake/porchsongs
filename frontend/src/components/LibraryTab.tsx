@@ -74,7 +74,7 @@ function PerformanceSheet({ song, onSongUpdated }: { song: Song; onSongUpdated: 
   const cardRef = useRef<HTMLDivElement>(null);
   const [autoOneCol, setAutoOneCol] = useState(false);
   const [userOverride, setUserOverride] = useState<number | null>(null);
-  const [localFontSize, setLocalFontSize] = useState<number | null>(song.font_size);
+  const [localFontSize, setLocalFontSize] = useState<number | null>(song.font_size ?? null);
 
   useLayoutEffect(() => {
     setAutoOneCol(false);
@@ -82,7 +82,7 @@ function PerformanceSheet({ song, onSongUpdated }: { song: Song; onSongUpdated: 
   }, [text]);
 
   useEffect(() => {
-    setLocalFontSize(song.font_size);
+    setLocalFontSize(song.font_size ?? null);
   }, [song.font_size]);
 
   const canSplit = columns !== null;

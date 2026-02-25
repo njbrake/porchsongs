@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .routers import auth, profiles, rewrite, songs
+from .schemas import HealthResponse
 
 load_dotenv()
 
@@ -36,10 +37,10 @@ app.include_router(songs.router, prefix="/api")
 app.include_router(rewrite.router, prefix="/api")
 
 
-@app.get("/api/health")
-async def health() -> dict[str, str]:
+@app.get("/api/health", response_model=HealthResponse, tags=["health"])
+async def health() -> HealthResponse:
     """Public health-check endpoint for container orchestration."""
-    return {"status": "ok", "version": __version__}
+    return HealthResponse(status="ok", version=__version__)
 
 
 # Serve the React build output (frontend/dist) if it exists, otherwise serve frontend/ directly.

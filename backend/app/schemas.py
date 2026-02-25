@@ -204,3 +204,48 @@ class ChatResponse(BaseModel):
     version: int
     reasoning: str | None = None
     usage: TokenUsage | None = None
+
+
+# --- Auth ---
+class LoginRequest(BaseModel):
+    password: str = ""
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    user: UserOut
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class RefreshResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+
+
+# --- Generic response models for OpenAPI spec ---
+class OkResponse(BaseModel):
+    ok: bool
+
+
+class HealthResponse(BaseModel):
+    status: str
+    version: str
+
+
+class DefaultPromptsResponse(BaseModel):
+    parse: str
+    chat: str
+
+
+class ProviderInfo(BaseModel):
+    name: str
+    local: bool
+
+
+class ProvidersResponse(BaseModel):
+    providers: list[ProviderInfo]
+    platform_enabled: bool

@@ -103,6 +103,13 @@ export default function App() {
 
   const isPremium = authConfig?.method === 'oauth_google';
 
+  // When premium mode is detected after auth config loads, fix the settings sub-tab
+  useEffect(() => {
+    if (isPremium && settingsTab !== 'account') {
+      setSettingsTab('account');
+    }
+  }, [isPremium, settingsTab]);
+
   // Wrapper that updates both state and URL
   const setTab = useCallback((key: string, subTab?: string) => {
     if (key === 'settings') {

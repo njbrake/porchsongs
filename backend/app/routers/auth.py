@@ -1,7 +1,6 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..auth.dependencies import get_current_user
@@ -10,28 +9,16 @@ from ..auth.rate_limit import auth_rate_limiter
 from ..auth.tokens import create_access_token, create_refresh_token
 from ..database import get_db
 from ..models import RefreshToken, User
-from ..schemas import UserOut
+from ..schemas import (
+    LoginRequest,
+    OkResponse,
+    RefreshRequest,
+    RefreshResponse,
+    TokenResponse,
+    UserOut,
+)
 
-router = APIRouter()
-
-
-class LoginRequest(BaseModel):
-    password: str = ""
-
-
-class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    user: UserOut
-
-
-class RefreshRequest(BaseModel):
-    refresh_token: str
-
-
-class RefreshResponse(BaseModel):
-    access_token: str
-    refresh_token: str
+router = APIRouter(tags=["auth"])
 
 
 @router.get("/auth/config")
@@ -115,17 +102,17 @@ async def refresh(
     )
 
 
-@router.post("/auth/logout")
+@router.post("/auth/logout", response_model=OkResponse)
 async def logout(
     body: RefreshRequest,
     db: Session = Depends(get_db),
-) -> dict[str, bool]:
+) -> OkResponse:
     """Revoke a refresh token."""
     rt = db.query(RefreshToken).filter(RefreshToken.token == body.refresh_token).first()
     if rt:
         rt.revoked = True
         db.commit()
-    return {"ok": True}
+    return OkResponse(ok=True)
 
 
 @router.get("/auth/me", response_model=UserOut)

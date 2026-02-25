@@ -1,0 +1,57 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-json
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.12
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: openapi-types
+        name: openapi types freshness
+        language: system
+        entry: sh -c 'uv run python scripts/export_openapi.py frontend/openapi.json && cd frontend && npm run generate:api && git diff --exit-code frontend/src/generated/api.d.ts'
+        pass_filenames: false
+        files: ^backend/app/(schemas\.py|routers/.+\.py|main\.py)$
+
+      - id: typecheck
+        name: typescript typecheck
+        language: system
+        entry: sh -c 'cd frontend && npm run typecheck'
+        pass_filenames: false
+        files: ^frontend/src/.*\.tsx?$
+
+      - id: eslint
+        name: eslint
+        language: system
+        entry: sh -c 'cd frontend && npx eslint src/'
+        pass_filenames: false
+        files: ^frontend/src/.*\.tsx?$
+
+      - id: frontend-tests
+        name: frontend tests
+        language: system
+        entry: sh -c 'cd frontend && npx vitest run'
+        pass_filenames: false
+        files: ^frontend/src/.*\.tsx?$
+        stages: [pre-push]
+
+      - id: backend-tests
+        name: backend tests
+        language: system
+        entry: sh -c 'DATABASE_URL="sqlite:///:memory:" uv run pytest -x -q'
+        pass_filenames: false
+        files: ^(backend|tests)/.*\.py$
+        stages: [pre-push]

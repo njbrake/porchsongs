@@ -4,8 +4,8 @@ import ModelSelector from '@/components/ModelSelector';
 
 describe('ModelSelector', () => {
   const savedModels = [
-    { id: 1, profile_id: 1, provider: 'openai', model: 'gpt-4o' },
-    { id: 2, profile_id: 1, provider: 'anthropic', model: 'claude-sonnet' },
+    { id: 1, profile_id: 1, provider: 'openai', model: 'gpt-4o', api_base: null, created_at: '2024-01-01T00:00:00Z' },
+    { id: 2, profile_id: 1, provider: 'anthropic', model: 'claude-sonnet', api_base: null, created_at: '2024-01-01T00:00:00Z' },
   ];
 
   it('shows "No models configured" when no models and no provider', () => {

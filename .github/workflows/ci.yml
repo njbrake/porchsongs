@@ -43,3 +43,41 @@ jobs:
 
       - name: Ruff format check
         run: uv run ruff format --check backend/
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Python dependencies
+        run: uv sync
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Regenerate API types from backend
+        run: |
+          uv run python scripts/export_openapi.py frontend/openapi.json
+          cd frontend && npm run generate:api
+
+      - name: Check generated types are up-to-date
+        run: git diff --exit-code frontend/src/generated/api.d.ts
+
+      - name: TypeScript type check
+        run: cd frontend && npm run typecheck
+
+      - name: Lint
+        run: cd frontend && npx eslint src/
+
+      - name: Tests
+        run: cd frontend && npx vitest run

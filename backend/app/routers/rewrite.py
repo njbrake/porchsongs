@@ -17,8 +17,10 @@ from ..schemas import (
     ChatMessage,
     ChatRequest,
     ChatResponse,
+    DefaultPromptsResponse,
     ParseRequest,
     ParseResponse,
+    ProvidersResponse,
     TokenUsage,
 )
 from ..services import llm_service
@@ -114,14 +116,14 @@ def _lookup_api_base(
     return None
 
 
-@router.get("/prompts/defaults")
+@router.get("/prompts/defaults", response_model=DefaultPromptsResponse, tags=["prompts"])
 async def get_default_prompts(
     current_user: User = Depends(get_current_user),
-) -> dict[str, str]:
-    return {
-        "parse": llm_service.CLEAN_SYSTEM_PROMPT,
-        "chat": llm_service.CHAT_SYSTEM_PROMPT,
-    }
+) -> DefaultPromptsResponse:
+    return DefaultPromptsResponse(
+        parse=llm_service.CLEAN_SYSTEM_PROMPT,
+        chat=llm_service.CHAT_SYSTEM_PROMPT,
+    )
 
 
 @router.post("/parse", response_model=ParseResponse)
@@ -421,14 +423,14 @@ async def chat_stream(
     )
 
 
-@router.get("/providers")
+@router.get("/providers", response_model=ProvidersResponse, tags=["providers"])
 async def list_providers(
     current_user: User = Depends(get_current_user),
-) -> dict[str, object]:
-    return {
-        "providers": llm_service.get_configured_providers(),
-        "platform_enabled": llm_service.is_platform_enabled(),
-    }
+) -> ProvidersResponse:
+    return ProvidersResponse(
+        providers=llm_service.get_configured_providers(),
+        platform_enabled=llm_service.is_platform_enabled(),
+    )
 
 
 @router.get("/providers/{provider}/models")

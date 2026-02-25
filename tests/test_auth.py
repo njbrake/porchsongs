@@ -297,8 +297,12 @@ def test_data_isolation_profiles():
     Session = sessionmaker(bind=engine)
     db = Session()
 
-    user_a = User(email="a@test.com", name="A", role="user", is_active=True, created_at=datetime.now(UTC))
-    user_b = User(email="b@test.com", name="B", role="user", is_active=True, created_at=datetime.now(UTC))
+    user_a = User(
+        email="a@test.com", name="A", role="user", is_active=True, created_at=datetime.now(UTC)
+    )
+    user_b = User(
+        email="b@test.com", name="B", role="user", is_active=True, created_at=datetime.now(UTC)
+    )
     db.add_all([user_a, user_b])
     db.commit()
     db.refresh(user_a)
@@ -343,8 +347,12 @@ def test_data_isolation_songs():
     Session = sessionmaker(bind=engine)
     db = Session()
 
-    user_a = User(email="a@test.com", name="A", role="user", is_active=True, created_at=datetime.now(UTC))
-    user_b = User(email="b@test.com", name="B", role="user", is_active=True, created_at=datetime.now(UTC))
+    user_a = User(
+        email="a@test.com", name="A", role="user", is_active=True, created_at=datetime.now(UTC)
+    )
+    user_b = User(
+        email="b@test.com", name="B", role="user", is_active=True, created_at=datetime.now(UTC)
+    )
     db.add_all([user_a, user_b])
     db.commit()
     db.refresh(user_a)
@@ -361,11 +369,14 @@ def test_data_isolation_songs():
     app.dependency_overrides[get_current_user] = lambda: user_a
     with TestClient(app) as client_a:
         profile = client_a.post("/api/profiles", json={"name": "A's Profile"}).json()
-        resp = client_a.post("/api/songs", json={
-            "profile_id": profile["id"],
-            "original_content": "Hello",
-            "rewritten_content": "Hi",
-        })
+        resp = client_a.post(
+            "/api/songs",
+            json={
+                "profile_id": profile["id"],
+                "original_content": "Hello",
+                "rewritten_content": "Hi",
+            },
+        )
         assert resp.status_code == 201
         song_a_id = resp.json()["id"]
 

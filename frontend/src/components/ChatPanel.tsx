@@ -344,7 +344,7 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
         // No tokens were streamed (unlikely but handle it)
         setMessages(prev => [...prev, finalMsg].slice(-MAX_MESSAGES));
       }
-      if (result.rewritten_content !== null) {
+      if (result.rewritten_content != null) {
         onContentUpdated(result.rewritten_content);
       }
       if (result.original_content && onOriginalContentUpdated) {

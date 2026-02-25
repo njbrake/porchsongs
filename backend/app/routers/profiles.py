@@ -8,6 +8,7 @@ from ..auth.scoping import get_user_profile
 from ..database import get_db
 from ..models import Profile, ProfileModel, ProviderConnection, User
 from ..schemas import (
+    OkResponse,
     ProfileCreate,
     ProfileModelCreate,
     ProfileModelOut,
@@ -17,7 +18,7 @@ from ..schemas import (
     ProviderConnectionOut,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["profiles"])
 
 
 @router.get("/profiles", response_model=list[ProfileOut])
@@ -93,12 +94,12 @@ async def update_profile(
     return profile
 
 
-@router.delete("/profiles/{profile_id}")
+@router.delete("/profiles/{profile_id}", response_model=OkResponse)
 async def delete_profile(
     profile_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> dict[str, bool]:
+) -> OkResponse:
     from ..models import Song
 
     profile = get_user_profile(db, current_user, profile_id)
@@ -116,7 +117,7 @@ async def delete_profile(
     db.query(ProviderConnection).filter(ProviderConnection.profile_id == profile.id).delete()
     db.delete(profile)
     db.commit()
-    return {"ok": True}
+    return OkResponse(ok=True)
 
 
 @router.get("/profiles/{profile_id}/models", response_model=list[ProfileModelOut])
@@ -165,13 +166,13 @@ async def add_profile_model(
     return pm
 
 
-@router.delete("/profiles/{profile_id}/models/{model_id}")
+@router.delete("/profiles/{profile_id}/models/{model_id}", response_model=OkResponse)
 async def delete_profile_model(
     profile_id: int,
     model_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> dict[str, bool]:
+) -> OkResponse:
     get_user_profile(db, current_user, profile_id)
     pm = (
         db.query(ProfileModel)
@@ -182,7 +183,7 @@ async def delete_profile_model(
         raise HTTPException(status_code=404, detail="Saved model not found")
     db.delete(pm)
     db.commit()
-    return {"ok": True}
+    return OkResponse(ok=True)
 
 
 # --- Provider Connections ---
@@ -235,13 +236,13 @@ async def add_connection(
     return conn
 
 
-@router.delete("/profiles/{profile_id}/connections/{connection_id}")
+@router.delete("/profiles/{profile_id}/connections/{connection_id}", response_model=OkResponse)
 async def delete_connection(
     profile_id: int,
     connection_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> dict[str, bool]:
+) -> OkResponse:
     get_user_profile(db, current_user, profile_id)
     conn = (
         db.query(ProviderConnection)
@@ -257,4 +258,4 @@ async def delete_connection(
     ).delete()
     db.delete(conn)
     db.commit()
-    return {"ok": True}
+    return OkResponse(ok=True)

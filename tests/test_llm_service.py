@@ -8,7 +8,6 @@ from app.services.llm_service import (
     _parse_clean_response,
 )
 
-
 # --- _build_chat_kwargs ---
 
 
@@ -75,10 +74,7 @@ def test_parse_clean_basic():
 
 
 def test_parse_clean_unknown_maps_to_none():
-    raw = (
-        "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
-        "<original>\nHello\n</original>"
-    )
+    raw = "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n<original>\nHello\n</original>"
     result = _parse_clean_response(raw, "fallback")
     assert result["title"] is None
     assert result["artist"] is None

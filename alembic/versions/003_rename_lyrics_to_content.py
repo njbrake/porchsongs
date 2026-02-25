@@ -20,14 +20,10 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.alter_column("songs", "original_lyrics", new_column_name="original_content")
     op.alter_column("songs", "rewritten_lyrics", new_column_name="rewritten_content")
-    op.alter_column(
-        "song_revisions", "rewritten_lyrics", new_column_name="rewritten_content"
-    )
+    op.alter_column("song_revisions", "rewritten_lyrics", new_column_name="rewritten_content")
 
 
 def downgrade() -> None:
     op.alter_column("songs", "original_content", new_column_name="original_lyrics")
     op.alter_column("songs", "rewritten_content", new_column_name="rewritten_lyrics")
-    op.alter_column(
-        "song_revisions", "rewritten_content", new_column_name="rewritten_lyrics"
-    )
+    op.alter_column("song_revisions", "rewritten_content", new_column_name="rewritten_lyrics")

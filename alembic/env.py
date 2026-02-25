@@ -8,9 +8,9 @@ from sqlalchemy import engine_from_config, pool
 # Ensure backend/ is on sys.path so `app` package can be imported
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
-from app.config import settings  # noqa: E402
-from app.database import Base  # noqa: E402
-from app.models import (  # noqa: E402, F401
+from app.config import settings
+from app.database import Base
+from app.models import (  # noqa: F401
     ChatMessage,
     Profile,
     ProfileModel,

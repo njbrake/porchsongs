@@ -16,17 +16,23 @@ def _fake_completion_response(content):
 
 def _make_profile_and_song(client):
     """Helper: create a profile and a song, return (profile, song)."""
-    profile = client.post("/api/profiles", json={
-        "name": "Test",
-    }).json()
-    song = client.post("/api/songs", json={
-        "profile_id": profile["id"],
-        "title": "Test Song",
-        "artist": "Test Artist",
-        "original_content": "G  Am\nHello world\nDm  G\nGoodbye moon",
-        "rewritten_content": "G  Am\nHi there world\nDm  G\nSee ya moon",
-        "changes_summary": "Changed hello to hi",
-    }).json()
+    profile = client.post(
+        "/api/profiles",
+        json={
+            "name": "Test",
+        },
+    ).json()
+    song = client.post(
+        "/api/songs",
+        json={
+            "profile_id": profile["id"],
+            "title": "Test Song",
+            "artist": "Test Artist",
+            "original_content": "G  Am\nHello world\nDm  G\nGoodbye moon",
+            "rewritten_content": "G  Am\nHi there world\nDm  G\nSee ya moon",
+            "changes_summary": "Changed hello to hi",
+        },
+    ).json()
     return profile, song
 
 
@@ -41,20 +47,26 @@ LLM_SETTINGS = {
 
 @patch("app.services.llm_service.acompletion")
 def test_parse_endpoint(mock_acompletion, client):
-    profile = client.post("/api/profiles", json={
-        "name": "Nathan",
-    }).json()
+    profile = client.post(
+        "/api/profiles",
+        json={
+            "name": "Nathan",
+        },
+    ).json()
 
     mock_acompletion.return_value = _fake_completion_response(
         "<meta>\nTitle: Test Song\nArtist: Test Artist\n</meta>\n"
         "<original>\nG  Am\nHello world\nDm  G\nGoodbye moon\n</original>"
     )
 
-    resp = client.post("/api/parse", json={
-        "profile_id": profile["id"],
-        "content": "G  Am\nHello world\nDm  G\nGoodbye moon",
-        **LLM_SETTINGS,
-    })
+    resp = client.post(
+        "/api/parse",
+        json={
+            "profile_id": profile["id"],
+            "content": "G  Am\nHello world\nDm  G\nGoodbye moon",
+            **LLM_SETTINGS,
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert "Hello world" in data["original_content"]
@@ -79,11 +91,14 @@ def test_parse_unknown_title_artist(mock_acompletion, client):
         "<original>\nOriginal line one\nOriginal line two\n</original>"
     )
 
-    resp = client.post("/api/parse", json={
-        "profile_id": profile["id"],
-        "content": "Original line one\nOriginal line two",
-        **LLM_SETTINGS,
-    })
+    resp = client.post(
+        "/api/parse",
+        json={
+            "profile_id": profile["id"],
+            "content": "Original line one\nOriginal line two",
+            **LLM_SETTINGS,
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["title"] is None
@@ -92,11 +107,14 @@ def test_parse_unknown_title_artist(mock_acompletion, client):
 
 
 def test_parse_profile_not_found(client):
-    resp = client.post("/api/parse", json={
-        "profile_id": 9999,
-        "content": "Hello",
-        **LLM_SETTINGS,
-    })
+    resp = client.post(
+        "/api/parse",
+        json={
+            "profile_id": 9999,
+            "content": "Hello",
+            **LLM_SETTINGS,
+        },
+    )
     assert resp.status_code == 404
 
 
@@ -106,11 +124,14 @@ def test_parse_llm_error(mock_acompletion, client):
     profile = client.post("/api/profiles", json={"name": "Test"}).json()
     mock_acompletion.side_effect = RuntimeError("API rate limit exceeded")
 
-    resp = client.post("/api/parse", json={
-        "profile_id": profile["id"],
-        "content": "Hello world",
-        **LLM_SETTINGS,
-    })
+    resp = client.post(
+        "/api/parse",
+        json={
+            "profile_id": profile["id"],
+            "content": "Hello world",
+            **LLM_SETTINGS,
+        },
+    )
     assert resp.status_code == 502
     assert "LLM error" in resp.json()["detail"]
 
@@ -126,16 +147,21 @@ def test_chat_endpoint(mock_acompletion, client):
         "<content>\nHi there world\nCatch ya moon\n</content>\nI changed 'see ya' to 'catch ya'."
     )
 
-    resp = client.post("/api/chat", json={
-        "song_id": song["id"],
-        "messages": [
-            {"role": "user", "content": "Change 'see ya' to 'catch ya'"},
-        ],
-        **LLM_SETTINGS,
-    })
+    resp = client.post(
+        "/api/chat",
+        json={
+            "song_id": song["id"],
+            "messages": [
+                {"role": "user", "content": "Change 'see ya' to 'catch ya'"},
+            ],
+            **LLM_SETTINGS,
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
-    assert "catch ya" in data["rewritten_content"].lower() or "Catch ya" in data["rewritten_content"]
+    assert (
+        "catch ya" in data["rewritten_content"].lower() or "Catch ya" in data["rewritten_content"]
+    )
     assert "assistant_message" in data
     assert data["version"] == 2  # bumped from 1
 
@@ -149,11 +175,14 @@ def test_chat_persists_changes(mock_acompletion, client):
         "<content>\nUpdated line one\nUpdated line two\n</content>\nChanged everything."
     )
 
-    client.post("/api/chat", json={
-        "song_id": song["id"],
-        "messages": [{"role": "user", "content": "Rewrite everything"}],
-        **LLM_SETTINGS,
-    })
+    client.post(
+        "/api/chat",
+        json={
+            "song_id": song["id"],
+            "messages": [{"role": "user", "content": "Rewrite everything"}],
+            **LLM_SETTINGS,
+        },
+    )
 
     # Check the song was updated
     song_resp = client.get(f"/api/songs/{song['id']}")
@@ -174,11 +203,14 @@ def test_chat_persists_messages(mock_acompletion, client):
         "<content>\nUpdated line one\nUpdated line two\n</content>\nChanged everything."
     )
 
-    client.post("/api/chat", json={
-        "song_id": song["id"],
-        "messages": [{"role": "user", "content": "Rewrite everything"}],
-        **LLM_SETTINGS,
-    })
+    client.post(
+        "/api/chat",
+        json={
+            "song_id": song["id"],
+            "messages": [{"role": "user", "content": "Rewrite everything"}],
+            **LLM_SETTINGS,
+        },
+    )
 
     # Check that chat messages were persisted
     msgs = client.get(f"/api/songs/{song['id']}/messages").json()
@@ -200,11 +232,14 @@ def test_chat_conversational_no_content(mock_acompletion, client):
         "Sure! The rhyme scheme in verse 2 is ABAB. Want me to change it?"
     )
 
-    resp = client.post("/api/chat", json={
-        "song_id": song["id"],
-        "messages": [{"role": "user", "content": "What's the rhyme scheme in verse 2?"}],
-        **LLM_SETTINGS,
-    })
+    resp = client.post(
+        "/api/chat",
+        json={
+            "song_id": song["id"],
+            "messages": [{"role": "user", "content": "What's the rhyme scheme in verse 2?"}],
+            **LLM_SETTINGS,
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
 
@@ -227,14 +262,19 @@ def test_chat_stores_full_raw_response(mock_acompletion, client):
     """The assistant ChatMessage stored in DB should be the full raw LLM response."""
     _, song = _make_profile_and_song(client)
 
-    raw_response = "<content>\nNew line one\nNew line two\n</content>\nI rewrote both lines for clarity."
+    raw_response = (
+        "<content>\nNew line one\nNew line two\n</content>\nI rewrote both lines for clarity."
+    )
     mock_acompletion.return_value = _fake_completion_response(raw_response)
 
-    client.post("/api/chat", json={
-        "song_id": song["id"],
-        "messages": [{"role": "user", "content": "Rewrite both lines"}],
-        **LLM_SETTINGS,
-    })
+    client.post(
+        "/api/chat",
+        json={
+            "song_id": song["id"],
+            "messages": [{"role": "user", "content": "Rewrite both lines"}],
+            **LLM_SETTINGS,
+        },
+    )
 
     msgs = client.get(f"/api/songs/{song['id']}/messages").json()
     assert len(msgs) == 2
@@ -253,11 +293,14 @@ def test_chat_conversational_stores_messages(mock_acompletion, client):
     conversational_response = "Great question! I think we could try an AABB scheme instead."
     mock_acompletion.return_value = _fake_completion_response(conversational_response)
 
-    client.post("/api/chat", json={
-        "song_id": song["id"],
-        "messages": [{"role": "user", "content": "What do you think about the rhyme scheme?"}],
-        **LLM_SETTINGS,
-    })
+    client.post(
+        "/api/chat",
+        json={
+            "song_id": song["id"],
+            "messages": [{"role": "user", "content": "What do you think about the rhyme scheme?"}],
+            **LLM_SETTINGS,
+        },
+    )
 
     msgs = client.get(f"/api/songs/{song['id']}/messages").json()
     assert len(msgs) == 2
@@ -267,11 +310,14 @@ def test_chat_conversational_stores_messages(mock_acompletion, client):
 
 
 def test_chat_song_not_found(client):
-    resp = client.post("/api/chat", json={
-        "song_id": 9999,
-        "messages": [{"role": "user", "content": "hello"}],
-        **LLM_SETTINGS,
-    })
+    resp = client.post(
+        "/api/chat",
+        json={
+            "song_id": 9999,
+            "messages": [{"role": "user", "content": "hello"}],
+            **LLM_SETTINGS,
+        },
+    )
     assert resp.status_code == 404
 
 
@@ -305,28 +351,36 @@ def test_list_provider_models_failure(mock_list_models, client):
 @patch("app.services.llm_service.acompletion")
 def test_parse_passes_api_base(mock_acompletion, client):
     """When a ProfileModel has api_base set, the parse call should pass it to acompletion."""
-    profile = client.post("/api/profiles", json={
-        "name": "Local LLM User",
-    }).json()
+    profile = client.post(
+        "/api/profiles",
+        json={
+            "name": "Local LLM User",
+        },
+    ).json()
 
     # Save a ProfileModel with api_base
-    client.post(f"/api/profiles/{profile['id']}/models", json={
-        "provider": "ollama",
-        "model": "llama3",
-        "api_base": "http://localhost:11434",
-    })
-
-    mock_acompletion.return_value = _fake_completion_response(
-        "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
-        "<original>\nHello world\n</original>"
+    client.post(
+        f"/api/profiles/{profile['id']}/models",
+        json={
+            "provider": "ollama",
+            "model": "llama3",
+            "api_base": "http://localhost:11434",
+        },
     )
 
-    resp = client.post("/api/parse", json={
-        "profile_id": profile["id"],
-        "content": "Hello world",
-        "provider": "ollama",
-        "model": "llama3",
-    })
+    mock_acompletion.return_value = _fake_completion_response(
+        "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n<original>\nHello world\n</original>"
+    )
+
+    resp = client.post(
+        "/api/parse",
+        json={
+            "profile_id": profile["id"],
+            "content": "Hello world",
+            "provider": "ollama",
+            "model": "llama3",
+        },
+    )
     assert resp.status_code == 200
 
     assert mock_acompletion.call_count == 1
@@ -336,20 +390,25 @@ def test_parse_passes_api_base(mock_acompletion, client):
 @patch("app.services.llm_service.acompletion")
 def test_parse_no_api_base_when_no_profile_model(mock_acompletion, client):
     """When no ProfileModel exists, api_base should not be passed."""
-    profile = client.post("/api/profiles", json={
-        "name": "Cloud User",
-    }).json()
+    profile = client.post(
+        "/api/profiles",
+        json={
+            "name": "Cloud User",
+        },
+    ).json()
 
     mock_acompletion.return_value = _fake_completion_response(
-        "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n"
-        "<original>\nHello world\n</original>"
+        "<meta>\nTitle: UNKNOWN\nArtist: UNKNOWN\n</meta>\n<original>\nHello world\n</original>"
     )
 
-    resp = client.post("/api/parse", json={
-        "profile_id": profile["id"],
-        "content": "Hello world",
-        **LLM_SETTINGS,
-    })
+    resp = client.post(
+        "/api/parse",
+        json={
+            "profile_id": profile["id"],
+            "content": "Hello world",
+            **LLM_SETTINGS,
+        },
+    )
     assert resp.status_code == 200
 
     assert mock_acompletion.call_count == 1
@@ -390,18 +449,24 @@ def test_get_default_prompts(client):
 
 def test_profile_system_prompt_fields_roundtrip(client):
     """Creating and updating profiles with system prompt fields."""
-    profile = client.post("/api/profiles", json={
-        "name": "Custom Prompts",
-        "system_prompt_parse": "Custom parse prompt",
-        "system_prompt_chat": "Custom chat prompt",
-    }).json()
+    profile = client.post(
+        "/api/profiles",
+        json={
+            "name": "Custom Prompts",
+            "system_prompt_parse": "Custom parse prompt",
+            "system_prompt_chat": "Custom chat prompt",
+        },
+    ).json()
     assert profile["system_prompt_parse"] == "Custom parse prompt"
     assert profile["system_prompt_chat"] == "Custom chat prompt"
 
     # Update to clear one prompt
-    updated = client.put(f"/api/profiles/{profile['id']}", json={
-        "system_prompt_parse": None,
-    }).json()
+    updated = client.put(
+        f"/api/profiles/{profile['id']}",
+        json={
+            "system_prompt_parse": None,
+        },
+    ).json()
     assert updated["system_prompt_parse"] is None
     assert updated["system_prompt_chat"] == "Custom chat prompt"
 
@@ -410,23 +475,30 @@ def test_profile_system_prompt_fields_roundtrip(client):
 def test_parse_uses_custom_system_prompt(mock_acompletion, client):
     """When a profile has a custom parse prompt, it should be used in the LLM call."""
     custom_prompt = "You are a CUSTOM parse assistant."
-    profile = client.post("/api/profiles", json={
-        "name": "Custom",
-        "system_prompt_parse": custom_prompt,
-    }).json()
+    profile = client.post(
+        "/api/profiles",
+        json={
+            "name": "Custom",
+            "system_prompt_parse": custom_prompt,
+        },
+    ).json()
 
     mock_acompletion.return_value = _fake_completion_response(
-        "<meta>\nTitle: Test\nArtist: Test\n</meta>\n"
-        "<original>\nHello world\n</original>"
+        "<meta>\nTitle: Test\nArtist: Test\n</meta>\n<original>\nHello world\n</original>"
     )
 
-    client.post("/api/parse", json={
-        "profile_id": profile["id"],
-        "content": "Hello world",
-        **LLM_SETTINGS,
-    })
+    client.post(
+        "/api/parse",
+        json={
+            "profile_id": profile["id"],
+            "content": "Hello world",
+            **LLM_SETTINGS,
+        },
+    )
 
-    messages = mock_acompletion.call_args.kwargs.get("messages") or mock_acompletion.call_args[1].get("messages")
+    messages = mock_acompletion.call_args.kwargs.get("messages") or mock_acompletion.call_args[
+        1
+    ].get("messages")
     assert messages[0]["content"] == custom_prompt
 
 
@@ -434,27 +506,36 @@ def test_parse_uses_custom_system_prompt(mock_acompletion, client):
 def test_chat_uses_custom_system_prompt(mock_acompletion, client):
     """When a profile has a custom chat prompt, it should be used in the LLM call."""
     custom_prompt = "You are a CUSTOM chat assistant."
-    profile = client.post("/api/profiles", json={
-        "name": "Custom Chat",
-        "system_prompt_chat": custom_prompt,
-    }).json()
-    song = client.post("/api/songs", json={
-        "profile_id": profile["id"],
-        "original_content": "Hello world",
-        "rewritten_content": "Hi there world",
-    }).json()
+    profile = client.post(
+        "/api/profiles",
+        json={
+            "name": "Custom Chat",
+            "system_prompt_chat": custom_prompt,
+        },
+    ).json()
+    song = client.post(
+        "/api/songs",
+        json={
+            "profile_id": profile["id"],
+            "original_content": "Hello world",
+            "rewritten_content": "Hi there world",
+        },
+    ).json()
 
-    mock_acompletion.return_value = _fake_completion_response(
-        "Just a conversational response."
+    mock_acompletion.return_value = _fake_completion_response("Just a conversational response.")
+
+    client.post(
+        "/api/chat",
+        json={
+            "song_id": song["id"],
+            "messages": [{"role": "user", "content": "Hello"}],
+            **LLM_SETTINGS,
+        },
     )
 
-    client.post("/api/chat", json={
-        "song_id": song["id"],
-        "messages": [{"role": "user", "content": "Hello"}],
-        **LLM_SETTINGS,
-    })
-
-    messages = mock_acompletion.call_args.kwargs.get("messages") or mock_acompletion.call_args[1].get("messages")
+    messages = mock_acompletion.call_args.kwargs.get("messages") or mock_acompletion.call_args[
+        1
+    ].get("messages")
     # The system message should start with the custom prompt (song content is appended)
     assert messages[0]["content"].startswith(custom_prompt)
 
@@ -476,18 +557,20 @@ def test_chat_multimodal_content_passthrough(mock_acompletion, client):
         {"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBOR..."}},
     ]
 
-    resp = client.post("/api/chat", json={
-        "song_id": song["id"],
-        "messages": [{"role": "user", "content": multimodal_content}],
-        **LLM_SETTINGS,
-    })
+    resp = client.post(
+        "/api/chat",
+        json={
+            "song_id": song["id"],
+            "messages": [{"role": "user", "content": multimodal_content}],
+            **LLM_SETTINGS,
+        },
+    )
     assert resp.status_code == 200
 
     # Verify the multimodal content was passed through to the LLM
-    call_messages = (
-        mock_acompletion.call_args.kwargs.get("messages")
-        or mock_acompletion.call_args[1].get("messages")
-    )
+    call_messages = mock_acompletion.call_args.kwargs.get("messages") or mock_acompletion.call_args[
+        1
+    ].get("messages")
     # Last message should have the multimodal content array
     user_msg = call_messages[-1]
     assert user_msg["role"] == "user"
@@ -501,20 +584,21 @@ def test_chat_multimodal_persists_text_only(mock_acompletion, client):
     """When multimodal content is sent, only the text portion is persisted to DB."""
     _, song = _make_profile_and_song(client)
 
-    mock_acompletion.return_value = _fake_completion_response(
-        "I can see the chord chart."
-    )
+    mock_acompletion.return_value = _fake_completion_response("I can see the chord chart.")
 
     multimodal_content = [
         {"type": "text", "text": "Describe this chord chart"},
         {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc123"}},
     ]
 
-    client.post("/api/chat", json={
-        "song_id": song["id"],
-        "messages": [{"role": "user", "content": multimodal_content}],
-        **LLM_SETTINGS,
-    })
+    client.post(
+        "/api/chat",
+        json={
+            "song_id": song["id"],
+            "messages": [{"role": "user", "content": multimodal_content}],
+            **LLM_SETTINGS,
+        },
+    )
 
     msgs = client.get(f"/api/songs/{song['id']}/messages").json()
     assert len(msgs) == 2
@@ -529,15 +613,16 @@ def test_chat_plain_string_still_works(mock_acompletion, client):
     """Plain string content should still work after the multimodal change."""
     _, song = _make_profile_and_song(client)
 
-    mock_acompletion.return_value = _fake_completion_response(
-        "Sure, here's some feedback."
-    )
+    mock_acompletion.return_value = _fake_completion_response("Sure, here's some feedback.")
 
-    resp = client.post("/api/chat", json={
-        "song_id": song["id"],
-        "messages": [{"role": "user", "content": "Give me feedback"}],
-        **LLM_SETTINGS,
-    })
+    resp = client.post(
+        "/api/chat",
+        json={
+            "song_id": song["id"],
+            "messages": [{"role": "user", "content": "Give me feedback"}],
+            **LLM_SETTINGS,
+        },
+    )
     assert resp.status_code == 200
 
     msgs = client.get(f"/api/songs/{song['id']}/messages").json()

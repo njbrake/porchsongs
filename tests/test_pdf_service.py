@@ -1,13 +1,13 @@
 """Tests for PDF generation service."""
 
+from fpdf import FPDF
+
 from app.models import Profile, Song
 from app.services.pdf_service import (
     _fit_font_size,
     _sanitize_for_latin1,
     generate_song_pdf,
 )
-from fpdf import FPDF
-
 
 # ── Unit tests for generate_song_pdf ─────────────────────────────────────────
 

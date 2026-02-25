@@ -14,6 +14,7 @@ from ..models import (
 from ..schemas import (
     ChatMessageCreate,
     ChatMessageOut,
+    OkResponse,
     SongCreate,
     SongOut,
     SongRevisionOut,
@@ -22,7 +23,7 @@ from ..schemas import (
 )
 from ..services.pdf_service import generate_song_pdf
 
-router = APIRouter()
+router = APIRouter(tags=["songs"])
 
 
 @router.get("/songs", response_model=list[SongOut])
@@ -184,19 +185,19 @@ async def duplicate_song(
     return copy
 
 
-@router.delete("/songs/{song_id}")
+@router.delete("/songs/{song_id}", response_model=OkResponse)
 async def delete_song(
     song_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> dict[str, bool]:
+) -> OkResponse:
     song = get_user_song(db, current_user, song_id)
     # Delete related revisions and chat messages
     db.query(SongRevision).filter(SongRevision.song_id == song.id).delete()
     db.query(ChatMessage).filter(ChatMessage.song_id == song.id).delete()
     db.delete(song)
     db.commit()
-    return {"ok": True}
+    return OkResponse(ok=True)
 
 
 @router.get("/songs/{song_id}/revisions", response_model=list[SongRevisionOut])

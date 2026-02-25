@@ -1,21 +1,28 @@
 import type {
-  Profile,
-  Song,
-  SongRevision,
-  SavedModel,
-  ProviderConnection,
-  ChatResult,
   AuthConfig,
   AuthUser,
-  TokenResponse,
   ChatHistoryRow,
+  ChatResult,
+  CheckoutResponse,
   ParseResult,
-  SubscriptionInfo,
   PlanInfo,
+  PortalResponse,
+  Profile,
+  ProviderConnection,
   ProvidersResponse,
+  SavedModel,
+  Song,
+  SongRevision,
+  SubscriptionInfo,
+  TokenResponse,
 } from '@/types';
-
-const BASE = '/api';
+import client, {
+  getAccessToken,
+  getRefreshToken,
+  setAccessToken,
+  setRefreshToken,
+  tryRefresh,
+} from '@/lib/api-client';
 
 // --- Storage keys ---
 const STORAGE_KEYS = {
@@ -32,90 +39,25 @@ const STORAGE_KEYS = {
 
 export { STORAGE_KEYS };
 
-// --- Token storage ---
-// Access token in memory (not localStorage) for security
-let _accessToken: string | null = null;
-
-// Refresh token in localStorage for persistence across tabs/refreshes
-function _getRefreshToken(): string | null {
-  return localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
-}
-function _setRefreshToken(token: string | null): void {
-  if (token) {
-    localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, token);
-  } else {
-    localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
-  }
-}
+// --- Shared helpers ---
 
 function _getAuthHeaders(): Record<string, string> {
-  if (_accessToken) {
-    return { Authorization: `Bearer ${_accessToken}` };
+  const token = getAccessToken();
+  if (token) {
+    return { Authorization: `Bearer ${token}` };
   }
   return {};
 }
-
-// --- Refresh token deduplication ---
-let _refreshPromise: Promise<boolean> | null = null;
-
-async function _doRefresh(): Promise<boolean> {
-  const refreshToken = _getRefreshToken();
-  if (!refreshToken) return false;
-
-  try {
-    const res = await fetch(`${BASE}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-    if (!res.ok) {
-      _accessToken = null;
-      _setRefreshToken(null);
-      return false;
-    }
-    const data = (await res.json()) as { access_token: string; refresh_token: string };
-    _accessToken = data.access_token;
-    _setRefreshToken(data.refresh_token);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function _tryRefresh(): Promise<boolean> {
-  if (!_refreshPromise) {
-    _refreshPromise = _doRefresh().finally(() => {
-      _refreshPromise = null;
-    });
-  }
-  return _refreshPromise;
-}
-
-// --- Shared helpers ---
 
 function _parseApiError(body: unknown, fallback: string): string {
   const b = body as { detail?: string | { message?: string; error?: string } };
   if (!b.detail) return fallback;
 
-  // Premium middleware returns structured error objects like:
-  // { detail: { error: "quota_exceeded", message: "...", rewrites_used: N } }
   if (typeof b.detail === 'object') {
     return b.detail.message || b.detail.error || fallback;
   }
 
   return b.detail;
-}
-
-async function _throwIfNotOk(res: Response): Promise<void> {
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    const message = _parseApiError(body, `Request failed: ${res.status}`);
-
-    // Attach status code to the error so callers can distinguish error types
-    const err = new Error(message) as Error & { status?: number };
-    err.status = res.status;
-    throw err;
-  }
 }
 
 function _downloadBlob(blob: Blob, filename: string): void {
@@ -129,6 +71,14 @@ function _downloadBlob(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
+/** Throw a typed Error from an openapi-fetch error body. */
+function _throwApiError(error: unknown, fallback: string): never {
+  const message = _parseApiError(error, fallback);
+  throw new Error(message);
+}
+
+// --- SSE streaming (stays manual — openapi-fetch doesn't handle SSE) ---
+
 async function _streamSse<T>(
   endpoint: string,
   data: Record<string, unknown>,
@@ -137,7 +87,7 @@ async function _streamSse<T>(
   onReasoning?: (token: string) => void,
 ): Promise<T> {
   const doStream = async (retry: boolean): Promise<T> => {
-    const res = await fetch(`${BASE}${endpoint}`, {
+    const res = await fetch(`/api${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
       body: JSON.stringify(data),
@@ -145,12 +95,18 @@ async function _streamSse<T>(
     });
 
     if (res.status === 401 && retry) {
-      const refreshed = await _tryRefresh();
+      const refreshed = await tryRefresh();
       if (refreshed) return doStream(false);
       window.dispatchEvent(new CustomEvent('porchsongs-logout'));
       throw new Error('Authentication required. Please log in.');
     }
-    await _throwIfNotOk(res);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const message = _parseApiError(body, `Request failed: ${res.status}`);
+      const err = new Error(message) as Error & { status?: number };
+      err.status = res.status;
+      throw err;
+    }
 
     const reader = res.body?.getReader();
     if (!reader) throw new Error('No response body');
@@ -195,37 +151,15 @@ async function _streamSse<T>(
   return doStream(true);
 }
 
-// --- Core fetch with auto-refresh ---
-
-async function _fetch<T>(path: string, options: RequestInit = {}, retry = true): Promise<T> {
-  const url = BASE + path;
-  const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders(), ...options.headers },
-    ...options,
-  });
-
-  if (res.status === 401 && retry) {
-    const refreshed = await _tryRefresh();
-    if (refreshed) {
-      return _fetch<T>(path, options, false);
-    }
-    window.dispatchEvent(new CustomEvent('porchsongs-logout'));
-    throw new Error('Authentication required. Please log in.');
-  }
-
-  await _throwIfNotOk(res);
-  return res.json() as Promise<T>;
-}
-
 // --- Auth API ---
 
 async function getAuthConfig(): Promise<AuthConfig> {
-  const res = await fetch(`${BASE}/auth/config`);
+  const res = await fetch('/api/auth/config');
   return res.json() as Promise<AuthConfig>;
 }
 
 async function login(password: string): Promise<TokenResponse> {
-  const res = await fetch(`${BASE}/auth/login`, {
+  const res = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ password }),
@@ -235,16 +169,16 @@ async function login(password: string): Promise<TokenResponse> {
     throw new Error(_parseApiError(body, 'Login failed'));
   }
   const data = (await res.json()) as TokenResponse;
-  _accessToken = data.access_token;
-  _setRefreshToken(data.refresh_token);
+  setAccessToken(data.access_token);
+  setRefreshToken(data.refresh_token);
   return data;
 }
 
 async function logout(): Promise<void> {
-  const refreshToken = _getRefreshToken();
+  const refreshToken = getRefreshToken();
   if (refreshToken) {
     try {
-      await fetch(`${BASE}/auth/logout`, {
+      await fetch('/api/auth/logout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
         body: JSON.stringify({ refresh_token: refreshToken }),
@@ -253,19 +187,21 @@ async function logout(): Promise<void> {
       // Best effort
     }
   }
-  _accessToken = null;
-  _setRefreshToken(null);
+  setAccessToken(null);
+  setRefreshToken(null);
 }
 
 async function tryRestoreSession(): Promise<AuthUser | null> {
-  const refreshToken = _getRefreshToken();
+  const refreshToken = getRefreshToken();
   if (!refreshToken) return null;
 
-  const refreshed = await _tryRefresh();
+  const refreshed = await tryRefresh();
   if (!refreshed) return null;
 
   try {
-    return await _fetch<AuthUser>('/auth/me');
+    const { data, error } = await client.GET('/api/auth/me');
+    if (error) return null;
+    return data as AuthUser;
   } catch {
     return null;
   }
@@ -276,15 +212,37 @@ const api = {
   login,
   logout,
   tryRestoreSession,
+
   // Profiles
-  listProfiles: () => _fetch<Profile[]>('/profiles'),
-  createProfile: (data: Partial<Profile>) => _fetch<Profile>('/profiles', { method: 'POST', body: JSON.stringify(data) }),
-  updateProfile: (id: number, data: Partial<Profile>) => _fetch<Profile>(`/profiles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  listProfiles: async () => {
+    const { data, error } = await client.GET('/api/profiles');
+    if (error) _throwApiError(error, 'Failed to list profiles');
+    return data as Profile[];
+  },
+  createProfile: async (body: Partial<Profile>) => {
+    const { data, error } = await client.POST('/api/profiles', {
+      body: body as never,
+    });
+    if (error) _throwApiError(error, 'Failed to create profile');
+    return data as Profile;
+  },
+  updateProfile: async (id: number, body: Partial<Profile>) => {
+    const { data, error } = await client.PUT('/api/profiles/{profile_id}', {
+      params: { path: { profile_id: id } },
+      body: body as never,
+    });
+    if (error) _throwApiError(error, 'Failed to update profile');
+    return data as Profile;
+  },
 
   // Prompts
-  getDefaultPrompts: () => _fetch<{ parse: string; chat: string }>('/prompts/defaults'),
+  getDefaultPrompts: async () => {
+    const { data, error } = await client.GET('/api/prompts/defaults');
+    if (error) _throwApiError(error, 'Failed to get default prompts');
+    return data as { parse: string; chat: string };
+  },
 
-  // Parse
+  // Parse (SSE — stays manual)
   parseStream: (
     data: Record<string, unknown>,
     onToken: (token: string) => void,
@@ -293,48 +251,125 @@ const api = {
   ): Promise<ParseResult> => _streamSse<ParseResult>('/parse/stream', data, onToken, signal, onReasoning),
 
   // Songs
-  listSongs: (profileId?: number) => {
-    const query = profileId ? `?profile_id=${profileId}` : '';
-    return _fetch<Song[]>(`/songs${query}`);
+  listSongs: async (profileId?: number) => {
+    const { data, error } = await client.GET('/api/songs', {
+      params: { query: { profile_id: profileId } },
+    });
+    if (error) _throwApiError(error, 'Failed to list songs');
+    return data as Song[];
   },
-  getSong: (id: number) => _fetch<Song>(`/songs/${id}`),
-  saveSong: (data: Partial<Song>) => _fetch<Song>('/songs', { method: 'POST', body: JSON.stringify(data) }),
-  updateSong: (id: number, data: Partial<Song>) => _fetch<Song>(`/songs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteSong: (id: number) => _fetch<void>(`/songs/${id}`, { method: 'DELETE' }),
-  duplicateSong: (id: number) => _fetch<Song>(`/songs/${id}/duplicate`, { method: 'POST' }),
-  getSongRevisions: (id: number) => _fetch<SongRevision[]>(`/songs/${id}/revisions`),
+  getSong: async (id: number) => {
+    const { data, error } = await client.GET('/api/songs/{song_id}', {
+      params: { path: { song_id: id } },
+    });
+    if (error) _throwApiError(error, 'Failed to get song');
+    return data as Song;
+  },
+  saveSong: async (body: Partial<Song>) => {
+    const { data, error } = await client.POST('/api/songs', {
+      body: body as never,
+    });
+    if (error) _throwApiError(error, 'Failed to save song');
+    return data as Song;
+  },
+  updateSong: async (id: number, body: Partial<Song>) => {
+    const { data, error } = await client.PUT('/api/songs/{song_id}', {
+      params: { path: { song_id: id } },
+      body: body as never,
+    });
+    if (error) _throwApiError(error, 'Failed to update song');
+    return data as Song;
+  },
+  deleteSong: async (id: number) => {
+    const { error } = await client.DELETE('/api/songs/{song_id}', {
+      params: { path: { song_id: id } },
+    });
+    if (error) _throwApiError(error, 'Failed to delete song');
+  },
+  duplicateSong: async (id: number) => {
+    const { data, error } = await client.POST('/api/songs/{song_id}/duplicate', {
+      params: { path: { song_id: id } },
+    });
+    if (error) _throwApiError(error, 'Failed to duplicate song');
+    return data as Song;
+  },
+  getSongRevisions: async (id: number) => {
+    const { data, error } = await client.GET('/api/songs/{song_id}/revisions', {
+      params: { path: { song_id: id } },
+    });
+    if (error) _throwApiError(error, 'Failed to get revisions');
+    return data as SongRevision[];
+  },
 
-  // Chat
+  // Chat (SSE — stays manual)
   chatStream: (
     data: Record<string, unknown>,
     onToken: (token: string) => void,
     signal?: AbortSignal,
     onReasoning?: (token: string) => void,
   ): Promise<ChatResult & { version: number }> => _streamSse<ChatResult & { version: number }>('/chat/stream', data, onToken, signal, onReasoning),
-  getChatHistory: (songId: number) => _fetch<ChatHistoryRow[]>(`/songs/${songId}/messages`),
+  getChatHistory: async (songId: number) => {
+    const { data, error } = await client.GET('/api/songs/{song_id}/messages', {
+      params: { path: { song_id: songId } },
+    });
+    if (error) _throwApiError(error, 'Failed to get chat history');
+    return data as ChatHistoryRow[];
+  },
 
   // Profile Models (saved provider+model combos)
-  listProfileModels: (profileId: number) => _fetch<SavedModel[]>(`/profiles/${profileId}/models`),
-  addProfileModel: (profileId: number, data: { provider: string; model: string }) =>
-    _fetch<SavedModel>(`/profiles/${profileId}/models`, { method: 'POST', body: JSON.stringify(data) }),
-  deleteProfileModel: (profileId: number, modelId: number) =>
-    _fetch<void>(`/profiles/${profileId}/models/${modelId}`, { method: 'DELETE' }),
+  listProfileModels: async (profileId: number) => {
+    const { data, error } = await client.GET('/api/profiles/{profile_id}/models', {
+      params: { path: { profile_id: profileId } },
+    });
+    if (error) _throwApiError(error, 'Failed to list models');
+    return data as SavedModel[];
+  },
+  addProfileModel: async (profileId: number, body: { provider: string; model: string }) => {
+    const { data, error } = await client.POST('/api/profiles/{profile_id}/models', {
+      params: { path: { profile_id: profileId } },
+      body,
+    });
+    if (error) _throwApiError(error, 'Failed to add model');
+    return data as SavedModel;
+  },
+  deleteProfileModel: async (profileId: number, modelId: number) => {
+    const { error } = await client.DELETE('/api/profiles/{profile_id}/models/{model_id}', {
+      params: { path: { profile_id: profileId, model_id: modelId } },
+    });
+    if (error) _throwApiError(error, 'Failed to delete model');
+  },
 
   // Provider Connections
-  listProviderConnections: (profileId: number) => _fetch<ProviderConnection[]>(`/profiles/${profileId}/connections`),
-  addProviderConnection: (profileId: number, data: { provider: string; api_base?: string }) =>
-    _fetch<ProviderConnection>(`/profiles/${profileId}/connections`, { method: 'POST', body: JSON.stringify(data) }),
-  deleteProviderConnection: (profileId: number, connectionId: number) =>
-    _fetch<void>(`/profiles/${profileId}/connections/${connectionId}`, { method: 'DELETE' }),
+  listProviderConnections: async (profileId: number) => {
+    const { data, error } = await client.GET('/api/profiles/{profile_id}/connections', {
+      params: { path: { profile_id: profileId } },
+    });
+    if (error) _throwApiError(error, 'Failed to list connections');
+    return data as ProviderConnection[];
+  },
+  addProviderConnection: async (profileId: number, body: { provider: string; api_base?: string }) => {
+    const { data, error } = await client.POST('/api/profiles/{profile_id}/connections', {
+      params: { path: { profile_id: profileId } },
+      body: body as never,
+    });
+    if (error) _throwApiError(error, 'Failed to add connection');
+    return data as ProviderConnection;
+  },
+  deleteProviderConnection: async (profileId: number, connectionId: number) => {
+    const { error } = await client.DELETE('/api/profiles/{profile_id}/connections/{connection_id}', {
+      params: { path: { profile_id: profileId, connection_id: connectionId } },
+    });
+    if (error) _throwApiError(error, 'Failed to delete connection');
+  },
 
   // PDF
   downloadSongPdf: async (id: number, title: string | null, artist: string | null) => {
     const filename = `${title || 'Untitled'} - ${artist || 'Unknown'}.pdf`;
-    let res = await fetch(`${BASE}/songs/${id}/pdf`, { headers: _getAuthHeaders() });
+    let res = await fetch(`/api/songs/${id}/pdf`, { headers: _getAuthHeaders() });
     if (res.status === 401) {
-      const refreshed = await _tryRefresh();
+      const refreshed = await tryRefresh();
       if (refreshed) {
-        res = await fetch(`${BASE}/songs/${id}/pdf`, { headers: _getAuthHeaders() });
+        res = await fetch(`/api/songs/${id}/pdf`, { headers: _getAuthHeaders() });
       } else {
         window.dispatchEvent(new CustomEvent('porchsongs-logout'));
         throw new Error('Authentication required. Please log in.');
@@ -345,17 +380,42 @@ const api = {
   },
 
   // Providers
-  listProviders: () => _fetch<ProvidersResponse>('/providers'),
-  listProviderModels: (provider: string, apiBase?: string) => {
-    const query = apiBase ? `?api_base=${encodeURIComponent(apiBase)}` : '';
-    return _fetch<string[]>(`/providers/${provider}/models${query}`);
+  listProviders: async () => {
+    const { data, error } = await client.GET('/api/providers');
+    if (error) _throwApiError(error, 'Failed to list providers');
+    return data as ProvidersResponse;
+  },
+  listProviderModels: async (provider: string, apiBase?: string) => {
+    const { data, error } = await client.GET('/api/providers/{provider}/models', {
+      params: { path: { provider }, query: { api_base: apiBase } },
+    });
+    if (error) _throwApiError(error, 'Failed to list models');
+    return data as string[];
   },
 
   // Premium: Subscriptions & Billing
-  getSubscription: () => _fetch<SubscriptionInfo>('/subscriptions/me'),
-  listPlans: () => _fetch<PlanInfo[]>('/subscriptions/plans'),
-  createCheckout: (plan: string) => _fetch<{ checkout_url: string }>('/billing/checkout', { method: 'POST', body: JSON.stringify({ plan }) }),
-  createPortal: () => _fetch<{ portal_url: string }>('/billing/portal', { method: 'POST' }),
+  getSubscription: async () => {
+    const { data, error } = await client.GET('/api/subscriptions/me');
+    if (error) _throwApiError(error, 'Failed to get subscription');
+    return data as SubscriptionInfo;
+  },
+  listPlans: async () => {
+    const { data, error } = await client.GET('/api/subscriptions/plans');
+    if (error) _throwApiError(error, 'Failed to list plans');
+    return data as PlanInfo[];
+  },
+  createCheckout: async (plan: string) => {
+    const { data, error } = await client.POST('/api/billing/checkout', {
+      body: { plan } as never,
+    });
+    if (error) _throwApiError(error, 'Failed to create checkout');
+    return data as CheckoutResponse;
+  },
+  createPortal: async () => {
+    const { data, error } = await client.POST('/api/billing/portal');
+    if (error) _throwApiError(error, 'Failed to create portal');
+    return data as PortalResponse;
+  },
 };
 
 export default api;

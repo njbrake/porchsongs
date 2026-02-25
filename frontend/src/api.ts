@@ -4,7 +4,6 @@ import type {
   SongRevision,
   SavedModel,
   ProviderConnection,
-  Provider,
   ChatResult,
   AuthConfig,
   AuthUser,
@@ -13,6 +12,7 @@ import type {
   ParseResult,
   SubscriptionInfo,
   PlanInfo,
+  ProvidersResponse,
 } from '@/types';
 
 const BASE = '/api';
@@ -345,7 +345,7 @@ const api = {
   },
 
   // Providers
-  listProviders: () => _fetch<Provider[]>('/providers'),
+  listProviders: () => _fetch<ProvidersResponse>('/providers'),
   listProviderModels: (provider: string, apiBase?: string) => {
     const query = apiBase ? `?api_base=${encodeURIComponent(apiBase)}` : '';
     return _fetch<string[]>(`/providers/${provider}/models${query}`);

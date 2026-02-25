@@ -24,7 +24,8 @@ function tabFromPath(pathname: string): string {
 function settingsTabFromPath(pathname: string): string {
   const parts = pathname.replace(/^\//, '').split('/');
   if (parts[0]?.toLowerCase() === 'settings' && SETTINGS_SUB_TABS_ALL.includes(parts[1]?.toLowerCase() ?? '')) {
-    return parts[1]!.toLowerCase();
+    const sub = parts[1]!.toLowerCase();
+    return sub === 'prompts' ? 'profile' : sub;
   }
   return 'profile';
 }
@@ -315,7 +316,7 @@ export default function App() {
             reasoningEffort={reasoningEffort}
             onChangeReasoningEffort={setReasoningEffort}
             savedModels={savedModels}
-            onOpenSettings={() => setTab('settings', 'profile')}
+            onOpenSettings={() => setTab('settings', 'providers')}
             isPremium={isPremium}
           />
         </div>

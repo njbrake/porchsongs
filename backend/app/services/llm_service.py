@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
@@ -109,10 +110,22 @@ that becomes the new current version for subsequent turns."""
 
 _LOCAL_PROVIDERS = {"ollama", "llamafile", "llamacpp", "lmstudio", "vllm"}
 
+# Meta-providers that proxy to other providers and should not be directly selectable.
+_HIDDEN_PROVIDERS = {"platform"}
+
+
+def is_platform_enabled() -> bool:
+    """Return True when the Any LLM Platform key is configured."""
+    return bool(os.getenv("ANY_LLM_KEY"))
+
 
 def get_configured_providers() -> list[dict[str, object]]:
     """Return all known providers. Actual validation happens when listing models."""
-    return [{"name": p.value, "local": p.value in _LOCAL_PROVIDERS} for p in LLMProvider]
+    return [
+        {"name": p.value, "local": p.value in _LOCAL_PROVIDERS}
+        for p in LLMProvider
+        if p.value not in _HIDDEN_PROVIDERS
+    ]
 
 
 async def get_models(provider: str, api_base: str | None = None) -> list[str]:
@@ -217,6 +230,8 @@ async def parse_content_stream(
     response = await acompletion(stream=True, **kwargs)
 
     async for chunk in response:
+        if not chunk.choices:  # type: ignore[union-attr]
+            continue
         delta = chunk.choices[0].delta  # type: ignore[union-attr]
         if delta:
             reasoning = getattr(delta, "reasoning", None)
@@ -403,6 +418,8 @@ async def chat_edit_content_stream(
     import json
 
     async for chunk in response:
+        if not chunk.choices:  # type: ignore[union-attr]
+            continue
         delta = chunk.choices[0].delta  # type: ignore[union-attr]
         if delta:
             reasoning = getattr(delta, "reasoning", None)

@@ -244,7 +244,10 @@ def test_song_revisions(client):
 def test_list_providers(client):
     resp = client.get("/api/providers")
     assert resp.status_code == 200
-    providers = resp.json()
+    data = resp.json()
+    assert "providers" in data
+    assert "platform_enabled" in data
+    providers = data["providers"]
     assert isinstance(providers, list)
     assert len(providers) > 0
     assert "name" in providers[0]

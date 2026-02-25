@@ -175,7 +175,7 @@ wheels = [
 
 [[package]]
 name = "anthropic"
-version = "0.82.0"
+version = "0.84.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -187,9 +187,9 @@ dependencies = [
     { name = "sniffio" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6f/94/3766b5414d9e35687d518943a5b2ffb2696cd5c53248eec13fa1e8a5c73d/anthropic-0.82.0.tar.gz", hash = "sha256:e217340ba40cb9e24c88aacccc365334a6c3f46778855eca5000a6aa83d73dde", size = 533270, upload-time = "2026-02-18T20:25:16.844Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/04/ea/0869d6df9ef83dcf393aeefc12dd81677d091c6ffc86f783e51cf44062f2/anthropic-0.84.0.tar.gz", hash = "sha256:72f5f90e5aebe62dca316cb013629cfa24996b0f5a4593b8c3d712bc03c43c37", size = 539457, upload-time = "2026-02-25T05:22:38.54Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5c/49/b570250e36471effbc146d22ffb111e775f11ff2d8b503b32526f25a8f23/anthropic-0.82.0-py3-none-any.whl", hash = "sha256:2525828b6798635a7a691c4c62d49bd10bbd288ab83fa4ba55851264dfa5377d", size = 456304, upload-time = "2026-02-18T20:25:18.788Z" },
+    { url = "https://files.pythonhosted.org/packages/64/ca/218fa25002a332c0aa149ba18ffc0543175998b1f65de63f6d106689a345/anthropic-0.84.0-py3-none-any.whl", hash = "sha256:861c4c50f91ca45f942e091d83b60530ad6d4f98733bfe648065364da05d29e7", size = 455156, upload-time = "2026-02-25T05:22:40.468Z" },
 ]
 
 [package.optional-dependencies]
@@ -213,7 +213,7 @@ wheels = [
 
 [[package]]
 name = "any-llm-sdk"
-version = "1.8.5"
+version = "1.8.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -223,9 +223,9 @@ dependencies = [
     { name = "rich" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/56/19/2fa65c2cd298330fcb4b862d091a4e1dd4edbf8b79afe89ee14b8c5ca21d/any_llm_sdk-1.8.5.tar.gz", hash = "sha256:fca91cbdb0a07b386c845f3d92e076daaff039dd73ba4ea4f0dadfbc43140cb7", size = 128831, upload-time = "2026-02-16T10:35:37.085Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b2/9f/e3ae51bd4724b7a4019e935b19a877f31c040095f0f745aad7b17f904811/any_llm_sdk-1.8.6.tar.gz", hash = "sha256:ef6fd798bde3f39e85170a909fd86931399f95bd8efb8316235a2c58d47816a8", size = 133852, upload-time = "2026-02-25T15:37:36.207Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/34/0c/c15f1953bc5238e3301bb83f85d8af68cfe7089fb834df1f107ea71103f4/any_llm_sdk-1.8.5-py3-none-any.whl", hash = "sha256:9d431bf6f806449f126fb3c9ffeaf1e2286d7f4e2ce4d7739792d7deb40d55bd", size = 181773, upload-time = "2026-02-16T10:35:35.319Z" },
+    { url = "https://files.pythonhosted.org/packages/60/68/14b09d305eef4c302a751c5fd45e8668c1fd8bccc8156d373c2a6cd3c4aa/any_llm_sdk-1.8.6-py3-none-any.whl", hash = "sha256:0f6cf178f9b736c9bb3d5d618709065361f3a0fb1094f2c71281c50631050aed", size = 189023, upload-time = "2026-02-25T15:37:34.528Z" },
 ]
 
 [package.optional-dependencies]
@@ -2291,7 +2291,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.14.0" },
-    { name = "any-llm-sdk", extras = ["all"], specifier = ">=1.8.0" },
+    { name = "any-llm-sdk", extras = ["all"], specifier = ">=1.8.6" },
     { name = "bcrypt", specifier = ">=4.2.0" },
     { name = "fastapi", specifier = "==0.115.6" },
     { name = "fpdf2", specifier = ">=2.8.0" },

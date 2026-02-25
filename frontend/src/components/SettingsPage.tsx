@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+
 import type { Profile, SavedModel, ProviderConnection, Provider, SubscriptionInfo, PlanInfo } from '@/types';
 
 interface ProviderCardProps {
@@ -162,10 +163,13 @@ interface LLMProvidersTabProps {
   connections: ProviderConnection[];
   onAddConnection: (provider: string, apiBase?: string | null) => Promise<ProviderConnection | null>;
   onRemoveConnection: (id: number) => void;
+  reasoningEffort: string;
+  onChangeReasoningEffort: (value: string) => void;
 }
 
-function LLMProvidersTab({ provider, model, savedModels, onSave, onAddModel, onRemoveModel, connections, onAddConnection, onRemoveConnection }: LLMProvidersTabProps) {
+function LLMProvidersTab({ provider, model, savedModels, onSave, onAddModel, onRemoveModel, connections, onAddConnection, onRemoveConnection, reasoningEffort, onChangeReasoningEffort }: LLMProvidersTabProps) {
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [platformAvailable, setPlatformAvailable] = useState(false);
   const [connProvider, setConnProvider] = useState('');
   const [connApiBase, setConnApiBase] = useState('');
   const [connVerifying, setConnVerifying] = useState(false);
@@ -173,7 +177,7 @@ function LLMProvidersTab({ provider, model, savedModels, onSave, onAddModel, onR
 
   useEffect(() => {
     api.listProviders()
-      .then(setProviders)
+      .then(res => { setProviders(res.providers); setPlatformAvailable(res.platform_enabled); })
       .catch(() => setProviders([]));
   }, []);
 
@@ -207,6 +211,19 @@ function LLMProvidersTab({ provider, model, savedModels, onSave, onAddModel, onR
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Reasoning effort */}
+      <Card>
+        <CardContent className="pt-5">
+          <h3 className="text-sm font-semibold mb-2">Default Reasoning Effort</h3>
+          <p className="text-sm text-muted-foreground mb-3">Controls how much effort the LLM spends thinking before responding.</p>
+          <Select value={reasoningEffort} onChange={(e: ChangeEvent<HTMLSelectElement>) => onChangeReasoningEffort(e.target.value)}>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </Select>
+        </CardContent>
+      </Card>
+
       {/* One card per connected provider */}
       {connections.map(conn => (
         <ProviderCard
@@ -260,44 +277,29 @@ function LLMProvidersTab({ provider, model, savedModels, onSave, onAddModel, onR
           )}
         </CardContent>
       </Card>
+
+      {platformAvailable && (
+        <p className="text-xs text-muted-foreground text-center">
+          Using{' '}
+          <a href="https://any-llm.ai" target="_blank" rel="noopener noreferrer" className="underline font-medium">
+            any-llm.ai
+          </a>
+          {' '}for key management and access
+        </p>
+      )}
     </div>
   );
 }
 
 interface ProfileSubTabProps {
   profile: Profile | null;
-  reasoningEffort: string;
-  onChangeReasoningEffort: (value: string) => void;
-  isPremium?: boolean;
 }
 
-function ProfileSubTab({ profile, reasoningEffort, onChangeReasoningEffort, isPremium }: ProfileSubTabProps) {
-  return (
-    <div>
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-1">Profile</h2>
-        <p className="text-muted-foreground">Profile settings.</p>
-      </div>
-
-      {!isPremium && (
-        <Card>
-          <CardContent className="pt-6">
-            <h3 className="text-sm font-semibold mb-3">Default Reasoning Effort</h3>
-            <p className="text-sm text-muted-foreground mb-3">Controls how much effort the LLM spends thinking before responding. Higher effort may produce better results but takes longer.</p>
-            <Select value={reasoningEffort} onChange={(e: ChangeEvent<HTMLSelectElement>) => onChangeReasoningEffort(e.target.value)}>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </Select>
-          </CardContent>
-        </Card>
-      )}
-
-      {!profile && (
-        <p className="text-sm text-muted-foreground italic mt-4">No profile loaded.</p>
-      )}
-    </div>
-  );
+function ProfileSubTab({ profile }: ProfileSubTabProps) {
+  if (!profile) {
+    return <p className="text-sm text-muted-foreground italic">No profile loaded.</p>;
+  }
+  return null;
 }
 
 interface SystemPromptsTabProps {
@@ -515,8 +517,7 @@ function AccountTab() {
 }
 
 const SETTINGS_TABS = [
-  { key: 'profile', label: 'Profile' },
-  { key: 'prompts', label: 'System Prompts' },
+  { key: 'profile', label: 'Profile & Prompts' },
   { key: 'providers', label: 'LLM Providers' },
 ] as const;
 
@@ -569,11 +570,10 @@ export default function SettingsPage({ provider, model, savedModels, onSave, onA
       {activeTab === 'account' && isPremium && <AccountTab />}
 
       {activeTab === 'profile' && (
-        <ProfileSubTab profile={profile} reasoningEffort={isPremium ? '' : reasoningEffort} onChangeReasoningEffort={onChangeReasoningEffort} isPremium={isPremium} />
-      )}
-
-      {activeTab === 'prompts' && (
-        <SystemPromptsTab profile={profile} onSaveProfile={onSaveProfile} />
+        <div className="flex flex-col gap-8">
+          <ProfileSubTab profile={profile} />
+          <SystemPromptsTab profile={profile} onSaveProfile={onSaveProfile} />
+        </div>
       )}
 
       {activeTab === 'providers' && !isPremium && (
@@ -587,6 +587,8 @@ export default function SettingsPage({ provider, model, savedModels, onSave, onA
           connections={connections}
           onAddConnection={onAddConnection}
           onRemoveConnection={onRemoveConnection}
+          reasoningEffort={reasoningEffort}
+          onChangeReasoningEffort={onChangeReasoningEffort}
         />
       )}
     </div>

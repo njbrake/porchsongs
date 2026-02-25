@@ -6,6 +6,7 @@ export interface Profile {
   is_default: boolean;
   system_prompt_parse?: string | null;
   system_prompt_chat?: string | null;
+  platform_key_disabled?: boolean;
   created_at: string;
 }
 
@@ -87,6 +88,11 @@ export interface ProviderConnection {
 export interface Provider {
   name: string;
   local: boolean;
+}
+
+export interface ProvidersResponse {
+  providers: Provider[];
+  platform_enabled: boolean;
 }
 
 // Auth types

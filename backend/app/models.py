@@ -49,6 +49,7 @@ class Profile(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
     system_prompt_parse: Mapped[str | None] = mapped_column(Text, nullable=True)
     system_prompt_chat: Mapped[str | None] = mapped_column(Text, nullable=True)
+    platform_key_disabled: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(UTC),

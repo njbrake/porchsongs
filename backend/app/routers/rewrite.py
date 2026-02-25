@@ -414,8 +414,11 @@ async def chat_stream(
 @router.get("/providers")
 async def list_providers(
     current_user: User = Depends(get_current_user),
-) -> list[dict[str, str | bool]]:
-    return llm_service.get_configured_providers()
+) -> dict[str, object]:
+    return {
+        "providers": llm_service.get_configured_providers(),
+        "platform_enabled": llm_service.is_platform_enabled(),
+    }
 
 
 @router.get("/providers/{provider}/models")

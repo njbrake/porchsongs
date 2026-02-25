@@ -11,6 +11,8 @@ const alertVariants = cva(
           'bg-warning-bg border border-warning-border text-warning-text flex-col',
         error:
           'bg-error-bg border border-error-border text-error-text justify-between items-center',
+        info:
+          'bg-info-bg border border-info-border text-info-text flex-col',
       },
     },
     defaultVariants: {

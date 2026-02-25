@@ -21,12 +21,14 @@ class ProfileCreate(BaseModel):
     is_default: bool = False
     system_prompt_parse: str | None = None
     system_prompt_chat: str | None = None
+    platform_key_disabled: bool = False
 
 
 class ProfileUpdate(BaseModel):
     is_default: bool | None = None
     system_prompt_parse: str | None = None
     system_prompt_chat: str | None = None
+    platform_key_disabled: bool | None = None
 
 
 class ProfileOut(BaseModel):
@@ -35,6 +37,7 @@ class ProfileOut(BaseModel):
     is_default: bool
     system_prompt_parse: str | None = None
     system_prompt_chat: str | None = None
+    platform_key_disabled: bool = False
     created_at: datetime
     updated_at: datetime
 

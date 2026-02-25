@@ -1,5 +1,4 @@
 import { useParams, Link } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
 import { HOWTO_ARTICLES } from '@/data/howto-articles';
 
 export default function HowToArticle() {
@@ -20,12 +19,10 @@ export default function HowToArticle() {
 
   return (
     <>
-      <Helmet>
-        <title>{article.title} — porchsongs</title>
-        <meta name="description" content={article.excerpt} />
-        <meta property="og:title" content={`${article.title} — porchsongs`} />
-        <meta property="og:description" content={article.excerpt} />
-      </Helmet>
+      <title>{article.title} — porchsongs</title>
+      <meta name="description" content={article.excerpt} />
+      <meta property="og:title" content={`${article.title} — porchsongs`} />
+      <meta property="og:description" content={article.excerpt} />
 
       <article className="py-16 sm:py-24 px-4 max-w-3xl mx-auto">
         <Link to="/how-to" className="text-sm text-primary hover:underline mb-6 inline-block">

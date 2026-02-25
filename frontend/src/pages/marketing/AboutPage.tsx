@@ -1,14 +1,10 @@
-import { Helmet } from 'react-helmet-async';
-
 export default function AboutPage() {
   return (
     <>
-      <Helmet>
-        <title>About — porchsongs</title>
-        <meta name="description" content="Learn about porchsongs — an AI-powered tool for rewriting song lyrics to match your vocal range and style." />
-        <meta property="og:title" content="About — porchsongs" />
-        <meta property="og:description" content="AI-powered song rewriting for musicians and worship leaders." />
-      </Helmet>
+      <title>About — porchsongs</title>
+      <meta name="description" content="Learn about porchsongs — an AI-powered tool for rewriting song lyrics to match your vocal range and style." />
+      <meta property="og:title" content="About — porchsongs" />
+      <meta property="og:description" content="AI-powered song rewriting for musicians and worship leaders." />
 
       <section className="py-16 sm:py-24 px-4 max-w-3xl mx-auto">
         <h1 className="text-3xl sm:text-4xl font-bold mb-6">[PLACEHOLDER] About porchsongs</h1>

@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
 
 const PLANS = [
   {
@@ -35,12 +34,10 @@ const PLANS = [
 export default function PricingPage() {
   return (
     <>
-      <Helmet>
-        <title>Pricing — porchsongs</title>
-        <meta name="description" content="Simple pricing for porchsongs. Free plan with 10 rewrites/mo. Pro plan with 200 rewrites/mo for $8/mo." />
-        <meta property="og:title" content="Pricing — porchsongs" />
-        <meta property="og:description" content="Simple pricing for song rewriting. Start free, upgrade when you need more." />
-      </Helmet>
+      <title>Pricing — porchsongs</title>
+      <meta name="description" content="Simple pricing for porchsongs. Free plan with 10 rewrites/mo. Pro plan with 200 rewrites/mo for $8/mo." />
+      <meta property="og:title" content="Pricing — porchsongs" />
+      <meta property="og:description" content="Simple pricing for song rewriting. Start free, upgrade when you need more." />
 
       <section className="py-16 sm:py-24 px-4 text-center">
         <h1 className="text-3xl sm:text-4xl font-bold mb-3">[PLACEHOLDER] Simple, transparent pricing</h1>

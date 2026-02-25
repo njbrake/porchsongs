@@ -1,16 +1,13 @@
 import { Link } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
 
 export default function HomePage() {
   return (
     <>
-      <Helmet>
-        <title>porchsongs — Make every song yours</title>
-        <meta name="description" content="Rewrite song lyrics to match your vocal range and style. AI-powered chord transposition and lyric adaptation." />
-        <meta property="og:title" content="porchsongs — Make every song yours" />
-        <meta property="og:description" content="Rewrite song lyrics to match your vocal range and style." />
-        <meta property="og:type" content="website" />
-      </Helmet>
+      <title>porchsongs — Make every song yours</title>
+      <meta name="description" content="Rewrite song lyrics to match your vocal range and style. AI-powered chord transposition and lyric adaptation." />
+      <meta property="og:title" content="porchsongs — Make every song yours" />
+      <meta property="og:description" content="Rewrite song lyrics to match your vocal range and style." />
+      <meta property="og:type" content="website" />
 
       {/* Hero */}
       <section className="py-16 sm:py-24 px-4 text-center">

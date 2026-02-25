@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import ChatPanel from '@/components/ChatPanel';
 import type { ChatMessage } from '@/types';
 
@@ -46,5 +46,37 @@ describe('ChatPanel', () => {
     ];
     render(<ChatPanel {...defaults} messages={messages} />);
     expect(screen.getByText('Pasted lyrics...')).toBeInTheDocument();
+  });
+
+  it('renders image thumbnails in user message bubbles', () => {
+    const messages: ChatMessage[] = [
+      { role: 'user', content: 'Check this chord chart', images: ['data:image/png;base64,abc123'] },
+    ];
+    render(<ChatPanel {...defaults} messages={messages} />);
+    const img = screen.getByAltText('Attached');
+    expect(img).toBeInTheDocument();
+    expect(img).toHaveAttribute('src', 'data:image/png;base64,abc123');
+  });
+
+  it('shows drag-over visual indicator when dragging files', () => {
+    render(<ChatPanel {...defaults} />);
+    const inputRow = screen.getByPlaceholderText(/Tell the AI/).closest('div')!;
+
+    fireEvent.dragEnter(inputRow, { dataTransfer: { types: ['Files'], files: [] } });
+
+    expect(screen.getByPlaceholderText(/Drop image here/)).toBeInTheDocument();
+  });
+
+  it('renders multiple image thumbnails on a single message', () => {
+    const messages: ChatMessage[] = [
+      {
+        role: 'user',
+        content: 'Two images',
+        images: ['data:image/png;base64,img1', 'data:image/jpeg;base64,img2'],
+      },
+    ];
+    render(<ChatPanel {...defaults} messages={messages} />);
+    const imgs = screen.getAllByAltText('Attached');
+    expect(imgs).toHaveLength(2);
   });
 });

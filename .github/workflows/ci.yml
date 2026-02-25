@@ -107,7 +107,7 @@ jobs:
 
       - name: Install Playwright dependencies
         run: |
-          cd e2e && npm ci
+          npm ci
           npx playwright install --with-deps chromium
 
       - name: Run E2E tests

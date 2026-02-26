@@ -2,7 +2,6 @@ export { isPremiumAuth } from './auth';
 export {
   getPremiumRouteElements,
   getDefaultSettingsTab,
-  getCatchAllRedirect,
   shouldRedirectRootToApp,
 } from './routes';
 export {

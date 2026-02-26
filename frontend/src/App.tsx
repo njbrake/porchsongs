@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import Spinner from '@/components/ui/spinner';
 import LoginPage from '@/components/LoginPage';
+import NotFoundPage from '@/components/NotFoundPage';
 import AppShell from '@/layouts/AppShell';
 import RewriteTab from '@/components/RewriteTab';
 import LibraryTab from '@/components/LibraryTab';
@@ -9,14 +10,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   getPremiumRouteElements,
   getDefaultSettingsTab,
-  getCatchAllRedirect,
   shouldRedirectRootToApp,
 } from '@/extensions';
-
-function CatchAll() {
-  const { isPremium } = useAuth();
-  return <Navigate to={getCatchAllRedirect(isPremium)} replace />;
-}
 
 /** Redirects legacy routes like /library/:id to /app/library/:id */
 function LegacyRedirect({ prefix }: { prefix: string }) {
@@ -65,8 +60,8 @@ export default function App() {
       <Route path="/settings" element={<Navigate to="/app/settings" replace />} />
       <Route path="/settings/:tab" element={<LegacyRedirect prefix="/app/settings" />} />
 
-      {/* Catch-all */}
-      <Route path="*" element={<CatchAll />} />
+      {/* 404 */}
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }

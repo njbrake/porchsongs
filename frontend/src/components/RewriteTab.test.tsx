@@ -14,11 +14,16 @@ vi.mock('react-router-dom', async () => {
 vi.mock('@/api', () => ({
   default: {
     parseStream: vi.fn(),
+    getChatHistory: vi.fn().mockResolvedValue([]),
+    saveSong: vi.fn(),
+    updateSong: vi.fn(),
+    deleteSong: vi.fn(),
   },
   STORAGE_KEYS: {
     DRAFT_INPUT: 'test_draft_input',
     DRAFT_INSTRUCTION: 'test_draft_instruction',
     SPLIT_PERCENT: 'test_split_pct',
+    CURRENT_SONG_ID: 'test_current_song_id',
   },
 }));
 
@@ -50,6 +55,53 @@ describe('RewriteTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
+  });
+
+  it('uses flex layout instead of hardcoded height in workshop mode', () => {
+    // ResizableColumns uses window.matchMedia
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
+    const props = makeProps({
+      rewriteResult: {
+        original_content: 'Hello World',
+        rewritten_content: '[G]Hello [C]World',
+        changes_summary: 'Added chords',
+      },
+      rewriteMeta: { profile_id: 1, title: 'Test', artist: 'Artist' },
+      currentSongId: 42,
+    });
+
+    const { container } = render(<RewriteTab {...props} />);
+
+    // The outer wrapper should use flex layout to fill remaining viewport height
+    const outerDiv = container.firstElementChild as HTMLElement;
+    expect(outerDiv.className).toContain('flex-1');
+    expect(outerDiv.className).toContain('min-h-0');
+    expect(outerDiv.className).toContain('flex-col');
+
+    // Should NOT contain any hardcoded calc(100dvh-...) heights
+    expect(container.innerHTML).not.toMatch(/calc\(100dvh/);
+  });
+
+  it('does not use flex fill in input mode', () => {
+    const props = makeProps();
+    const { container } = render(<RewriteTab {...props} />);
+
+    // In input mode, the outer wrapper should NOT use flex-1 layout
+    const outerDiv = container.firstElementChild as HTMLElement;
+    expect(outerDiv.className).not.toContain('flex-1');
   });
 
   it('aborts in-flight parse when unmounted', async () => {

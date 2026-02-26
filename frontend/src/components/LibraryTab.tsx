@@ -302,7 +302,17 @@ type DialogState =
   | { kind: 'delete'; songId: number }
   | { kind: 'bulkDelete'; count: number }
   | { kind: 'rename'; song: Song }
-  | { kind: 'newFolder'; song?: Song };
+  | { kind: 'newFolder'; song?: Song }
+  | { kind: 'renameFolder'; folder: string }
+  | { kind: 'deleteFolder'; folder: string };
+
+const SONGS_PER_PAGE = 20;
+
+export function lyricsPreview(content: string): string {
+  const lines = content.split('\n').filter(l => l.trim() && !/^\[.*\]$/.test(l.trim()));
+  const preview = lines.slice(0, 2).join(' \u2022 ');
+  return preview.length > 100 ? preview.slice(0, 100) + '\u2026' : preview;
+}
 
 export default function LibraryTab() {
   const ctx = useOutletContext<AppShellContext>();
@@ -324,6 +334,7 @@ export default function LibraryTab() {
   const selectMode = selectedIds.size > 0;
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [page, setPage] = useState(0);
   const [dialogState, setDialogState] = useState<DialogState>({ kind: 'none' });
 
   useEffect(() => {
@@ -359,6 +370,9 @@ export default function LibraryTab() {
     return result;
   }, [songs, searchQuery, activeFolder]);
 
+  // Reset page when filters/sorting change
+  useEffect(() => { setPage(0); }, [searchQuery, activeFolder, sortKey, sortDir]);
+
   const sortedSongs = useMemo(() => {
     const sorted = [...filteredSongs].sort((a, b) => {
       let cmp = 0;
@@ -381,6 +395,9 @@ export default function LibraryTab() {
     });
     return sorted;
   }, [filteredSongs, sortKey, sortDir]);
+
+  const totalPages = Math.ceil(sortedSongs.length / SONGS_PER_PAGE);
+  const pagedSongs = sortedSongs.slice(page * SONGS_PER_PAGE, (page + 1) * SONGS_PER_PAGE);
 
   useEffect(() => {
     if (initialSongId != null && loaded) {
@@ -511,6 +528,38 @@ export default function LibraryTab() {
     setDialogState({ kind: 'newFolder', song: draggingSongId ? songs.find(s => s.id === draggingSongId) : undefined });
   };
 
+  const handleRenameFolderRequest = (folder: string) => {
+    setDialogState({ kind: 'renameFolder', folder });
+  };
+
+  const handleRenameFolderConfirmed = async (oldName: string, values: Record<string, string>) => {
+    const newName = (values.name ?? '').trim();
+    if (!newName || newName === oldName) return;
+    try {
+      await api.renameFolder(oldName, newName);
+      setSongs(prev => prev.map(s => s.folder === oldName ? { ...s, folder: newName } : s));
+      setLocalFolders(prev => prev.map(f => f === oldName ? newName : f));
+      if (activeFolder === oldName) setActiveFolder(newName);
+    } catch (err) {
+      toast.error('Failed to rename folder: ' + (err as Error).message);
+    }
+  };
+
+  const handleDeleteFolderRequest = (folder: string) => {
+    setDialogState({ kind: 'deleteFolder', folder });
+  };
+
+  const handleDeleteFolderConfirmed = async (folder: string) => {
+    try {
+      await api.deleteFolder(folder);
+      setSongs(prev => prev.map(s => s.folder === folder ? { ...s, folder: null } : s));
+      setLocalFolders(prev => prev.filter(f => f !== folder));
+      if (activeFolder === folder) setActiveFolder(null);
+    } catch (err) {
+      toast.error('Failed to delete folder: ' + (err as Error).message);
+    }
+  };
+
   const handleNewFolderConfirmed = (values: Record<string, string>, song?: Song) => {
     const trimmed = (values.name ?? '').trim();
     if (!trimmed) return;
@@ -595,6 +644,11 @@ export default function LibraryTab() {
   const newFolderFields: PromptField[] = useMemo(() => [
     { key: 'name', label: 'Folder name', placeholder: 'Enter folder name' },
   ], []);
+
+  const renameFolderFields: PromptField[] = useMemo(() => {
+    if (dialogState.kind !== 'renameFolder') return [];
+    return [{ key: 'name', label: 'Folder name', defaultValue: dialogState.folder, placeholder: 'New folder name' }];
+  }, [dialogState]);
 
   // --- Performance View (single song) ---
   if (viewingSong) {
@@ -681,8 +735,14 @@ export default function LibraryTab() {
   // --- Song List ---
   if (songs.length === 0) {
     return (
-      <div className="text-center py-16 px-8 text-muted-foreground">
-        <p>No saved songs yet. Rewrite a song and save it!</p>
+      <div className="text-center py-16 px-8">
+        <h3 className="text-lg font-semibold text-foreground mb-2">Your library is empty</h3>
+        <p className="text-muted-foreground mb-4">
+          Songs you rewrite will appear here. Head to the Rewrite tab to get started.
+        </p>
+        <Button variant="default" onClick={() => navigate('/app/rewrite')}>
+          Go to Rewrite
+        </Button>
       </div>
     );
   }
@@ -733,20 +793,35 @@ export default function LibraryTab() {
             </button>
           )}
           {folders.map(f => (
-            <button
-              key={f}
-              className={cn(
-                FOLDER_PILL_CLASS,
-                activeFolder === f && FOLDER_PILL_ACTIVE,
-                dragOverFolder === f && 'bg-primary-light border-primary text-primary shadow-[0_0_0_2px_var(--color-primary-light)]'
-              )}
-              onClick={() => setActiveFolder(f)}
-              onDragOver={(e) => handleFolderDragOver(e, f)}
-              onDragLeave={handleFolderDragLeave}
-              onDrop={(e) => handleFolderDrop(e, f)}
-            >
-              {f}
-            </button>
+            <DropdownMenu key={f}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={cn(
+                    FOLDER_PILL_CLASS,
+                    activeFolder === f && FOLDER_PILL_ACTIVE,
+                    dragOverFolder === f && 'bg-primary-light border-primary text-primary shadow-[0_0_0_2px_var(--color-primary-light)]'
+                  )}
+                  onClick={() => setActiveFolder(f)}
+                  onDragOver={(e) => handleFolderDragOver(e, f)}
+                  onDragLeave={handleFolderDragLeave}
+                  onDrop={(e) => handleFolderDrop(e, f)}
+                  onContextMenu={(e) => { e.preventDefault(); }}
+                >
+                  {f}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => handleRenameFolderRequest(f)}>
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-danger hover:!bg-danger-light"
+                  onClick={() => handleDeleteFolderRequest(f)}
+                >
+                  Delete folder
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ))}
           {hasFolders && hasUnfiled && (
             <button
@@ -806,10 +881,11 @@ export default function LibraryTab() {
       )}
 
       <div className="flex flex-col gap-3">
-        {sortedSongs.map(song => {
+        {pagedSongs.map(song => {
           const date = new Date(song.created_at).toLocaleDateString();
           const artist = song.artist ? ` by ${song.artist}` : '';
           const isSelected = selectedIds.has(song.id);
+          const preview = lyricsPreview(song.rewritten_content);
 
           return (
             <Card
@@ -839,6 +915,9 @@ export default function LibraryTab() {
                     <EditableTitle song={song} onSaved={handleSongUpdated} />
                     {artist}
                   </h3>
+                  {preview && (
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">{preview}</p>
+                  )}
                   <span className="text-xs text-muted-foreground">
                     {date}
                     {song.current_version > 1 ? ` \u00B7 v${song.current_version}` : ''}
@@ -863,13 +942,39 @@ export default function LibraryTab() {
         {sortedSongs.length === 0 && songs.length > 0 && (
           <div className="text-center py-16 px-8 text-muted-foreground">
             {activeFolder && !searchQuery ? (
-              <p>No songs in this folder yet. Use the &hellip; menu on a song to move it here, or drag songs onto the folder tab.</p>
+              <p>No songs in this folder yet. Drag songs onto the folder tab or use the song menu to move them here.</p>
             ) : (
               <p>No songs match your search.</p>
             )}
           </div>
         )}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 pt-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={page === 0}
+            onClick={() => setPage(p => p - 1)}
+            aria-label="Previous page"
+          >
+            &larr; Prev
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {page + 1} of {totalPages}
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={page >= totalPages - 1}
+            onClick={() => setPage(p => p + 1)}
+            aria-label="Next page"
+          >
+            Next &rarr;
+          </Button>
+        </div>
+      )}
 
       <ConfirmDialog
         open={dialogState.kind === 'delete'}
@@ -912,6 +1017,29 @@ export default function LibraryTab() {
         confirmLabel="Create"
         onConfirm={(values) => {
           handleNewFolderConfirmed(values, dialogState.kind === 'newFolder' ? dialogState.song : undefined);
+        }}
+      />
+
+      <PromptDialog
+        open={dialogState.kind === 'renameFolder'}
+        onOpenChange={(open) => { if (!open) setDialogState({ kind: 'none' }); }}
+        title="Rename Folder"
+        fields={renameFolderFields}
+        confirmLabel="Rename"
+        onConfirm={(values) => {
+          if (dialogState.kind === 'renameFolder') handleRenameFolderConfirmed(dialogState.folder, values);
+        }}
+      />
+
+      <ConfirmDialog
+        open={dialogState.kind === 'deleteFolder'}
+        onOpenChange={(open) => { if (!open) setDialogState({ kind: 'none' }); }}
+        title="Delete Folder"
+        description={dialogState.kind === 'deleteFolder' ? `Delete the folder "${dialogState.folder}"? Songs in this folder will be moved to Unfiled.` : ''}
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          if (dialogState.kind === 'deleteFolder') handleDeleteFolderConfirmed(dialogState.folder);
         }}
       />
     </div>

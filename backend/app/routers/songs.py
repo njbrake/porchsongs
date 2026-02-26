@@ -16,6 +16,7 @@ from ..models import (
 from ..schemas import (
     ChatMessageCreate,
     ChatMessageOut,
+    FolderRename,
     OkResponse,
     SongCreate,
     SongOut,
@@ -62,6 +63,33 @@ async def list_folders(
         .all()
     )
     return sorted(row[0] for row in rows)
+
+
+@router.put("/songs/folders/{folder_name}", response_model=OkResponse)
+async def rename_folder(
+    folder_name: str,
+    data: FolderRename,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> OkResponse:
+    db.query(Song).filter(Song.user_id == current_user.id, Song.folder == folder_name).update(
+        {Song.folder: data.name}
+    )
+    db.commit()
+    return OkResponse(ok=True)
+
+
+@router.delete("/songs/folders/{folder_name}", response_model=OkResponse)
+async def delete_folder(
+    folder_name: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> OkResponse:
+    db.query(Song).filter(Song.user_id == current_user.id, Song.folder == folder_name).update(
+        {Song.folder: None}
+    )
+    db.commit()
+    return OkResponse(ok=True)
 
 
 @router.get("/songs/{song_id}", response_model=SongOut)

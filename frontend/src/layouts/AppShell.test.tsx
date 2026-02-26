@@ -59,4 +59,13 @@ describe('AppShell layout', () => {
     expect(wrapper.className).toContain('top-0');
     expect(wrapper.className).toContain('z-50');
   });
+
+  it('renders footer with GitHub link', () => {
+    renderWithRouter(<AppShell />, { route: '/app/rewrite' });
+
+    const link = screen.getByRole('link', { name: 'GitHub' });
+    expect(link).toHaveAttribute('href', 'https://github.com/njbrake/porchsongs');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(screen.getByText(/Made with/)).toBeInTheDocument();
+  });
 });

@@ -3,6 +3,12 @@ import { toast } from 'sonner';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { copyToClipboard as copyText } from '@/lib/utils';
 
 function copyToClipboard(text: string) {
@@ -38,7 +44,7 @@ export default function ComparisonView({
           </Button>
         </CardHeader>
         <Textarea
-          className="flex-1 border-0 rounded-none p-3 sm:p-4 text-xs sm:text-code bg-transparent resize-none overflow-y-auto cursor-text focus:bg-focus-bg"
+          className="flex-1 border-0 rounded-none p-3 sm:p-4 text-xs sm:text-code bg-transparent resize-none overflow-y-auto cursor-text"
           value={rewritten}
           onChange={e => onRewrittenChange(e.target.value)}
           onBlur={onRewrittenBlur}
@@ -55,17 +61,17 @@ export default function ComparisonView({
         {showOriginal ? 'Hide Original' : 'Show Original'}
       </Button>
 
-      {showOriginal && (
-        <Card className="mt-2 opacity-80">
-          <CardHeader className="flex items-center justify-between">
-            <span>Original</span>
+      <Dialog open={showOriginal} onOpenChange={setShowOriginal}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Original</DialogTitle>
             <Button variant="secondary" size="sm" onClick={() => copyToClipboard(original)}>
               Copy
             </Button>
-          </CardHeader>
-          <pre className="p-3 sm:p-4 font-mono text-xs sm:text-code leading-relaxed whitespace-pre-wrap break-words overflow-x-auto max-h-[600px] overflow-y-auto">{original}</pre>
-        </Card>
-      )}
+          </DialogHeader>
+          <pre className="p-3 sm:p-4 font-mono text-xs sm:text-code leading-relaxed whitespace-pre-wrap break-words overflow-y-auto flex-1 min-h-0">{original}</pre>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

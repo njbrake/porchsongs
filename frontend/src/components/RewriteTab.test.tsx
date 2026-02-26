@@ -27,8 +27,11 @@ vi.mock('@/api', () => ({
 vi.mock('@/components/ChatPanel', () => ({ default: () => <div data-testid="chat-panel" /> }));
 vi.mock('@/components/ComparisonView', () => ({ default: () => <div data-testid="comparison-view" /> }));
 vi.mock('@/components/ui/resizable-columns', () => ({
-  default: ({ className }: { className?: string }) => (
-    <div data-testid="resizable-columns" className={className} />
+  default: ({ className, left, right }: { className?: string; left?: React.ReactNode; right?: React.ReactNode }) => (
+    <div data-testid="resizable-columns" className={className}>
+      {left}
+      {right}
+    </div>
   ),
 }));
 
@@ -115,5 +118,36 @@ describe('RewriteTab', () => {
     // The ResizableColumns container should use flex-1 to fill remaining space
     const resizable = screen.getByTestId('resizable-columns');
     expect(resizable.className).toContain('flex-1');
+  });
+
+  it('collapses Share and Scrap into overflow menu on mobile in workshopping state', () => {
+    const props = makeProps({
+      rewriteResult: {
+        original_content: '[C]Hello [G]World',
+        rewritten_content: '[C]Hello [G]World',
+        changes_summary: 'No changes',
+      },
+      rewriteMeta: { title: 'Test', artist: 'Test' },
+      currentSongId: 1,
+    });
+    render(<RewriteTab {...props} />);
+
+    // "New Song" and "Save" should be always-visible buttons (no hidden class)
+    const newSongBtn = screen.getByRole('button', { name: 'New Song' });
+    const saveBtn = screen.getByRole('button', { name: 'Save' });
+    expect(newSongBtn.className).not.toContain('hidden');
+    expect(saveBtn.className).not.toContain('hidden');
+
+    // "Share" and "Scrap This" buttons should be hidden on mobile (have hidden md:inline-flex)
+    const shareBtn = screen.getByRole('button', { name: 'Share' });
+    const scrapBtn = screen.getByRole('button', { name: 'Scrap This' });
+    expect(shareBtn.className).toContain('hidden');
+    expect(shareBtn.className).toContain('md:inline-flex');
+    expect(scrapBtn.className).toContain('hidden');
+    expect(scrapBtn.className).toContain('md:inline-flex');
+
+    // A mobile overflow trigger ("More actions") should exist with md:hidden
+    const overflowTrigger = screen.getByRole('button', { name: 'More actions' });
+    expect(overflowTrigger.className).toContain('md:hidden');
   });
 });

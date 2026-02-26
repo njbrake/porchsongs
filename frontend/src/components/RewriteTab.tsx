@@ -8,6 +8,13 @@ import ModelSelector from '@/components/ModelSelector';
 import ResizableColumns from '@/components/ui/resizable-columns';
 import ConfirmDialog from '@/components/ui/confirm-dialog';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
@@ -558,7 +565,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
               <>
                 {!isPremium && modelControls()}
 
-                <div className="flex gap-2 mb-2 flex-wrap">
+                <div className="flex gap-2 mb-2">
                   <Button variant="secondary" onClick={handleNewSong}>
                     New Song
                   </Button>
@@ -571,18 +578,43 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
                      saveStatus === 'saving' ? 'Saving...' : 'Save'}
                   </Button>
                   <Button
+                    className="hidden md:inline-flex"
                     variant="secondary"
                     onClick={handleShare}
                   >
                     Share
                   </Button>
                   <Button
+                    className="hidden md:inline-flex"
                     variant="danger-outline"
                     onClick={() => setScrapDialogOpen(true)}
                     disabled={!currentSongId}
                   >
                     Scrap This
                   </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        className="md:hidden bg-transparent border border-border rounded-md cursor-pointer text-xl leading-none px-2.5 py-2 text-muted-foreground tracking-wider min-h-[2.75rem] inline-flex items-center justify-center hover:bg-panel hover:text-foreground"
+                        aria-label="More actions"
+                      >
+                        &hellip;
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={handleShare}>
+                        Share
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-danger hover:!bg-danger-light"
+                        disabled={!currentSongId}
+                        onClick={() => setScrapDialogOpen(true)}
+                      >
+                        Scrap This
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
 
                 <ChatPanel

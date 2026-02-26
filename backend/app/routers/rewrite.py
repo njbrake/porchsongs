@@ -214,11 +214,14 @@ async def parse_stream(
     )
 
 
-def _extract_text(content: str | list[dict[str, object]]) -> str:
-    """Extract plain text from a multimodal content value."""
-    if isinstance(content, str):
-        return content
-    return " ".join(str(p["text"]) for p in content if p.get("type") == "text")
+def _deserialize_content(raw: str) -> str | list[dict[str, object]]:
+    """Deserialize a persisted content value back to its original form."""
+    if raw.startswith("["):
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return raw
 
 
 def _load_chat_messages(
@@ -234,7 +237,7 @@ def _load_chat_messages(
         .all()
     )
     history: list[dict[str, object]] = [
-        {"role": row.role, "content": row.content} for row in history_rows
+        {"role": row.role, "content": _deserialize_content(row.content)} for row in history_rows
     ]
     return history + [{"role": m.role, "content": m.content} for m in req_messages]
 
@@ -269,11 +272,12 @@ def _persist_chat_result(
 
     last_user_msg = req_messages[-1] if req_messages else None
     if last_user_msg and last_user_msg.role == "user":
+        content = last_user_msg.content
         db.add(
             ChatMessageModel(
                 song_id=song.id,
                 role="user",
-                content=_extract_text(last_user_msg.content),
+                content=json.dumps(content) if isinstance(content, list) else content,
                 is_note=False,
             )
         )

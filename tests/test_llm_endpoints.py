@@ -589,10 +589,10 @@ def test_chat_multimodal_content_passthrough(
 
 
 @patch("app.services.llm_service.acompletion")
-def test_chat_multimodal_persists_text_only(
+def test_chat_multimodal_display_text_only(
     mock_acompletion: MagicMock, client: TestClient
 ) -> None:
-    """When multimodal content is sent, only the text portion is persisted to DB."""
+    """Messages endpoint returns text-only display content for multimodal messages."""
     _, song = _make_profile_and_song(client)
 
     mock_acompletion.return_value = _fake_completion_response("I can see the chord chart.")
@@ -613,7 +613,7 @@ def test_chat_multimodal_persists_text_only(
 
     msgs = client.get(f"/api/songs/{song['id']}/messages").json()
     assert len(msgs) == 2
-    # The persisted user message should be text-only, no base64 image data
+    # Display endpoint extracts text portion only
     assert msgs[0]["role"] == "user"
     assert msgs[0]["content"] == "Describe this chord chart"
     assert "base64" not in msgs[0]["content"]
@@ -638,3 +638,82 @@ def test_chat_plain_string_still_works(mock_acompletion: MagicMock, client: Test
 
     msgs = client.get(f"/api/songs/{song['id']}/messages").json()
     assert msgs[0]["content"] == "Give me feedback"
+
+
+@patch("app.services.llm_service.acompletion")
+def test_chat_image_only_displays_placeholder(
+    mock_acompletion: MagicMock, client: TestClient
+) -> None:
+    """Image-only messages display as '[Image]' but full content is preserved for LLM."""
+    _, song = _make_profile_and_song(client)
+
+    mock_acompletion.return_value = _fake_completion_response("I can see the image.")
+
+    image_only_content = [
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc123"}},
+    ]
+
+    resp = client.post(
+        "/api/chat",
+        json={
+            "song_id": song["id"],
+            "messages": [{"role": "user", "content": image_only_content}],
+            **LLM_SETTINGS,
+        },
+    )
+    assert resp.status_code == 200
+
+    # Display endpoint shows placeholder
+    msgs = client.get(f"/api/songs/{song['id']}/messages").json()
+    assert len(msgs) == 2
+    assert msgs[0]["role"] == "user"
+    assert msgs[0]["content"] == "[Image]"
+
+
+@patch("app.services.llm_service.acompletion")
+def test_chat_after_image_preserves_multimodal_for_llm(
+    mock_acompletion: MagicMock, client: TestClient
+) -> None:
+    """Follow-up chat loads the full multimodal content (including image) for the LLM."""
+    _, song = _make_profile_and_song(client)
+
+    mock_acompletion.return_value = _fake_completion_response("I can see the image.")
+
+    image_content = [
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc123"}},
+    ]
+
+    # First chat: image-only
+    client.post(
+        "/api/chat",
+        json={
+            "song_id": song["id"],
+            "messages": [{"role": "user", "content": image_content}],
+            **LLM_SETTINGS,
+        },
+    )
+
+    # Second chat: text follow-up
+    mock_acompletion.return_value = _fake_completion_response("Here are some suggestions.")
+
+    resp = client.post(
+        "/api/chat",
+        json={
+            "song_id": song["id"],
+            "messages": [{"role": "user", "content": "Now improve the chorus"}],
+            **LLM_SETTINGS,
+        },
+    )
+    assert resp.status_code == 200
+
+    # Verify the LLM received the full multimodal content from history, not a placeholder
+    call_messages = (
+        mock_acompletion.call_args.kwargs.get("messages")
+        or mock_acompletion.call_args[1].get("messages")
+    )
+    user_msgs = [m for m in call_messages if m["role"] == "user"]
+    # First user message should be the deserialized multimodal content
+    assert isinstance(user_msgs[0]["content"], list)
+    assert user_msgs[0]["content"][0]["type"] == "image_url"
+    # Second user message is plain text
+    assert user_msgs[1]["content"] == "Now improve the chorus"

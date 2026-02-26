@@ -242,13 +242,15 @@ export default function AppShell() {
 
   return (
     <div className="flex flex-col h-dvh">
-      <Header
-        user={currentAuthUser}
-        authRequired={authConfig?.required ?? false}
-        onLogout={handleLogout}
-        isPremium={isPremium}
-      />
-      <Tabs />
+      <div className="sticky top-0 z-50 shrink-0">
+        <Header
+          user={currentAuthUser}
+          authRequired={authConfig?.required ?? false}
+          onLogout={handleLogout}
+          isPremium={isPremium}
+        />
+        <Tabs />
+      </div>
       <main className="flex-1 min-h-0 flex flex-col overflow-y-auto max-w-[1800px] w-full mx-auto px-2 sm:px-4 py-4">
         <Outlet context={ctx} />
       </main>

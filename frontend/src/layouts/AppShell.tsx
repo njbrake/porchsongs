@@ -242,13 +242,15 @@ export default function AppShell() {
 
   return (
     <>
-      <Header
-        user={currentAuthUser}
-        authRequired={authConfig?.required ?? false}
-        onLogout={handleLogout}
-        isPremium={isPremium}
-      />
-      <Tabs />
+      <div className="sticky top-0 z-40">
+        <Header
+          user={currentAuthUser}
+          authRequired={authConfig?.required ?? false}
+          onLogout={handleLogout}
+          isPremium={isPremium}
+        />
+        <Tabs />
+      </div>
       <main className="max-w-[1800px] mx-auto px-2 sm:px-4 py-4">
         <Outlet context={ctx} />
       </main>

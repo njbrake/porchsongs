@@ -207,26 +207,6 @@ class ChatResponse(BaseModel):
     usage: TokenUsage | None = None
 
 
-# --- Auth ---
-class LoginRequest(BaseModel):
-    password: str = ""
-
-
-class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    user: UserOut
-
-
-class RefreshRequest(BaseModel):
-    refresh_token: str
-
-
-class RefreshResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-
-
 # --- Generic response models for OpenAPI spec ---
 class OkResponse(BaseModel):
     ok: bool

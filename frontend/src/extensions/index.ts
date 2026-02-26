@@ -1,6 +1,7 @@
 export { isPremiumAuth } from './auth';
 export {
   getPremiumRouteElements,
+  getLoginPageElement,
   getDefaultSettingsTab,
   shouldRedirectRootToApp,
 } from './routes';
@@ -11,6 +12,7 @@ export {
 } from './settings';
 export type { ExtensionTab } from './settings';
 export {
+  tryRestoreSession,
   getSubscription,
   listPlans,
   createCheckout,

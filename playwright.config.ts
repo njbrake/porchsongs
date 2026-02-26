@@ -1,7 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const OSS_PORT = 8765;
-const PREMIUM_PORT = 8766;
 
 export default defineConfig({
   testDir: './e2e',
@@ -24,13 +23,6 @@ export default defineConfig({
         baseURL: `http://127.0.0.1:${OSS_PORT}`,
       },
     },
-    {
-      name: 'premium',
-      testDir: './e2e/premium',
-      use: {
-        baseURL: `http://127.0.0.1:${PREMIUM_PORT}`,
-      },
-    },
   ],
   webServer: [
     {
@@ -40,17 +32,6 @@ export default defineConfig({
       timeout: 30_000,
       env: {
         DATABASE_URL: 'sqlite:////tmp/e2e_oss.db',
-      },
-    },
-    {
-      command: `bash e2e/scripts/start-server.sh ${PREMIUM_PORT} "sqlite:////tmp/e2e_premium.db" APP_SECRET=test-password JWT_SECRET=e2e-test-secret`,
-      port: PREMIUM_PORT,
-      reuseExistingServer: !process.env.CI,
-      timeout: 30_000,
-      env: {
-        DATABASE_URL: 'sqlite:////tmp/e2e_premium.db',
-        APP_SECRET: 'test-password',
-        JWT_SECRET: 'e2e-test-secret',
       },
     },
   ],

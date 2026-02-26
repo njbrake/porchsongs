@@ -7,7 +7,7 @@ from ..models import User
 
 
 class AuthBackend(ABC):
-    """Abstract auth backend. OSS ships AppSecretBackend; premium plugins implement their own."""
+    """Abstract auth backend. Premium plugins implement their own."""
 
     @abstractmethod
     def get_auth_config(self) -> dict[str, Any]:

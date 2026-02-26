@@ -29,8 +29,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((config) => {
         setAuthConfig(config);
         if (!config.required) {
+          // OSS mode — no auth needed, immediately ready
           setAuthState('ready');
         } else {
+          // Premium mode — try to restore existing session
           api.tryRestoreSession().then((user) => {
             if (user) {
               setCurrentAuthUser(user);

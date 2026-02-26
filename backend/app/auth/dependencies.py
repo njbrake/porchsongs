@@ -1,42 +1,56 @@
-from fastapi import Depends, HTTPException, Request
+from datetime import UTC, datetime
+
+from fastapi import Depends
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..config import settings
 from ..database import get_db
-from ..models import User
-from .app_secret import AppSecretBackend
-from .loader import get_auth_backend
-from .tokens import decode_access_token
+from ..models import Profile, User
+
+LOCAL_EMAIL = "local@porchsongs.local"
+
+
+def _get_or_create_local_user(db: Session) -> User:
+    """Return the single local user, creating it on first access."""
+    user = db.query(User).filter(User.email == LOCAL_EMAIL).first()
+    if user:
+        return user
+    user = User(
+        email=LOCAL_EMAIL,
+        name="Local User",
+        role="admin",
+        is_active=True,
+        created_at=datetime.now(UTC),
+    )
+    db.add(user)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        user = db.query(User).filter(User.email == LOCAL_EMAIL).first()
+        if user:
+            return user
+        raise
+    db.refresh(user)
+    # Create a default profile for the new user
+    profile = Profile(
+        user_id=user.id,
+        is_default=True,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    db.add(profile)
+    db.commit()
+    return user
 
 
 def get_current_user(
-    request: Request,
     db: Session = Depends(get_db),
 ) -> User:
-    """Extract and validate the current user from the request.
+    """Return the local default user.
 
-    Special case: if auth_backend is app_secret and APP_SECRET is not set,
-    auto-return the local user (zero-config dev mode).
+    In OSS mode there is no authentication — every request is served by the
+    single local user.  When a premium plugin is loaded it overrides this
+    dependency with its own JWT-backed implementation.
     """
-    backend = get_auth_backend()
-
-    # Zero-config dev mode: no APP_SECRET set with app_secret backend
-    if isinstance(backend, AppSecretBackend) and not settings.app_secret:
-        return backend.get_local_user(db)
-
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
-
-    token = auth_header[7:]
-
-    try:
-        payload = decode_access_token(token)
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired token") from None
-
-    user_id = int(payload["sub"])
-    user = db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found or inactive")
-    return user
+    return _get_or_create_local_user(db)

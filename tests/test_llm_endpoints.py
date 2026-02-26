@@ -136,7 +136,9 @@ def test_parse_llm_error(mock_acompletion: MagicMock, client: TestClient) -> Non
         },
     )
     assert resp.status_code == 502
-    assert "LLM error" in resp.json()["detail"]
+    assert "Something went wrong" in resp.json()["detail"]
+    # Raw exception details should NOT leak to the client
+    assert "rate limit" not in resp.json()["detail"]
 
 
 # --- POST /api/chat ---

@@ -44,7 +44,12 @@ _PROVIDER_KEY_ENV_VARS: dict[str, str] = {
 
 
 def _format_llm_error(e: Exception, provider: str | None = None) -> str:
-    """Turn raw SDK errors into user-friendly messages with setup instructions."""
+    """Turn raw SDK errors into user-friendly messages with setup instructions.
+
+    Auth-related errors get a specific hint (these are operator-facing anyway).
+    All other errors return a generic message — the full details are logged
+    server-side so they don't leak to the frontend.
+    """
     msg = str(e).lower()
     if "api key" in msg or "apikey" in msg or "authentication" in msg or "unauthorized" in msg:
         env_var = _PROVIDER_KEY_ENV_VARS.get(provider or "")
@@ -58,7 +63,8 @@ def _format_llm_error(e: Exception, provider: str | None = None) -> str:
             f"No API key configured for {provider or 'this provider'}. "
             "Set the appropriate API key environment variable on the server and restart."
         )
-    return f"LLM error: {e}"
+    logger.exception("LLM call failed (provider=%s)", provider)
+    return "Something went wrong while processing your request. Please try again."
 
 
 T = TypeVar("T")

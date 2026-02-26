@@ -15,6 +15,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(String, default="user")  # "admin" or "user"
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     profiles: Mapped[list["Profile"]] = relationship("Profile", back_populates="user")
     songs: Mapped[list["Song"]] = relationship("Song", back_populates="user")

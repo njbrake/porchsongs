@@ -282,23 +282,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/songs/{song_id}/duplicate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Duplicate Song */
-        post: operations["duplicate_song_api_songs__song_id__duplicate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/songs/{song_id}/revisions": {
         parameters: {
             query?: never;
@@ -1746,37 +1729,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    duplicate_song_api_songs__song_id__duplicate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                song_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SongOut"];
                 };
             };
             /** @description Validation Error */

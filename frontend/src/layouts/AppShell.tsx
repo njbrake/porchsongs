@@ -241,7 +241,7 @@ export default function AppShell() {
   };
 
   return (
-    <>
+    <div className="flex flex-col h-dvh">
       <Header
         user={currentAuthUser}
         authRequired={authConfig?.required ?? false}
@@ -249,10 +249,10 @@ export default function AppShell() {
         isPremium={isPremium}
       />
       <Tabs />
-      <main className="max-w-[1800px] mx-auto px-2 sm:px-4 py-4">
+      <main className="flex-1 min-h-0 flex flex-col overflow-y-auto max-w-[1800px] w-full mx-auto px-2 sm:px-4 py-4">
         <Outlet context={ctx} />
       </main>
       <Toaster position="bottom-right" richColors />
-    </>
+    </div>
   );
 }

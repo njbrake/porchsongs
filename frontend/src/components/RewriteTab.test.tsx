@@ -19,7 +19,17 @@ vi.mock('@/api', () => ({
     DRAFT_INPUT: 'test_draft_input',
     DRAFT_INSTRUCTION: 'test_draft_instruction',
     SPLIT_PERCENT: 'test_split_pct',
+    CURRENT_SONG_ID: 'test_current_song_id',
   },
+}));
+
+// Mock heavy child components to isolate RewriteTab layout tests
+vi.mock('@/components/ChatPanel', () => ({ default: () => <div data-testid="chat-panel" /> }));
+vi.mock('@/components/ComparisonView', () => ({ default: () => <div data-testid="comparison-view" /> }));
+vi.mock('@/components/ui/resizable-columns', () => ({
+  default: ({ className }: { className?: string }) => (
+    <div data-testid="resizable-columns" className={className} />
+  ),
 }));
 
 import api from '@/api';
@@ -82,5 +92,28 @@ describe('RewriteTab', () => {
 
     // The abort signal should have fired
     expect(abortSpy).toHaveBeenCalled();
+  });
+
+  it('uses flex layout instead of hardcoded viewport-height offset in workshopping state', () => {
+    const props = makeProps({
+      rewriteResult: {
+        original_content: '[C]Hello [G]World',
+        rewritten_content: '[C]Hello [G]World',
+        changes_summary: 'No changes',
+      },
+      rewriteMeta: { title: 'Test', artist: 'Test' },
+      currentSongId: 1,
+    });
+    const { container } = render(<RewriteTab {...props} />);
+
+    // No element should use a calc-based viewport height (the old fragile pattern)
+    const allElements = container.querySelectorAll('*');
+    for (const el of allElements) {
+      expect(el.className).not.toMatch(/calc\(100dvh/);
+    }
+
+    // The ResizableColumns container should use flex-1 to fill remaining space
+    const resizable = screen.getByTestId('resizable-columns');
+    expect(resizable.className).toContain('flex-1');
   });
 });

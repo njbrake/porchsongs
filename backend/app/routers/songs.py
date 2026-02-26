@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -175,19 +177,48 @@ async def list_revisions(
     return revisions
 
 
+def _display_content(raw: str) -> str:
+    """Convert persisted content to display-friendly text.
+
+    Multimodal content is stored as a JSON array; extract the text portions
+    for display and use ``[Image]`` as a placeholder for image-only messages.
+    """
+    if raw.startswith("["):
+        try:
+            parts = json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            return raw
+        text = " ".join(str(p["text"]) for p in parts if p.get("type") == "text")
+        if not text and any(p.get("type") == "image_url" for p in parts):
+            return "[Image]"
+        return text or raw
+    return raw
+
+
 @router.get("/songs/{song_id}/messages", response_model=list[ChatMessageOut])
 async def list_messages(
     song_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[ChatMessage]:
+) -> list[ChatMessageOut]:
     get_user_song(db, current_user, song_id)
-    return (
+    rows = (
         db.query(ChatMessage)
         .filter(ChatMessage.song_id == song_id)
         .order_by(ChatMessage.created_at.asc())
         .all()
     )
+    return [
+        ChatMessageOut(
+            id=row.id,
+            song_id=row.song_id,
+            role=row.role,
+            content=_display_content(row.content),
+            is_note=row.is_note,
+            created_at=row.created_at,
+        )
+        for row in rows
+    ]
 
 
 @router.post("/songs/{song_id}/messages", response_model=list[ChatMessageOut], status_code=201)

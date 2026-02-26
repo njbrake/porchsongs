@@ -336,7 +336,13 @@ def _build_chat_kwargs(
 
     llm_messages: list[dict[str, object]] = [{"role": "system", "content": system_content}]
     for msg in messages:
-        llm_messages.append({"role": msg["role"], "content": msg["content"]})
+        content = msg["content"]
+        # Skip messages with empty content - LLM providers reject them.
+        if isinstance(content, str) and not content:
+            continue
+        if isinstance(content, list) and not content:
+            continue
+        llm_messages.append({"role": msg["role"], "content": content})
 
     kwargs: dict[str, object] = {
         "model": model,

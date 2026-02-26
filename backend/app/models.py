@@ -82,6 +82,11 @@ class Song(Base):
     status: Mapped[str] = mapped_column(String, default="draft")
     current_version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
 
     user: Mapped["User"] = relationship("User", back_populates="songs")
 

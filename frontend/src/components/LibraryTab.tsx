@@ -294,7 +294,7 @@ function SongMenu({ song, onDelete, onRename, onEdit, folders, onMoveToFolder, o
   );
 }
 
-type SortKey = 'date' | 'title' | 'artist';
+type SortKey = 'date' | 'modified' | 'title' | 'artist';
 type SortDir = 'asc' | 'desc';
 
 type DialogState =
@@ -368,6 +368,9 @@ export default function LibraryTab() {
           break;
         case 'artist':
           cmp = (a.artist || '').localeCompare(b.artist || '');
+          break;
+        case 'modified':
+          cmp = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
           break;
         case 'date':
         default:
@@ -702,7 +705,8 @@ export default function LibraryTab() {
             value={sortKey}
             onChange={(e) => setSortKey(e.target.value as SortKey)}
           >
-            <option value="date">Date</option>
+            <option value="date">Created</option>
+            <option value="modified">Modified</option>
             <option value="title">Title</option>
             <option value="artist">Artist</option>
           </Select>

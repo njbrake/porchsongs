@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { STORAGE_KEYS } from '@/api';
 import ComparisonView from '@/components/ComparisonView';
@@ -22,6 +22,7 @@ import Spinner from '@/components/ui/spinner';
 import StreamingPre from '@/components/ui/streaming-pre';
 import { Alert } from '@/components/ui/alert';
 import { cn, copyToClipboard } from '@/lib/utils';
+import { QuotaBanner, isQuotaError } from '@/extensions/quota';
 import type { AppShellContext } from '@/layouts/AppShell';
 import type { Profile, Song, RewriteResult, RewriteMeta, ChatMessage, LlmSettings, SavedModel, ParseResult } from '@/types';
 
@@ -417,9 +418,18 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
+      {isPremium && <QuotaBanner />}
+
       {error && (
         <Alert variant="error" className="mt-4 mb-4">
-          <span>{error}</span>
+          <div className="flex-1">
+            <span>{error}</span>
+            {isQuotaError(error) && (
+              <Link to="/app/settings/account" className="ml-2 font-semibold text-primary underline">
+                Upgrade your plan
+              </Link>
+            )}
+          </div>
           <Button variant="ghost" size="sm" className="text-error-text p-1 leading-none" onClick={() => setError(null)}>
             &times;
           </Button>

@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import Markdown from 'react-markdown';
 import { cn } from '@/lib/utils';
 import api from '@/api';
+import { isQuotaError } from '@/extensions/quota';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -387,9 +389,16 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
           <div key={i} className={cn('flex flex-col', msg.role === 'user' ? 'items-end' : 'items-start')}>
             <ChatMessageBubble msg={msg} isStreaming={streaming && i === messages.length - 1} />
             {lastFailedInput && i === messages.length - 1 && msg.role === 'assistant' && msg.content.startsWith('Error:') && (
-              <Button variant="secondary" size="sm" className="mt-1" onClick={handleRetry}>
-                Retry
-              </Button>
+              <div className="flex items-center gap-2 mt-1">
+                <Button variant="secondary" size="sm" onClick={handleRetry}>
+                  Retry
+                </Button>
+                {isQuotaError(msg.content) && (
+                  <Link to="/app/settings/account" className="text-sm font-semibold text-primary underline">
+                    Upgrade your plan
+                  </Link>
+                )}
+              </div>
             )}
           </div>
         ))}

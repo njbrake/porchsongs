@@ -41,6 +41,9 @@ export default function LoginPage() {
           <Button className="w-full mt-1" onClick={() => { window.location.href = '/api/auth/oauth/google'; }}>
             Sign in with Google
           </Button>
+          <a href="/" className="text-sm text-muted-foreground hover:text-foreground underline mt-2">
+            Back to homepage
+          </a>
         </Card>
       </div>
     );

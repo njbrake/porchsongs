@@ -9,14 +9,15 @@ vi.mock('@/api', () => ({
   },
 }));
 
+const mockHandleLogin = vi.fn();
+let mockAuthConfig: { method: string; required: boolean } = { method: 'password', required: true };
+
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
-    authConfig: { method: 'password', required: true },
+    authConfig: mockAuthConfig,
     handleLogin: mockHandleLogin,
   }),
 }));
-
-const mockHandleLogin = vi.fn();
 
 import api from '@/api';
 
@@ -24,6 +25,7 @@ describe('LoginPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    mockAuthConfig = { method: 'password', required: true };
   });
 
   it('renders the login form', () => {
@@ -60,5 +62,19 @@ describe('LoginPage', () => {
     await user.click(screen.getByText('Log In'));
 
     expect(screen.getByText('Wrong password. Please try again.')).toBeInTheDocument();
+  });
+
+  it('renders OAuth login with back-to-homepage link', () => {
+    mockAuthConfig = { method: 'oauth_google', required: true };
+    renderWithRouter(<LoginPage />);
+    expect(screen.getByText('Sign in with Google')).toBeInTheDocument();
+    const link = screen.getByText('Back to homepage');
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute('href', '/');
+  });
+
+  it('does not show back-to-homepage link for password login', () => {
+    renderWithRouter(<LoginPage />);
+    expect(screen.queryByText('Back to homepage')).not.toBeInTheDocument();
   });
 });

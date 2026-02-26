@@ -62,8 +62,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handleLogout = useCallback(() => {
     api.logout();
     setCurrentAuthUser(null);
-    setAuthState('login');
-  }, []);
+    if (isPremium) {
+      window.location.href = '/';
+    } else {
+      setAuthState('login');
+    }
+  }, [isPremium]);
 
   const handleLogin = useCallback((user: AuthUser) => {
     setCurrentAuthUser(user);

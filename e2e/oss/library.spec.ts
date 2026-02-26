@@ -10,7 +10,7 @@ test.describe('OSS Library', () => {
 
     // Should show the empty state message
     await expect(
-      page.getByText(/No saved songs yet/)
+      page.getByText(/Your library is empty/)
     ).toBeVisible({ timeout: 5_000 });
   });
 

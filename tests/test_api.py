@@ -157,6 +157,65 @@ def test_delete_song(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
+def test_rename_folder(client: TestClient) -> None:
+    profile = client.post("/api/profiles", json={}).json()
+    # Create two songs in "Rock" folder
+    for title in ("Song A", "Song B"):
+        client.post(
+            "/api/songs",
+            json={
+                "profile_id": profile["id"],
+                "title": title,
+                "original_content": "orig",
+                "rewritten_content": "rw",
+                "folder": "Rock",
+            },
+        )
+    # And one song in a different folder
+    client.post(
+        "/api/songs",
+        json={
+            "profile_id": profile["id"],
+            "title": "Song C",
+            "original_content": "orig",
+            "rewritten_content": "rw",
+            "folder": "Jazz",
+        },
+    )
+
+    resp = client.put("/api/songs/folders/Rock", json={"name": "Classic Rock"})
+    assert resp.status_code == 200
+
+    songs = client.get("/api/songs").json()
+    rock_songs = [s for s in songs if s["folder"] == "Classic Rock"]
+    jazz_songs = [s for s in songs if s["folder"] == "Jazz"]
+    assert len(rock_songs) == 2
+    assert len(jazz_songs) == 1  # unchanged
+
+
+def test_delete_folder(client: TestClient) -> None:
+    profile = client.post("/api/profiles", json={}).json()
+    client.post(
+        "/api/songs",
+        json={
+            "profile_id": profile["id"],
+            "title": "Song A",
+            "original_content": "orig",
+            "rewritten_content": "rw",
+            "folder": "Temp",
+        },
+    )
+
+    resp = client.delete("/api/songs/folders/Temp")
+    assert resp.status_code == 200
+
+    songs = client.get("/api/songs").json()
+    assert songs[0]["folder"] is None
+
+    folders = client.get("/api/songs/folders").json()
+    assert "Temp" not in folders
+
+
 def test_update_song_status(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     song = client.post(

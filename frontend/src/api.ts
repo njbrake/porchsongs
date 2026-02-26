@@ -208,6 +208,19 @@ const api = {
     if (error) _throwApiError(error, 'Failed to list songs');
     return data as Song[];
   },
+  renameFolder: async (oldName: string, newName: string) => {
+    const { error } = await client.PUT('/api/songs/folders/{folder_name}', {
+      params: { path: { folder_name: oldName } },
+      body: { name: newName },
+    });
+    if (error) _throwApiError(error, 'Failed to rename folder');
+  },
+  deleteFolder: async (folderName: string) => {
+    const { error } = await client.DELETE('/api/songs/folders/{folder_name}', {
+      params: { path: { folder_name: folderName } },
+    });
+    if (error) _throwApiError(error, 'Failed to delete folder');
+  },
   getSong: async (id: number) => {
     const { data, error } = await client.GET('/api/songs/{song_id}', {
       params: { path: { song_id: id } },

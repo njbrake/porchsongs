@@ -155,6 +155,10 @@ class SongUpdate(BaseModel):
     folder: str | None = None
 
 
+class FolderRename(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
 # --- Song Status ---
 class SongStatusUpdate(BaseModel):
     status: Literal["draft", "completed"]

@@ -22,7 +22,7 @@ import Spinner from '@/components/ui/spinner';
 import StreamingPre from '@/components/ui/streaming-pre';
 import { Alert } from '@/components/ui/alert';
 import { cn, copyToClipboard } from '@/lib/utils';
-import { QuotaBanner, isQuotaError } from '@/extensions/quota';
+import { QuotaBanner, OnboardingBanner, isQuotaError } from '@/extensions/quota';
 import type { AppShellContext } from '@/layouts/AppShell';
 import type { Profile, Song, RewriteResult, RewriteMeta, ChatMessage, LlmSettings, SavedModel, ParseResult } from '@/types';
 
@@ -440,6 +440,8 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
       {isInput && !loading && (
         <>
           {!isPremium && modelControls()}
+
+          <OnboardingBanner />
 
           <Card>
             <CardContent className="pt-6">

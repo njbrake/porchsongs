@@ -127,9 +127,6 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
   const isParsed = !!parseResult && !rewriteResult;
   const isWorkshopping = !!rewriteResult;
 
-  // Height for the two-pane layout: account for header + tabs + mobile pane toggle
-  const splitHeight = 'h-[calc(100dvh-11rem)] md:h-[calc(100dvh-7rem)]';
-
   const handleParse = async () => {
     const trimmedInput = input.trim();
     if (!trimmedInput) return;
@@ -412,7 +409,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
   );
 
   return (
-    <div>
+    <div className="flex flex-col flex-1 min-h-0">
       {error && (
         <Alert variant="error" className="mt-4 mb-4">
           <span>{error}</span>
@@ -488,11 +485,11 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
 
       {/* PARSED state */}
       {isParsed && (
-        <div className="mt-2">
+        <div className="flex flex-col flex-1 min-h-0 mt-2">
           {mobilePaneToggle}
 
           <ResizableColumns
-            className={splitHeight}
+            className="flex-1 min-h-0"
             columnClassName="flex-col min-h-0"
             mobilePane={mobilePane === 'chat' ? 'left' : 'right'}
             left={
@@ -550,11 +547,11 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
 
       {/* WORKSHOPPING state */}
       {isWorkshopping && (
-        <div className="mt-2">
+        <div className="flex flex-col flex-1 min-h-0 mt-2">
           {mobilePaneToggle}
 
           <ResizableColumns
-            className={splitHeight}
+            className="flex-1 min-h-0"
             columnClassName="flex-col min-h-0"
             mobilePane={mobilePane === 'chat' ? 'left' : 'right'}
             left={

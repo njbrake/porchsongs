@@ -1,6 +1,5 @@
 import type {
   AuthConfig,
-  AuthUser,
   ChatHistoryRow,
   ChatResult,
   ParseResult,
@@ -10,11 +9,9 @@ import type {
   SavedModel,
   Song,
   SongRevision,
-  TokenResponse,
 } from '@/types';
 import client, {
   getAccessToken,
-  getRefreshToken,
   setAccessToken,
   setRefreshToken,
   tryRefresh,
@@ -154,58 +151,18 @@ async function getAuthConfig(): Promise<AuthConfig> {
   return res.json() as Promise<AuthConfig>;
 }
 
-async function login(password: string): Promise<TokenResponse> {
-  const res = await fetch('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(_parseApiError(body, 'Login failed'));
-  }
-  const data = (await res.json()) as TokenResponse;
-  setAccessToken(data.access_token);
-  setRefreshToken(data.refresh_token);
-  return data;
-}
-
-async function logout(): Promise<void> {
-  const refreshToken = getRefreshToken();
-  if (refreshToken) {
-    try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
-        body: JSON.stringify({ refresh_token: refreshToken }),
-      });
-    } catch {
-      // Best effort
-    }
-  }
+function logout(): void {
   setAccessToken(null);
   setRefreshToken(null);
 }
 
-async function tryRestoreSession(): Promise<AuthUser | null> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return null;
-
-  const refreshed = await tryRefresh();
-  if (!refreshed) return null;
-
-  try {
-    const { data, error } = await client.GET('/api/auth/me');
-    if (error) return null;
-    return data as AuthUser;
-  } catch {
-    return null;
-  }
+async function tryRestoreSession(): Promise<null> {
+  // OSS mode — no session to restore. Premium overrides this.
+  return null;
 }
 
 const api = {
   getAuthConfig,
-  login,
   logout,
   tryRestoreSession,
 

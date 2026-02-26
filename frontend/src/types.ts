@@ -7,8 +7,14 @@ export type Song = components['schemas']['SongOut'];
 export type SongRevision = components['schemas']['SongRevisionOut'];
 export type SavedModel = components['schemas']['ProfileModelOut'];
 export type ProviderConnection = components['schemas']['ProviderConnectionOut'];
-export type AuthUser = components['schemas']['UserOut'];
-export type TokenResponse = components['schemas']['TokenResponse'];
+export interface AuthUser {
+  id: number;
+  email: string;
+  name: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+}
 export type ChatHistoryRow = components['schemas']['ChatMessageOut'];
 export type ParseResult = components['schemas']['ParseResponse'];
 export type TokenUsage = components['schemas']['TokenUsage'];
@@ -57,7 +63,7 @@ export interface Provider {
 }
 
 export interface AuthConfig {
-  method: 'password' | 'oauth_google';
+  method: 'none' | 'password' | 'oauth_google';
   required: boolean;
   google_client_id?: string;
   require_invite_code?: boolean;

@@ -58,7 +58,7 @@ SEO meta injection (premium): `premium/porchsongs_premium/seo.py` injects route-
 
 ### Auth
 
-Plugin architecture in `backend/app/auth/`. OSS uses `AppSecretBackend` (password gate via `APP_SECRET` env var); premium uses Google OAuth loaded via `PREMIUM_PLUGIN` env var. JWT access tokens (15min) + refresh tokens (30 days). Every data endpoint uses `Depends(get_current_user)` with `user_id` filtering. Frontend stores access token in memory, refresh token in localStorage.
+Plugin architecture in `backend/app/auth/`. **OSS is auth-free** — `get_current_user` auto-creates and returns a single local user (`local@porchsongs.local`). No login required. Premium adds Google OAuth via `PREMIUM_PLUGIN` env var, overriding `get_current_user` with JWT validation. JWT tokens, refresh tokens, rate limiting, and login/logout endpoints all live in the premium layer. Every data endpoint uses `Depends(get_current_user)` with `user_id` filtering. The auth ABC (`AuthBackend`), token utilities, and rate limiter remain in OSS for premium to import.
 
 ### LLM Integration
 

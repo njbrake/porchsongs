@@ -1,6 +1,7 @@
 export { isPremiumAuth } from './auth';
 export {
   getPremiumRouteElements,
+  getLoginPageElement,
   getDefaultSettingsTab,
   shouldRedirectRootToApp,
 } from './routes';

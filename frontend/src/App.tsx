@@ -1,6 +1,5 @@
 import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import Spinner from '@/components/ui/spinner';
-import LoginPage from '@/components/LoginPage';
 import NotFoundPage from '@/components/NotFoundPage';
 import AppShell from '@/layouts/AppShell';
 import RewriteTab from '@/components/RewriteTab';
@@ -8,6 +7,7 @@ import LibraryTab from '@/components/LibraryTab';
 import SettingsPage from '@/components/SettingsPage';
 import { useAuth } from '@/contexts/AuthContext';
 import {
+  getLoginPageElement,
   getPremiumRouteElements,
   getDefaultSettingsTab,
   shouldRedirectRootToApp,
@@ -37,8 +37,8 @@ export default function App() {
       {/* Premium route elements (marketing pages, etc.) */}
       {getPremiumRouteElements()}
 
-      {/* Login */}
-      <Route path="/app/login" element={<LoginPage />} />
+      {/* Login — OSS redirects to /app, premium renders its LoginPage */}
+      <Route path="/app/login" element={getLoginPageElement()} />
 
       {/* Authenticated app */}
       <Route path="/app" element={<AppShell />}>

@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-For tips about running in a sandbox environment (worktree git setup, pre-commit hooks, ephemeral dirs), see [tips/sandbox.md](tips/sandbox.md).
+For tips about running in a sandbox environment (pre-commit hooks, ephemeral dirs), see [tips/sandbox.md](tips/sandbox.md).
 
 For tips about using the Playwright MCP plugin in the sandbox (browser install, --no-sandbox, direct scripts for layout debugging), see [tips/playwright.md](tips/playwright.md).
 

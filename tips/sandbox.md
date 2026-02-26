@@ -2,7 +2,7 @@
 
 ## Pre-commit hooks
 
-`pre-commit install` won't work in the sandbox because the worktree git setup isn't a standard repo. Run hook commands directly instead:
+`pre-commit` is not installed in the sandbox. Run hook commands directly instead:
 
 ```bash
 # Ruff lint + format
@@ -12,7 +12,6 @@ uv run ruff format --check backend/
 # OpenAPI types freshness (regenerate and verify)
 uv run python scripts/export_openapi.py frontend/openapi.json
 cd frontend && npm run generate:api
-# In sandbox, git diff won't work — just run typecheck to verify consistency:
 cd frontend && npm run typecheck
 
 # Frontend checks
@@ -26,9 +25,7 @@ DATABASE_URL="sqlite:///:memory:" uv run pytest -x -q
 
 ## Git operations
 
-- `git diff`, `git status`, `git log` won't work due to the worktree setup
-- `git push` is blocked (read-only access)
-- Don't attempt `pre-commit install`, `git commit`, or other git write operations
+Git works normally — `git diff`, `git status`, `git log`, `git commit` all work. Push access is configured via `gh` auth.
 
 ## Ephemeral directories
 

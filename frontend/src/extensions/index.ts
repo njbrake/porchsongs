@@ -12,6 +12,7 @@ export {
 } from './settings';
 export type { ExtensionTab } from './settings';
 export {
+  tryRestoreSession,
   getSubscription,
   listPlans,
   createCheckout,

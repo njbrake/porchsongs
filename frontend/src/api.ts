@@ -1,5 +1,6 @@
 import type {
   AuthConfig,
+  AuthUser,
   ChatHistoryRow,
   ChatResult,
   ParseResult,
@@ -16,6 +17,7 @@ import client, {
   setRefreshToken,
   tryRefresh,
 } from '@/lib/api-client';
+import { tryRestoreSession as _tryRestoreSession } from '@/extensions';
 
 // --- Storage keys ---
 const STORAGE_KEYS = {
@@ -156,15 +158,10 @@ function logout(): void {
   setRefreshToken(null);
 }
 
-async function tryRestoreSession(): Promise<null> {
-  // OSS mode — no session to restore. Premium overrides this.
-  return null;
-}
-
 const api = {
   getAuthConfig,
   logout,
-  tryRestoreSession,
+  tryRestoreSession: _tryRestoreSession as () => Promise<AuthUser | null>,
 
   // Profiles
   listProfiles: async () => {

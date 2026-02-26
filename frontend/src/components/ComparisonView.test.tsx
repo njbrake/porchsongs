@@ -31,7 +31,7 @@ describe('ComparisonView', () => {
     expect(screen.queryByText('Original content here')).not.toBeInTheDocument();
   });
 
-  it('shows original content after clicking "Show Original"', async () => {
+  it('shows original content in a dialog after clicking "Show Original"', async () => {
     const user = userEvent.setup();
     render(<ComparisonView {...defaults} />);
     await user.click(screen.getByText('Show Original'));
@@ -39,13 +39,19 @@ describe('ComparisonView', () => {
     expect(screen.getByText('Original')).toBeInTheDocument();
   });
 
-  it('hides original content when toggled back', async () => {
+  it('hides original content when dialog is dismissed', async () => {
     const user = userEvent.setup();
     render(<ComparisonView {...defaults} />);
     await user.click(screen.getByText('Show Original'));
     expect(screen.getByText('Original content here')).toBeInTheDocument();
-    await user.click(screen.getByText('Hide Original'));
+    await user.keyboard('{Escape}');
     expect(screen.queryByText('Original content here')).not.toBeInTheDocument();
+  });
+
+  it('textarea background does not change on focus', () => {
+    render(<ComparisonView {...defaults} />);
+    const textarea = screen.getByDisplayValue('Rewritten content here');
+    expect(textarea.className).not.toContain('focus:bg-focus-bg');
   });
 
   it('calls onRewrittenChange when textarea content changes', async () => {

@@ -92,6 +92,12 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
   const [parseReasoningText, setParseReasoningText] = useState('');
   const [parseReasoningExpanded, setParseReasoningExpanded] = useState(false);
 
+  // Abort in-flight parse when component unmounts (e.g. tab navigation)
+  // to avoid wasted LLM tokens/quota and lost results.
+  useEffect(() => {
+    return () => { parseAbortRef.current?.abort(); };
+  }, []);
+
   useEffect(() => {
     if (rewriteMeta) {
       setSongTitle(rewriteMeta.title || '');

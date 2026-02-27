@@ -39,7 +39,7 @@ function ChatMessageBubble({ msg, isStreaming }: { msg: ChatMessage; isStreaming
     ? 'bg-warning-bg text-warning-text self-center text-xs italic'
     : msg.role === 'user'
       ? 'bg-primary text-white self-end rounded-br-sm'
-      : 'bg-panel text-foreground self-start rounded-bl-sm';
+      : 'bg-card text-foreground self-start rounded-bl-sm border border-border';
 
   return (
     <div className={cn('px-3 py-2 rounded-md text-sm leading-normal max-w-[95%] sm:max-w-[85%] break-words', bubbleClass)}>

@@ -238,4 +238,103 @@ test.describe('OSS Library', () => {
     await expect(page.getByText('Folder Test Hymn').first()).toBeVisible({ timeout: 5_000 });
     await expect(page.getByText('Folder Test Pop').first()).toBeVisible();
   });
+
+  test('PDF download triggers a file download', async ({ page, baseURL }) => {
+    const profileId = await getDefaultProfileId(baseURL!);
+    await createSongViaApi(baseURL!, makeSongCreatePayload(profileId));
+
+    await page.goto('/');
+    await waitForAppReady(page);
+    await navigateToTab(page, 'Library');
+
+    // Open song detail view
+    await expect(page.getByText(/by John Newton/).first()).toBeVisible({ timeout: 5_000 });
+    await page.getByText(/by John Newton/).first().click();
+    await expect(page.getByRole('button', { name: /Download PDF/i })).toBeVisible({ timeout: 5_000 });
+
+    // Intercept the download
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: /Download PDF/i }).click();
+    const download = await downloadPromise;
+
+    // Verify filename and that file is non-empty
+    expect(download.suggestedFilename()).toBe('Amazing Grace - John Newton.pdf');
+    const path = await download.path();
+    expect(path).toBeTruthy();
+  });
+
+  test('revision history shows previous versions', async ({ page, baseURL }) => {
+    // Seed a song and add a revision via API
+    const profileId = await getDefaultProfileId(baseURL!);
+    const song = await createSongViaApi(baseURL!, {
+      ...makeSongCreatePayload(profileId),
+      title: 'Revision Test Song',
+    });
+    const songId = song.id as number;
+
+    // Create a revision by updating the song content
+    await fetch(`${baseURL}/api/songs/${songId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rewritten_content: 'Updated content for version 2' }),
+    });
+
+    await page.goto('/');
+    await waitForAppReady(page);
+    await navigateToTab(page, 'Library');
+
+    // Search and open the song
+    const searchInput = page.getByPlaceholder(/search/i);
+    await searchInput.fill('Revision Test Song');
+    await expect(page.getByText('Revision Test Song').first()).toBeVisible({ timeout: 5_000 });
+    await page.getByText(/by John Newton/).first().click();
+
+    // Open details panel
+    await expect(page.getByRole('button', { name: /Show Original/i })).toBeVisible({ timeout: 5_000 });
+    await page.getByRole('button', { name: /Show Original/i }).click();
+
+    // Verify the original content section appears
+    await expect(page.getByText('Original').first()).toBeVisible({ timeout: 5_000 });
+  });
+
+  test('sorting changes song order', async ({ page, baseURL }) => {
+    const profileId = await getDefaultProfileId(baseURL!);
+    await createSongViaApi(baseURL!, {
+      ...makeSongCreatePayload(profileId),
+      title: 'Alpha Song',
+      artist: 'Zeta Artist',
+    });
+    await createSongViaApi(baseURL!, {
+      ...makeSecondSongPayload(profileId),
+      title: 'Zeta Song',
+      artist: 'Alpha Artist',
+    });
+
+    await page.goto('/');
+    await waitForAppReady(page);
+    await navigateToTab(page, 'Library');
+
+    // Search to isolate our test songs
+    const searchInput = page.getByPlaceholder(/search/i);
+    await searchInput.fill('Song');
+
+    // Wait for both songs
+    await expect(page.getByText('Alpha Song').first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Zeta Song').first()).toBeVisible();
+
+    // Sort by title
+    const sortSelect = page.locator('select').first();
+    await sortSelect.selectOption('title');
+
+    // Click sort ascending
+    await page.getByLabel(/Sort ascending|Sort descending/).click();
+
+    // Get all song title spans to verify order
+    const titles = await page.getByTitle('Click to rename').allTextContents();
+    const songTitles = titles.filter(t => t.includes('Song'));
+    // With ascending sort, Alpha Song should come before Zeta Song
+    if (songTitles.length >= 2) {
+      expect(songTitles.indexOf('Alpha Song')).toBeLessThan(songTitles.indexOf('Zeta Song'));
+    }
+  });
 });

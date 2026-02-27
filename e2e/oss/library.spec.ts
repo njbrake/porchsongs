@@ -160,4 +160,45 @@ test.describe('OSS Library', () => {
     await expect(page.getByText('Amazing Grace (Updated)').first()).toBeVisible({ timeout: 5_000 });
     await expect(page.getByText(/by John Newton Jr\./).first()).toBeVisible();
   });
+
+  test('delete song removes it from library', async ({ page, baseURL }) => {
+    // Create a song with a unique title to avoid matching other test data
+    const profileId = await getDefaultProfileId(baseURL!);
+    await createSongViaApi(baseURL!, {
+      ...makeSongCreatePayload(profileId),
+      title: 'Song To Delete',
+    });
+
+    await page.goto('/');
+    await waitForAppReady(page);
+    await navigateToTab(page, 'Library');
+
+    // Wait for our song to appear
+    await expect(page.getByText('Song To Delete').first()).toBeVisible({ timeout: 5_000 });
+
+    // Search for it to isolate from other songs
+    const searchInput = page.getByPlaceholder(/search/i);
+    await searchInput.fill('Song To Delete');
+    await expect(page.getByText('Song To Delete').first()).toBeVisible();
+
+    // Open the song menu and click Delete
+    await page.getByLabel('Song actions').first().click();
+    await page.getByRole('menuitem', { name: /Delete/i }).click();
+
+    // Confirmation dialog should appear
+    await expect(page.getByText('Delete Song')).toBeVisible({ timeout: 2_000 });
+    await expect(page.getByText(/This action cannot be undone/)).toBeVisible();
+
+    // Confirm deletion
+    await page.getByRole('button', { name: 'Delete' }).click();
+
+    // Song should be removed — no results for this search
+    await expect(page.getByText('Song To Delete')).not.toBeVisible({ timeout: 5_000 });
+
+    // Verify persistence after reload
+    await page.reload();
+    await waitForAppReady(page);
+    await navigateToTab(page, 'Library');
+    await expect(page.getByText('Song To Delete')).not.toBeVisible({ timeout: 3_000 });
+  });
 });

@@ -546,7 +546,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
                       {parseReasoningExpanded ? 'Hide parse thinking' : 'Show parse thinking'}
                     </button>
                     {parseReasoningExpanded && (
-                      <pre className="whitespace-pre-wrap break-words text-xs mt-1 font-mono max-h-60 overflow-y-auto opacity-70">{parseResult.reasoning}</pre>
+                      <pre className="whitespace-pre-wrap break-words text-xs mt-1 font-mono max-h-[50vh] overflow-y-auto opacity-70">{parseResult.reasoning}</pre>
                     )}
                   </div>
                 )}

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import Markdown from 'react-markdown';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import api from '@/api';
 import { isQuotaError } from '@/extensions/quota';
@@ -120,9 +121,14 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
   const abortRef = useRef<AbortController | null>(null);
 
   const processFiles = useCallback(async (files: FileList | File[]) => {
+    const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
     const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
     const newImages: AttachedImage[] = [];
     for (const file of imageFiles) {
+      if (file.size > MAX_IMAGE_SIZE) {
+        toast.error(`Image "${file.name}" is too large (max 5 MB)`);
+        continue;
+      }
       const dataUrl = await fileToBase64(file);
       newImages.push({ dataUrl, name: file.name });
     }

@@ -53,12 +53,13 @@ function ChatMessageBubble({ msg, isStreaming }: { msg: ChatMessage; isStreaming
     <div className={cn('px-3 py-2 rounded-md text-sm leading-normal max-w-[95%] sm:max-w-[85%] break-words', bubbleClass)}>
       {hasReasoning && (
         <>
-          <button
-            className="block mb-1.5 bg-transparent border-0 p-0 text-xs text-primary cursor-pointer underline opacity-80 hover:opacity-100"
+          <Button
+            variant="link-inline"
+            className="block mb-1.5 text-xs opacity-80 hover:opacity-100"
             onClick={() => setThinkingExpanded(prev => !prev)}
           >
             {thinkingExpanded ? 'Hide thinking' : 'Show thinking'}
-          </button>
+          </Button>
           {thinkingExpanded && (
             <pre className="whitespace-pre-wrap break-words text-xs m-0 mb-2 font-mono max-h-80 overflow-y-auto opacity-70">{msg.reasoning}</pre>
           )}
@@ -81,12 +82,13 @@ function ChatMessageBubble({ msg, isStreaming }: { msg: ChatMessage; isStreaming
         msg.content
       )}
       {hasRaw && !isStreaming && (
-        <button
-          className="block mt-1.5 bg-transparent border-0 p-0 text-xs text-primary cursor-pointer underline opacity-80 hover:opacity-100"
+        <Button
+          variant="link-inline"
+          className="block mt-1.5 text-xs opacity-80 hover:opacity-100"
           onClick={() => setExpanded(prev => !prev)}
         >
           {expanded ? 'Show summary' : 'Show full response'}
-        </button>
+        </Button>
       )}
       {msg.model && !isStreaming && (
         <div className="mt-1.5 text-[10px] text-muted-foreground opacity-70 text-right">{msg.model}</div>

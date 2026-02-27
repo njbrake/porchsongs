@@ -539,12 +539,13 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
 
                 {parseResult?.reasoning && (
                   <div className="mb-2">
-                    <button
-                      className="bg-transparent border-0 p-0 text-xs text-primary cursor-pointer underline opacity-80 hover:opacity-100"
+                    <Button
+                      variant="link-inline"
+                      className="text-xs opacity-80 hover:opacity-100"
                       onClick={() => setParseReasoningExpanded(prev => !prev)}
                     >
                       {parseReasoningExpanded ? 'Hide parse thinking' : 'Show parse thinking'}
-                    </button>
+                    </Button>
                     {parseReasoningExpanded && (
                       <pre className="whitespace-pre-wrap break-words text-xs mt-1 font-mono max-h-[50vh] overflow-y-auto opacity-70">{parseResult.reasoning}</pre>
                     )}
@@ -606,12 +607,14 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button
-                        className="md:hidden bg-transparent border border-border rounded-md cursor-pointer text-xl leading-none px-2.5 py-2 text-muted-foreground tracking-wider min-h-[2.75rem] inline-flex items-center justify-center hover:bg-panel hover:text-foreground"
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="md:hidden border border-border text-xl text-muted-foreground tracking-wider"
                         aria-label="More actions"
                       >
                         &hellip;
-                      </button>
+                      </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={handleShare}>

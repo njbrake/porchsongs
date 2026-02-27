@@ -72,6 +72,22 @@ export async function mockProviderModels(page: Page): Promise<void> {
   });
 }
 
+/** Seed chat messages for a song via the API. */
+export async function createChatMessagesViaApi(
+  baseUrl: string,
+  songId: number,
+  messages: Array<{ role: string; content: string; is_note?: boolean }>
+): Promise<void> {
+  const res = await fetch(`${baseUrl}/api/songs/${songId}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(messages),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to create messages: ${res.status} ${await res.text()}`);
+  }
+}
+
 /** Set localStorage keys to pre-configure a provider+model so tests skip model selection. */
 export async function presetLlmSettings(page: Page, baseUrl: string): Promise<void> {
   await page.goto(baseUrl);

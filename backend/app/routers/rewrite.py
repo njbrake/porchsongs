@@ -256,6 +256,8 @@ def _persist_chat_result(
     assistant_content: str,
     req_messages: list[ChatMessage],
     original_content: str | None = None,
+    reasoning: str | None = None,
+    model: str | None = None,
 ) -> None:
     """Update song, create revision, and save chat messages (does not commit)."""
     if original_content is not None:
@@ -289,7 +291,12 @@ def _persist_chat_result(
         )
     db.add(
         ChatMessageModel(
-            song_id=song.id, role="assistant", content=assistant_content, is_note=False
+            song_id=song.id,
+            role="assistant",
+            content=assistant_content,
+            is_note=False,
+            reasoning=reasoning,
+            model=model,
         )
     )
 
@@ -333,6 +340,8 @@ async def chat(
         assistant_content=result["assistant_message"],
         req_messages=req.messages,
         original_content=result.get("original_content"),
+        reasoning=result.get("reasoning"),
+        model=req.model,
     )
     db.commit()
 
@@ -408,6 +417,8 @@ async def chat_stream(
                 assistant_content=accumulated,
                 req_messages=req.messages,
                 original_content=parsed.get("original_content"),
+                reasoning=reasoning_accumulated or None,
+                model=req.model,
             )
             db.commit()
         except Exception:

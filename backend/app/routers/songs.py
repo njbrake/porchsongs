@@ -250,6 +250,8 @@ async def list_messages(
             role=row.role,
             content=_display_content(row.content),
             is_note=row.is_note,
+            reasoning=row.reasoning,
+            model=row.model,
             created_at=row.created_at,
         )
         for row in rows
@@ -266,7 +268,14 @@ async def save_messages(
     get_user_song(db, current_user, song_id)
     rows = []
     for msg in messages:
-        row = ChatMessage(song_id=song_id, role=msg.role, content=msg.content, is_note=msg.is_note)
+        row = ChatMessage(
+            song_id=song_id,
+            role=msg.role,
+            content=msg.content,
+            is_note=msg.is_note,
+            reasoning=msg.reasoning,
+            model=msg.model,
+        )
         db.add(row)
         rows.append(row)
     db.commit()

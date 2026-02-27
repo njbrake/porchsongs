@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Outlet, Navigate, useNavigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import api, { STORAGE_KEYS } from '@/api';
+import { stripXmlTags } from '@/lib/utils';
 import useLocalStorage from '@/hooks/useLocalStorage';
 import useProviderConnections from '@/hooks/useProviderConnections';
 import useSavedModels from '@/hooks/useSavedModels';
@@ -9,7 +10,26 @@ import Header from '@/components/Header';
 import Tabs from '@/components/Tabs';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Profile, RewriteResult, RewriteMeta, ChatMessage, Song } from '@/types';
+import type { Profile, RewriteResult, RewriteMeta, ChatMessage, ChatHistoryRow, Song } from '@/types';
+
+function chatHistoryToMessages(rows: ChatHistoryRow[]): ChatMessage[] {
+  return rows.map(row => {
+    const role = row.role as 'user' | 'assistant';
+    if (role === 'assistant' && !row.is_note) {
+      const stripped = stripXmlTags(row.content);
+      const hadXml = stripped !== row.content;
+      return {
+        role,
+        content: hadXml ? (stripped || 'Chat edit applied.') : stripped,
+        rawContent: hadXml ? row.content : undefined,
+        isNote: row.is_note,
+        reasoning: row.reasoning ?? undefined,
+        model: row.model ?? undefined,
+      };
+    }
+    return { role, content: row.content, isNote: row.is_note };
+  });
+}
 
 /** Context value provided to child routes via useOutletContext(). */
 export interface AppShellContext {
@@ -127,11 +147,7 @@ export default function AppShell() {
       });
       try {
         const history = await api.getChatHistory(song.id);
-        setChatMessages(history.map(row => ({
-          role: row.role as 'user' | 'assistant',
-          content: row.content,
-          isNote: row.is_note,
-        })));
+        setChatMessages(chatHistoryToMessages(history));
       } catch {
         setChatMessages([]);
       }
@@ -186,14 +202,9 @@ export default function AppShell() {
     setCurrentSongId(song.id);
     navigate('/app/rewrite');
 
-    // Restore chat history
     try {
       const history = await api.getChatHistory(song.id);
-      setChatMessages(history.map(row => ({
-        role: row.role as 'user' | 'assistant',
-        content: row.content,
-        isNote: row.is_note,
-      })));
+      setChatMessages(chatHistoryToMessages(history));
     } catch {
       setChatMessages([]);
     }

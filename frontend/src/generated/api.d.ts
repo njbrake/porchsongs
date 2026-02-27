@@ -576,6 +576,10 @@ export interface components {
              * @default false
              */
             is_note: boolean;
+            /** Reasoning */
+            reasoning?: string | null;
+            /** Model */
+            model?: string | null;
         };
         /** ChatMessageOut */
         ChatMessageOut: {
@@ -589,6 +593,10 @@ export interface components {
             content: string;
             /** Is Note */
             is_note: boolean;
+            /** Reasoning */
+            reasoning?: string | null;
+            /** Model */
+            model?: string | null;
             /**
              * Created At
              * Format: date-time

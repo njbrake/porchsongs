@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import Markdown from 'react-markdown';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import { cn, stripXmlTags } from '@/lib/utils';
 import api from '@/api';
 import { isQuotaError } from '@/extensions/quota';
 import { Card, CardHeader } from '@/components/ui/card';
@@ -27,14 +27,6 @@ function fileToBase64(file: File): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
-}
-
-/** Strip <content>...</content> and <original_song>...</original_song> XML blocks from text. */
-function stripXmlTags(text: string): string {
-  return text
-    .replace(/<content>[\s\S]*?<\/content>/g, '')
-    .replace(/<original_song>[\s\S]*?<\/original_song>/g, '')
-    .trim();
 }
 
 function ChatMessageBubble({ msg, isStreaming }: { msg: ChatMessage; isStreaming?: boolean }) {
@@ -107,9 +99,11 @@ interface ChatPanelProps {
   onBeforeSend?: () => Promise<number>;
   onContentStreaming?: (partialContent: string) => void;
   onOriginalContentUpdated?: (content: string) => void;
+  headerRight?: ReactNode;
+  flat?: boolean;
 }
 
-export default function ChatPanel({ songId, messages, setMessages, llmSettings, onContentUpdated, initialLoading, onBeforeSend, onContentStreaming, onOriginalContentUpdated }: ChatPanelProps) {
+export default function ChatPanel({ songId, messages, setMessages, llmSettings, onContentUpdated, initialLoading, onBeforeSend, onContentStreaming, onOriginalContentUpdated, headerRight, flat }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [streaming, setStreaming] = useState(false);
@@ -385,14 +379,19 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
   };
 
   return (
-    <Card className="mt-0 flex flex-col flex-1 overflow-hidden">
-      <CardHeader>Chat Workshop</CardHeader>
+    <Card className={cn(flat ? 'border-0 shadow-none rounded-none bg-transparent' : 'mt-0', 'flex flex-col flex-1 overflow-hidden')}>
+      <CardHeader className={cn('flex items-center justify-between gap-2', flat && 'md:hidden')}>
+        <span>Chat Workshop</span>
+        {headerRight && (
+          <div className="flex items-center gap-1.5">{headerRight}</div>
+        )}
+      </CardHeader>
       {messages.length >= MAX_MESSAGES && (
         <div className="px-4 py-2 bg-warning-bg border-b border-warning-border text-warning-text text-xs">
           Chat history limit reached ({MAX_MESSAGES} messages). Older messages will be dropped.
         </div>
       )}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+      <div className={cn('flex-1 overflow-y-auto p-4 flex flex-col gap-2', flat && 'md:bg-panel md:shadow-[inset_0_1px_4px_rgba(0,0,0,0.04)] md:rounded-md')}>
         {messages.map((msg, i) => (
           <div key={i} className={cn('flex flex-col', msg.role === 'user' ? 'items-end' : 'items-start')}>
             <ChatMessageBubble msg={msg} isStreaming={streaming && i === messages.length - 1} />

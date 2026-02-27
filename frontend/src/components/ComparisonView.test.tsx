@@ -4,7 +4,6 @@ import ComparisonView from '@/components/ComparisonView';
 
 describe('ComparisonView', () => {
   const defaults = {
-    original: 'Original content here',
     rewritten: 'Rewritten content here',
     onRewrittenChange: vi.fn(),
     onRewrittenBlur: vi.fn(),
@@ -21,31 +20,34 @@ describe('ComparisonView', () => {
     expect(textarea.tagName).toBe('TEXTAREA');
   });
 
-  it('shows "Your Version" header', () => {
+  it('shows "Your Version" header when no headerLeft provided', () => {
     render(<ComparisonView {...defaults} />);
     expect(screen.getByText('Your Version')).toBeInTheDocument();
   });
 
-  it('does not show original content by default', () => {
-    render(<ComparisonView {...defaults} />);
-    expect(screen.queryByText('Original content here')).not.toBeInTheDocument();
+  it('renders headerLeft content instead of "Your Version" when provided', () => {
+    render(<ComparisonView {...defaults} headerLeft={<span>Custom Header</span>} />);
+    expect(screen.getByText('Custom Header')).toBeInTheDocument();
+    expect(screen.queryByText('Your Version')).not.toBeInTheDocument();
   });
 
-  it('shows original content in a dialog after clicking "Show Original"', async () => {
-    const user = userEvent.setup();
-    render(<ComparisonView {...defaults} />);
-    await user.click(screen.getByText('Show Original'));
-    expect(screen.getByText('Original content here')).toBeInTheDocument();
-    expect(screen.getByText('Original')).toBeInTheDocument();
+  it('renders Show Original button when onShowOriginal is provided', () => {
+    const onShowOriginal = vi.fn();
+    render(<ComparisonView {...defaults} onShowOriginal={onShowOriginal} />);
+    expect(screen.getByRole('button', { name: 'Show Original' })).toBeInTheDocument();
   });
 
-  it('hides original content when dialog is dismissed', async () => {
-    const user = userEvent.setup();
+  it('does not render Show Original button when onShowOriginal is omitted', () => {
     render(<ComparisonView {...defaults} />);
-    await user.click(screen.getByText('Show Original'));
-    expect(screen.getByText('Original content here')).toBeInTheDocument();
-    await user.keyboard('{Escape}');
-    expect(screen.queryByText('Original content here')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show Original' })).not.toBeInTheDocument();
+  });
+
+  it('calls onShowOriginal when the button is clicked', async () => {
+    const user = userEvent.setup();
+    const onShowOriginal = vi.fn();
+    render(<ComparisonView {...defaults} onShowOriginal={onShowOriginal} />);
+    await user.click(screen.getByRole('button', { name: 'Show Original' }));
+    expect(onShowOriginal).toHaveBeenCalledTimes(1);
   });
 
   it('textarea background does not change on focus', () => {

@@ -120,6 +120,8 @@ def upgrade() -> None:
         sa.Column("role", sa.String(), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column("is_note", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("reasoning", sa.Text(), nullable=True),
+        sa.Column("model", sa.String(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
     )
     op.create_index("ix_chat_messages_song_id", "chat_messages", ["song_id"])

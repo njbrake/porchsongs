@@ -174,6 +174,8 @@ class ChatMessageCreate(BaseModel):
     role: str
     content: str = Field(max_length=10_000)
     is_note: bool = False
+    reasoning: str | None = None
+    model: str | None = None
 
 
 class ChatMessageOut(BaseModel):
@@ -182,6 +184,8 @@ class ChatMessageOut(BaseModel):
     role: str
     content: str
     is_note: bool
+    reasoning: str | None = None
+    model: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

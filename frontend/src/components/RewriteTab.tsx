@@ -12,14 +12,22 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import Spinner from '@/components/ui/spinner';
 import StreamingPre from '@/components/ui/streaming-pre';
 import { Alert } from '@/components/ui/alert';
-import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { cn, copyToClipboard as copyText } from '@/lib/utils';
 import { QuotaBanner, OnboardingBanner, isQuotaError } from '@/extensions/quota';
 import type { AppShellContext } from '@/layouts/AppShell';
 import type { Profile, Song, RewriteResult, RewriteMeta, ChatMessage, LlmSettings, SavedModel, ParseResult } from '@/types';
@@ -90,6 +98,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
   const [songTitle, setSongTitle] = useState('');
   const [songArtist, setSongArtist] = useState('');
   const [scrapDialogOpen, setScrapDialogOpen] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(false);
 
   // Parse state
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
@@ -305,19 +314,21 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
     }
   }, [currentSongId, rewriteResult]);
 
-  const titleArtistInputs = (withBlur?: boolean) => (
-    <div className="flex flex-col gap-1 mb-2">
+  const editableInputClass = 'bg-transparent border-0 border-b border-transparent hover:border-dashed hover:border-border focus:border-solid focus:border-primary p-0 pb-px min-w-0 w-full focus:outline-none cursor-text transition-colors';
+
+  const compactTitleArtist = (withBlur?: boolean) => (
+    <div className="flex flex-col gap-0.5 flex-1 min-w-0 max-w-sm">
       <input
-        className="text-xl font-bold border-0 border-b border-dashed border-border bg-transparent py-1 text-foreground w-full focus:outline-none focus:border-primary placeholder:text-muted-foreground placeholder:font-normal"
+        className={cn(editableInputClass, 'text-sm font-semibold text-foreground placeholder:text-muted-foreground placeholder:font-normal')}
         type="text"
         value={songTitle || ''}
         onChange={e => handleTitleChange(e.target.value)}
         onBlur={withBlur ? handleMetaBlur : undefined}
-        placeholder="Song title"
+        placeholder="Untitled song"
         aria-label="Song title"
       />
       <input
-        className="text-base border-0 border-b border-dashed border-border bg-transparent py-0.5 text-muted-foreground w-full focus:outline-none focus:border-primary placeholder:text-muted-foreground"
+        className={cn(editableInputClass, 'text-xs text-muted-foreground placeholder:text-muted-foreground')}
         type="text"
         value={songArtist || ''}
         onChange={e => handleArtistChange(e.target.value)}
@@ -356,6 +367,61 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
       </div>
     </div>
   );
+
+  // Compact model + effort selects for ChatPanel header
+  const compactModelControls = () => {
+    const activeModel = savedModels.find(m => m.provider === llmSettings.provider && m.model === llmSettings.model);
+    const hasUnsaved = llmSettings.provider && llmSettings.model && !activeModel;
+
+    const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const val = e.target.value;
+      if (val === '__manage__') {
+        onOpenSettings();
+        return;
+      }
+      if (!val) return;
+      const sm = savedModels.find(m => m.id === Number(val));
+      if (sm) {
+        onChangeProvider(sm.provider);
+        onChangeModel(sm.model);
+      }
+    };
+
+    return (
+      <>
+        <Select
+          className="hidden sm:inline w-auto py-1 px-2 text-xs"
+          value={activeModel ? String(activeModel.id) : (hasUnsaved ? '__unsaved__' : '')}
+          onChange={handleModelChange}
+          aria-label="Model"
+        >
+          {hasUnsaved && (
+            <option value="__unsaved__">{llmSettings.provider} / {llmSettings.model}</option>
+          )}
+          {!hasUnsaved && !activeModel && (
+            <option value="">Model...</option>
+          )}
+          {savedModels.map(sm => (
+            <option key={sm.id} value={String(sm.id)}>
+              {sm.provider} / {sm.model}
+            </option>
+          ))}
+          <option value="__manage__">Manage models...</option>
+        </Select>
+        <Select
+          className="hidden sm:inline w-auto py-1 px-1.5 text-xs"
+          value={reasoningEffort}
+          onChange={e => onChangeReasoningEffort(e.target.value)}
+          aria-label="Reasoning effort"
+        >
+          <option value="off">Effort: Off</option>
+          <option value="low">Effort: Low</option>
+          <option value="medium">Effort: Med</option>
+          <option value="high">Effort: High</option>
+        </Select>
+      </>
+    );
+  };
 
   // Mobile pane toggle
   const mobilePaneToggle = (
@@ -461,114 +527,49 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
         </Card>
       )}
 
-      {/* PARSED state */}
-      {isParsed && (
-        <div className="flex flex-col flex-1 min-h-0 mt-2">
+      {/* PARSED + WORKSHOPPING states */}
+      {(isParsed || isWorkshopping) && (
+        <div className="flex flex-col flex-1 min-h-0 mt-2 md:mt-0">
           {mobilePaneToggle}
 
-          <ResizableColumns
-            className="flex-1 min-h-0"
-            columnClassName="flex-col min-h-0"
-            mobilePane={mobilePane === 'chat' ? 'left' : 'right'}
-            left={
-              <>
-                {!isPremium && modelControls()}
-
-                <div className="flex gap-2 mb-2 flex-wrap">
-                  <Button variant="secondary" onClick={handleNewSong}>
-                    New Song
-                  </Button>
-                </div>
-
-                <ChatPanel
-                  songId={currentSongId}
-                  messages={chatMessages}
-                  setMessages={setChatMessages}
-                  llmSettings={llmSettings}
-                  onContentUpdated={handleChatUpdate}
-                  initialLoading={false}
-                  onBeforeSend={handleBeforeSend}
-                  onOriginalContentUpdated={handleOriginalContentUpdated}
-                />
-              </>
-            }
-            right={
-              <>
-                {titleArtistInputs()}
-
-                {parseResult?.reasoning && (
-                  <div className="mb-2">
-                    <Button
-                      variant="link-inline"
-                      className="text-xs opacity-80 hover:opacity-100"
-                      onClick={() => setParseReasoningExpanded(prev => !prev)}
-                    >
-                      {parseReasoningExpanded ? 'Hide parse thinking' : 'Show parse thinking'}
-                    </Button>
-                    {parseReasoningExpanded && (
-                      <pre className="whitespace-pre-wrap break-words text-xs mt-1 font-mono max-h-[50vh] overflow-y-auto opacity-70">{parseResult.reasoning}</pre>
-                    )}
-                  </div>
-                )}
-
-                <Card className="flex flex-col flex-1 overflow-hidden">
-                  <Textarea
-                    className="flex-1 min-h-[200px] border-0 p-3 sm:p-4 font-mono text-xs sm:text-code leading-relaxed resize-none focus-visible:ring-0"
-                    value={parsedContent}
-                    onChange={e => setParsedContent(e.target.value)}
-                  />
-                </Card>
-              </>
-            }
-          />
-        </div>
-      )}
-
-      {/* WORKSHOPPING state */}
-      {isWorkshopping && (
-        <div className="flex flex-col flex-1 min-h-0 mt-2">
-          {mobilePaneToggle}
-
-          <ResizableColumns
-            className="flex-1 min-h-0"
-            columnClassName="flex-col min-h-0"
-            mobilePane={mobilePane === 'chat' ? 'left' : 'right'}
-            left={
-              <>
-                {!isPremium && modelControls()}
-
-                <div className="flex gap-2 mb-2">
-                  <Button variant="secondary" onClick={handleNewSong}>
-                    New Song
+          {/* Unified toolbar — desktop only */}
+          <div className="hidden md:flex items-center gap-4 px-4 py-2.5 border-b border-border">
+            {compactTitleArtist(isWorkshopping)}
+            <div className="flex items-center gap-1.5 ml-auto shrink-0">
+              {!isPremium && compactModelControls()}
+              {isWorkshopping && (
+                <>
+                  <div className="w-px h-5 bg-border mx-0.5" />
+                  <Button variant="secondary" size="sm" onClick={() => setShowOriginal(true)}>
+                    Original
                   </Button>
                   <Button
                     variant="secondary"
+                    className="h-7 px-2.5 text-xs"
                     onClick={handleSave}
                     disabled={saveStatus === 'saving' || !currentSongId}
                   >
                     {saveStatus === 'saved' ? 'Saved!' :
                      saveStatus === 'saving' ? 'Saving...' : 'Save'}
                   </Button>
-                  <Button
-                    className="hidden md:inline-flex"
-                    variant="danger-outline"
-                    onClick={() => setScrapDialogOpen(true)}
-                    disabled={!currentSongId}
-                  >
-                    Scrap This
+                </>
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" aria-label="More actions">
+                    &hellip;
                   </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="md:hidden border border-border text-xl text-muted-foreground tracking-wider"
-                        aria-label="More actions"
-                      >
-                        &hellip;
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {isParsed && parseResult?.reasoning && (
+                    <DropdownMenuItem onClick={() => setParseReasoningExpanded(prev => !prev)}>
+                      {parseReasoningExpanded ? 'Hide thinking' : 'Show thinking'}
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={handleNewSong}>New Song</DropdownMenuItem>
+                  {isWorkshopping && (
+                    <>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem
                         className="text-danger hover:!bg-danger-light"
                         disabled={!currentSongId}
@@ -576,36 +577,125 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
                       >
                         Scrap This
                       </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
 
-                <ChatPanel
-                  songId={currentSongId}
-                  messages={chatMessages}
-                  setMessages={setChatMessages}
-                  llmSettings={llmSettings}
-                  onContentUpdated={handleChatUpdate}
-                  initialLoading={false}
-                  onContentStreaming={handleChatUpdate}
-                  onOriginalContentUpdated={handleOriginalContentUpdated}
-                />
-              </>
+          <ResizableColumns
+            className="flex-1 min-h-0"
+            columnClassName="flex-col min-h-0"
+            mobilePane={mobilePane === 'chat' ? 'left' : 'right'}
+            left={
+              <ChatPanel
+                songId={currentSongId}
+                messages={chatMessages}
+                setMessages={setChatMessages}
+                llmSettings={llmSettings}
+                onContentUpdated={handleChatUpdate}
+                initialLoading={false}
+                {...(isParsed ? { onBeforeSend: handleBeforeSend } : { onContentStreaming: handleChatUpdate })}
+                onOriginalContentUpdated={handleOriginalContentUpdated}
+                flat
+                headerRight={
+                  <>
+                    {!isPremium && compactModelControls()}
+                    {isWorkshopping && (
+                      <Button
+                        variant="secondary"
+                        className="h-7 px-2.5 text-xs"
+                        onClick={handleSave}
+                        disabled={saveStatus === 'saving' || !currentSongId}
+                      >
+                        {saveStatus === 'saved' ? 'Saved!' :
+                         saveStatus === 'saving' ? 'Saving...' : 'Save'}
+                      </Button>
+                    )}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" aria-label="More actions">
+                          &hellip;
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={handleNewSong}>New Song</DropdownMenuItem>
+                        {isWorkshopping && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-danger hover:!bg-danger-light"
+                              disabled={!currentSongId}
+                              onClick={() => setScrapDialogOpen(true)}
+                            >
+                              Scrap This
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </>
+                }
+              />
             }
             right={
-              <>
-                {titleArtistInputs(true)}
-
+              isParsed ? (
+                <div className="flex flex-col flex-1 overflow-hidden">
+                  <CardHeader className={cn('flex items-center justify-between gap-2', 'md:hidden')}>
+                    {compactTitleArtist()}
+                    {parseResult?.reasoning && (
+                      <Button
+                        variant="link-inline"
+                        className="text-xs shrink-0 opacity-80 hover:opacity-100"
+                        onClick={() => setParseReasoningExpanded(prev => !prev)}
+                      >
+                        {parseReasoningExpanded ? 'Hide thinking' : 'Show thinking'}
+                      </Button>
+                    )}
+                  </CardHeader>
+                  {parseReasoningExpanded && parseResult?.reasoning && (
+                    <pre className="whitespace-pre-wrap break-words text-xs px-4 py-2 font-mono max-h-[30vh] overflow-y-auto opacity-70 border-b border-border">{parseResult.reasoning}</pre>
+                  )}
+                  <div className="flex-1 min-h-[200px] bg-card shadow-[inset_0_1px_4px_rgba(0,0,0,0.04)] rounded-sm">
+                    <Textarea
+                      className="h-full border-0 bg-transparent p-3 sm:p-4 font-mono text-xs sm:text-code leading-relaxed resize-none focus-visible:ring-0"
+                      value={parsedContent}
+                      onChange={e => setParsedContent(e.target.value)}
+                    />
+                  </div>
+                </div>
+              ) : (
                 <ComparisonView
-                  original={rewriteResult!.original_content}
                   rewritten={rewriteResult!.rewritten_content}
                   onRewrittenChange={handleRewrittenChange}
                   onRewrittenBlur={handleRewrittenBlur}
+                  headerLeft={compactTitleArtist(true)}
+                  flat
+                  onShowOriginal={() => setShowOriginal(true)}
                 />
-              </>
+              )
             }
           />
         </div>
+      )}
+
+      {/* Show Original dialog */}
+      {isWorkshopping && rewriteResult && (
+        <Dialog open={showOriginal} onOpenChange={setShowOriginal}>
+          <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle>Original</DialogTitle>
+              <Button variant="secondary" size="sm" onClick={() => {
+                if (copyText(rewriteResult.original_content)) toast.success('Copied to clipboard');
+                else toast.error('Failed to copy');
+              }}>
+                Copy
+              </Button>
+            </DialogHeader>
+            <pre className="p-3 sm:p-4 font-mono text-xs sm:text-code leading-relaxed whitespace-pre-wrap break-words overflow-y-auto flex-1 min-h-0">{rewriteResult.original_content}</pre>
+          </DialogContent>
+        </Dialog>
       )}
 
       <ConfirmDialog

@@ -5,6 +5,13 @@ export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
 }
 
+export function stripXmlTags(text: string): string {
+  return text
+    .replace(/<content>[\s\S]*?<\/content>/g, '')
+    .replace(/<original_song>[\s\S]*?<\/original_song>/g, '')
+    .trim();
+}
+
 /** Copy text to clipboard with Clipboard API → execCommand fallback. */
 export function copyToClipboard(text: string): boolean {
   if (navigator.clipboard) {

@@ -62,7 +62,8 @@ _static_dir = (
 )
 
 if _static_dir is not None:
-    _index_html = _static_dir / "index.html"
+    _index_html_path = _static_dir / "index.html"
+    _index_html_content = _index_html_path.read_text() if _index_html_path.exists() else ""
 
     @app.get("/app")
     @app.get("/app/{rest:path}")
@@ -73,6 +74,6 @@ if _static_dir is not None:
     @app.get("/settings/{rest:path}")
     async def _spa_fallback() -> HTMLResponse:
         """Serve index.html for SPA client-side routes."""
-        return HTMLResponse(_index_html.read_text())
+        return HTMLResponse(_index_html_content)
 
     app.mount("/", StaticFiles(directory=str(_static_dir), html=True), name="frontend")

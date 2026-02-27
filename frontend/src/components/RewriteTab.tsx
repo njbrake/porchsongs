@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useOutletContext, Link } from 'react-router-dom';
-import { toast } from 'sonner';
 import api, { STORAGE_KEYS } from '@/api';
 import ComparisonView from '@/components/ComparisonView';
 import ChatPanel from '@/components/ChatPanel';
@@ -13,7 +12,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
@@ -21,7 +19,7 @@ import { Select } from '@/components/ui/select';
 import Spinner from '@/components/ui/spinner';
 import StreamingPre from '@/components/ui/streaming-pre';
 import { Alert } from '@/components/ui/alert';
-import { cn, copyToClipboard } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { QuotaBanner, OnboardingBanner, isQuotaError } from '@/extensions/quota';
 import type { AppShellContext } from '@/layouts/AppShell';
 import type { Profile, Song, RewriteResult, RewriteMeta, ChatMessage, LlmSettings, SavedModel, ParseResult } from '@/types';
@@ -307,46 +305,6 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
     }
   }, [currentSongId, rewriteResult]);
 
-  const handleShare = useCallback(async () => {
-    if (!rewriteResult) return;
-
-    const titleLine = songTitle ? `# ${songTitle}` : '# Untitled Song';
-    const artistLine = songArtist ? `*${songArtist}*` : '';
-    const header = [titleLine, artistLine].filter(Boolean).join('\n');
-
-    const sections: string[] = [header];
-
-    sections.push('\n---\n\n## Original\n```\n' + rewriteResult.original_content + '\n```');
-
-    if (chatMessages.length > 0) {
-      const chatLines = chatMessages
-        .filter(m => !m.isNote)
-        .map(m => m.role === 'user' ? `**You:** ${m.content}` : `**AI:** ${m.content}`)
-        .join('\n\n');
-      sections.push('\n---\n\n## Conversation\n' + chatLines);
-    }
-
-    sections.push('\n---\n\n## Final Version\n```\n' + rewriteResult.rewritten_content + '\n```');
-
-    const text = sections.join('\n');
-
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: songTitle || 'Song Workshop', text });
-        return;
-      } catch (err) {
-        if ((err as Error).name === 'AbortError') return;
-        // Fall through to clipboard
-      }
-    }
-
-    if (copyToClipboard(text)) {
-      toast.success('Summary copied to clipboard');
-    } else {
-      toast.error('Could not copy to clipboard — try selecting and copying manually');
-    }
-  }, [rewriteResult, chatMessages, songTitle, songArtist]);
-
   const titleArtistInputs = (withBlur?: boolean) => (
     <div className="flex flex-col gap-1 mb-2">
       <input
@@ -593,13 +551,6 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
                   </Button>
                   <Button
                     className="hidden md:inline-flex"
-                    variant="secondary"
-                    onClick={handleShare}
-                  >
-                    Share
-                  </Button>
-                  <Button
-                    className="hidden md:inline-flex"
                     variant="danger-outline"
                     onClick={() => setScrapDialogOpen(true)}
                     disabled={!currentSongId}
@@ -618,10 +569,6 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={handleShare}>
-                        Share
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
                       <DropdownMenuItem
                         className="text-danger hover:!bg-danger-light"
                         disabled={!currentSongId}

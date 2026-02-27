@@ -37,11 +37,46 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>
     );
     expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-    expect(screen.getByText(/unexpected error/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Reload page' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try Again' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reload Page' })).toBeInTheDocument();
   });
 
-  it('calls window.location.reload when reload button is clicked', async () => {
+  it('shows fallbackLabel in error message when provided', () => {
+    render(
+      <ErrorBoundary fallbackLabel="Library">
+        <ThrowingChild />
+      </ErrorBoundary>
+    );
+    expect(screen.getByText(/error occurred in Library/)).toBeInTheDocument();
+  });
+
+  it('resets error state when Try Again is clicked', async () => {
+    const user = userEvent.setup();
+    let shouldThrow = true;
+
+    function ConditionalChild() {
+      if (shouldThrow) throw new Error('Test error');
+      return <p>Recovered</p>;
+    }
+
+    const { rerender } = render(
+      <ErrorBoundary>
+        <ConditionalChild />
+      </ErrorBoundary>
+    );
+    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+
+    shouldThrow = false;
+    await user.click(screen.getByRole('button', { name: 'Try Again' }));
+    rerender(
+      <ErrorBoundary>
+        <ConditionalChild />
+      </ErrorBoundary>
+    );
+    expect(screen.getByText('Recovered')).toBeInTheDocument();
+  });
+
+  it('calls window.location.reload when Reload Page button is clicked', async () => {
     const user = userEvent.setup();
     const reloadMock = vi.fn();
     Object.defineProperty(window, 'location', {
@@ -55,7 +90,7 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>
     );
 
-    await user.click(screen.getByRole('button', { name: 'Reload page' }));
+    await user.click(screen.getByRole('button', { name: 'Reload Page' }));
     expect(reloadMock).toHaveBeenCalled();
   });
 });

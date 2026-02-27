@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import Spinner from '@/components/ui/spinner';
 import NotFoundPage from '@/components/NotFoundPage';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import AppShell from '@/layouts/AppShell';
 import RewriteTab from '@/components/RewriteTab';
 import LibraryTab from '@/components/LibraryTab';
@@ -43,10 +44,10 @@ export default function App() {
       {/* Authenticated app */}
       <Route path="/app" element={<AppShell />}>
         <Route index element={<Navigate to="/app/rewrite" replace />} />
-        <Route path="rewrite" element={<RewriteTab />} />
-        <Route path="library" element={<LibraryTab />} />
-        <Route path="library/:id" element={<LibraryTab />} />
-        <Route path="settings/:tab" element={<SettingsPage />} />
+        <Route path="rewrite" element={<ErrorBoundary fallbackLabel="Rewrite"><RewriteTab /></ErrorBoundary>} />
+        <Route path="library" element={<ErrorBoundary fallbackLabel="Library"><LibraryTab /></ErrorBoundary>} />
+        <Route path="library/:id" element={<ErrorBoundary fallbackLabel="Library"><LibraryTab /></ErrorBoundary>} />
+        <Route path="settings/:tab" element={<ErrorBoundary fallbackLabel="Settings"><SettingsPage /></ErrorBoundary>} />
         <Route path="settings" element={<Navigate to={`/app/settings/${getDefaultSettingsTab(isPremium)}`} replace />} />
       </Route>
 

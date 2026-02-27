@@ -6,6 +6,7 @@ import {
   mockProviderModels,
   presetLlmSettings,
   createSongViaApi,
+  createChatMessagesViaApi,
   getDefaultProfileId,
 } from '../fixtures/test-helpers';
 import {
@@ -126,5 +127,41 @@ test.describe('Song Lifecycle', () => {
 
     // Verify the rewritten content updated (check for "soul" instead of "wretch")
     await expect(page.getByText(/saved a soul like/).first()).toBeVisible({ timeout: 5_000 });
+  });
+
+  test('chat history persists when reopening a song', async ({ page, baseURL }) => {
+    // Seed a song and chat messages directly via API
+    const profileId = await getDefaultProfileId(baseURL!);
+    const song = await createSongViaApi(baseURL!, makeSongCreatePayload(profileId));
+    const songId = song.id as number;
+    await createChatMessagesViaApi(baseURL!, songId, [
+      { role: 'user', content: 'Change "wretch" to "soul"' },
+      { role: 'assistant', content: CHANGES_SUMMARY },
+    ]);
+
+    // Load the song from library
+    await page.goto('/');
+    await waitForAppReady(page);
+    await navigateToTab(page, 'Library');
+
+    await expect(page.getByText(/by John Newton/).first()).toBeVisible({ timeout: 5_000 });
+    await page.getByText(/by John Newton/).first().click();
+    await expect(page.getByRole('button', { name: /Edit in Rewrite/i })).toBeVisible({ timeout: 5_000 });
+    await page.getByRole('button', { name: /Edit in Rewrite/i }).click();
+
+    // Verify chat history is loaded — both user message and assistant response
+    await expect(page.getByText('Change "wretch" to "soul"').first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(CHANGES_SUMMARY).first()).toBeVisible();
+
+    // Navigate away and come back to verify persistence
+    await navigateToTab(page, 'Library');
+    await expect(page.getByText(PARSED_TITLE).first()).toBeVisible({ timeout: 5_000 });
+    await page.getByText(/by John Newton/).first().click();
+    await expect(page.getByRole('button', { name: /Edit in Rewrite/i })).toBeVisible({ timeout: 5_000 });
+    await page.getByRole('button', { name: /Edit in Rewrite/i }).click();
+
+    // Chat history still present after round-trip
+    await expect(page.getByText('Change "wretch" to "soul"').first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(CHANGES_SUMMARY).first()).toBeVisible();
   });
 });

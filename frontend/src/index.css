@@ -47,6 +47,18 @@
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.2);
 
   --animate-spin: spin 0.8s linear infinite;
+  --animate-overlay-in: overlay-in 150ms ease-out;
+  --animate-dialog-in: dialog-in 150ms ease-out;
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dialog-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
 @layer base {

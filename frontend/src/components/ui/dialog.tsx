@@ -12,7 +12,7 @@ const DialogOverlay = forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      'fixed inset-0 z-50 bg-black/40',
+      'fixed inset-0 z-50 bg-black/40 animate-overlay-in',
       className
     )}
     {...props}
@@ -30,7 +30,7 @@ const DialogContent = forwardRef<
       ref={ref}
       aria-describedby={undefined}
       className={cn(
-        'fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-[450px] -translate-x-1/2 -translate-y-1/2 bg-card rounded-md shadow-lg focus:outline-none',
+        'fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 bg-card rounded-md shadow-lg focus:outline-none animate-dialog-in',
         className
       )}
       {...props}

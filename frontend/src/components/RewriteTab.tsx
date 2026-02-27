@@ -38,10 +38,11 @@ interface RewriteTabProps {
   rewriteResult: RewriteResult | null;
   rewriteMeta: RewriteMeta | null;
   currentSongId: number | null;
+  currentSongUuid: string | null;
   chatMessages: ChatMessage[];
   setChatMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   onNewRewrite: (result: RewriteResult | null, meta: RewriteMeta | null) => void;
-  onSongSaved: (songId: number) => void;
+  onSongSaved: (song: Song) => void;
   onContentUpdated: (content: string) => void;
   onChangeProvider: (provider: string) => void;
   onChangeModel: (model: string) => void;
@@ -61,6 +62,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
     rewriteResult,
     rewriteMeta,
     currentSongId,
+    currentSongUuid,
     chatMessages,
     setChatMessages,
     onNewRewrite,
@@ -122,7 +124,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
 
   useEffect(() => {
     setSaveStatus(null);
-  }, [currentSongId]);
+  }, [currentSongUuid]);
 
   const hasProfile = !!profile?.id;
   const hasModel = isPremium || (llmSettings.provider && llmSettings.model);
@@ -204,7 +206,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
       llm_provider: llmSettings.provider,
       llm_model: llmSettings.model,
     });
-    onSongSaved(song.id);
+    onSongSaved(song);
     return song.id;
   }, [profile, songTitle, songArtist, parsedContent, llmSettings, onSongSaved]);
 
@@ -246,9 +248,9 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
   };
 
   const handleScrap = async () => {
-    if (!currentSongId) return;
+    if (!currentSongUuid) return;
     try {
-      await api.deleteSong(currentSongId);
+      await api.deleteSong(currentSongUuid);
     } catch {
       // Song may already be gone
     }
@@ -256,10 +258,10 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
   };
 
   const handleSave = async () => {
-    if (!currentSongId || !rewriteResult) return;
+    if (!currentSongUuid || !rewriteResult) return;
     setSaveStatus('saving');
     try {
-      await api.updateSong(currentSongId, {
+      await api.updateSong(currentSongUuid, {
         title: songTitle || null,
         artist: songArtist || null,
         rewritten_content: rewriteResult.rewritten_content,
@@ -282,10 +284,10 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
   }, []);
 
   const handleMetaBlur = useCallback(() => {
-    if (currentSongId) {
-      api.updateSong(currentSongId, { title: songTitle || null, artist: songArtist || null } as Partial<Song>).catch(() => {});
+    if (currentSongUuid) {
+      api.updateSong(currentSongUuid, { title: songTitle || null, artist: songArtist || null } as Partial<Song>).catch(() => {});
     }
-  }, [currentSongId, songTitle, songArtist]);
+  }, [currentSongUuid, songTitle, songArtist]);
 
   const handleOriginalContentUpdated = useCallback((newOriginal: string) => {
     if (!rewriteResult && parseResult) {
@@ -299,20 +301,20 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
       );
     }
     // Persist to DB
-    if (currentSongId) {
-      api.updateSong(currentSongId, { original_content: newOriginal } as Partial<Song>).catch(() => {});
+    if (currentSongUuid) {
+      api.updateSong(currentSongUuid, { original_content: newOriginal } as Partial<Song>).catch(() => {});
     }
-  }, [rewriteResult, parseResult, rewriteMeta, currentSongId, onNewRewrite]);
+  }, [rewriteResult, parseResult, rewriteMeta, currentSongUuid, onNewRewrite]);
 
   const handleRewrittenChange = useCallback((newText: string) => {
     onContentUpdated(newText);
   }, [onContentUpdated]);
 
   const handleRewrittenBlur = useCallback(() => {
-    if (currentSongId && rewriteResult) {
-      api.updateSong(currentSongId, { rewritten_content: rewriteResult.rewritten_content } as Partial<Song>).catch(() => {});
+    if (currentSongUuid && rewriteResult) {
+      api.updateSong(currentSongUuid, { rewritten_content: rewriteResult.rewritten_content } as Partial<Song>).catch(() => {});
     }
-  }, [currentSongId, rewriteResult]);
+  }, [currentSongUuid, rewriteResult]);
 
   const editableInputClass = 'bg-transparent border-0 border-b border-transparent hover:border-dashed hover:border-border focus:border-solid focus:border-primary p-0 pb-px min-w-0 w-full focus:outline-none cursor-text transition-colors';
 
@@ -547,7 +549,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
                     variant="secondary"
                     className="h-7 px-2.5 text-xs"
                     onClick={handleSave}
-                    disabled={saveStatus === 'saving' || !currentSongId}
+                    disabled={saveStatus === 'saving' || !currentSongUuid}
                   >
                     {saveStatus === 'saved' ? 'Saved!' :
                      saveStatus === 'saving' ? 'Saving...' : 'Save'}
@@ -572,7 +574,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         className="text-danger hover:!bg-danger-light"
-                        disabled={!currentSongId}
+                        disabled={!currentSongUuid}
                         onClick={() => setScrapDialogOpen(true)}
                       >
                         Scrap This
@@ -607,7 +609,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
                         variant="secondary"
                         className="h-7 px-2.5 text-xs"
                         onClick={handleSave}
-                        disabled={saveStatus === 'saving' || !currentSongId}
+                        disabled={saveStatus === 'saving' || !currentSongUuid}
                       >
                         {saveStatus === 'saved' ? 'Saved!' :
                          saveStatus === 'saving' ? 'Saving...' : 'Save'}
@@ -626,7 +628,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               className="text-danger hover:!bg-danger-light"
-                              disabled={!currentSongId}
+                              disabled={!currentSongUuid}
                               onClick={() => setScrapDialogOpen(true)}
                             >
                               Scrap This

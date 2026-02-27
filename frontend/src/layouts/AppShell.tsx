@@ -38,10 +38,11 @@ export interface AppShellContext {
   rewriteResult: RewriteResult | null;
   rewriteMeta: RewriteMeta | null;
   currentSongId: number | null;
+  currentSongUuid: string | null;
   chatMessages: ChatMessage[];
   setChatMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   onNewRewrite: (result: RewriteResult | null, meta: RewriteMeta | null) => void;
-  onSongSaved: (songId: number) => void;
+  onSongSaved: (song: Song) => void;
   onContentUpdated: (content: string) => void;
   onChangeProvider: (provider: string) => void;
   onChangeModel: (model: string) => void;
@@ -86,20 +87,20 @@ export default function AppShell() {
   const [rewriteMeta, setRewriteMeta] = useState<RewriteMeta | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
-  // Persist currentSongId to localStorage so it survives page refresh
-  const [currentSongId, setCurrentSongIdRaw] = useState<number | null>(() => {
-    const stored = localStorage.getItem(STORAGE_KEYS.CURRENT_SONG_ID);
-    if (stored) {
-      const id = parseInt(stored, 10);
-      return Number.isFinite(id) ? id : null;
-    }
-    return null;
+  // Track current song — integer ID for chat requests, UUID for URL routing
+  const [currentSongId, setCurrentSongIdRaw] = useState<number | null>(null);
+  const [currentSongUuid, setCurrentSongUuidRaw] = useState<string | null>(() => {
+    return localStorage.getItem(STORAGE_KEYS.CURRENT_SONG_ID) || null;
   });
-  const setCurrentSongId = useCallback((id: number | null) => {
-    setCurrentSongIdRaw(id);
-    if (id != null) {
-      localStorage.setItem(STORAGE_KEYS.CURRENT_SONG_ID, String(id));
+
+  const setCurrentSong = useCallback((song: Song | null) => {
+    if (song) {
+      setCurrentSongIdRaw(song.id);
+      setCurrentSongUuidRaw(song.uuid);
+      localStorage.setItem(STORAGE_KEYS.CURRENT_SONG_ID, song.uuid);
     } else {
+      setCurrentSongIdRaw(null);
+      setCurrentSongUuidRaw(null);
       localStorage.removeItem(STORAGE_KEYS.CURRENT_SONG_ID);
     }
   }, []);
@@ -130,8 +131,9 @@ export default function AppShell() {
 
   // Auto-restore active song on mount (page refresh recovery)
   useEffect(() => {
-    if (authState !== 'ready' || rewriteResult || !currentSongId) return;
-    api.getSong(currentSongId).then(async (song: Song) => {
+    if (authState !== 'ready' || rewriteResult || !currentSongUuid) return;
+    api.getSong(currentSongUuid).then(async (song: Song) => {
+      setCurrentSongIdRaw(song.id);
       setRewriteResult({
         original_content: song.original_content,
         rewritten_content: song.rewritten_content,
@@ -146,13 +148,13 @@ export default function AppShell() {
         llm_model: song.llm_model ?? undefined,
       });
       try {
-        const history = await api.getChatHistory(song.id);
+        const history = await api.getChatHistory(song.uuid);
         setChatMessages(chatHistoryToMessages(history));
       } catch {
         setChatMessages([]);
       }
     }).catch(() => {
-      setCurrentSongId(null);
+      setCurrentSong(null);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authState]);
@@ -173,13 +175,13 @@ export default function AppShell() {
     setRewriteMeta(meta);
     if (!result) {
       setChatMessages([]);
-      setCurrentSongId(null);
+      setCurrentSong(null);
     }
-  }, [setCurrentSongId]);
+  }, [setCurrentSong]);
 
-  const handleSongSaved = useCallback((songId: number) => {
-    setCurrentSongId(songId);
-  }, [setCurrentSongId]);
+  const handleSongSaved = useCallback((song: Song) => {
+    setCurrentSong(song);
+  }, [setCurrentSong]);
 
   const handleContentUpdated = useCallback((newContent: string) => {
     setRewriteResult(prev => prev ? { ...prev, rewritten_content: newContent } : prev);
@@ -199,16 +201,16 @@ export default function AppShell() {
       llm_provider: song.llm_provider ?? undefined,
       llm_model: song.llm_model ?? undefined,
     });
-    setCurrentSongId(song.id);
+    setCurrentSong(song);
     navigate('/app/rewrite');
 
     try {
-      const history = await api.getChatHistory(song.id);
+      const history = await api.getChatHistory(song.uuid);
       setChatMessages(chatHistoryToMessages(history));
     } catch {
       setChatMessages([]);
     }
-  }, [navigate, setCurrentSongId]);
+  }, [navigate, setCurrentSong]);
 
   const handleRemoveConnection = useCallback(async (connId: number) => {
     const conn = connections.find(c => c.id === connId);
@@ -247,6 +249,7 @@ export default function AppShell() {
     rewriteResult,
     rewriteMeta,
     currentSongId,
+    currentSongUuid,
     chatMessages,
     setChatMessages,
     onNewRewrite: handleNewRewrite,

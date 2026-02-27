@@ -187,7 +187,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/songs/{song_id}": {
+    "/api/songs/{song_ref}": {
         parameters: {
             query?: never;
             header?: never;
@@ -195,18 +195,18 @@ export interface paths {
             cookie?: never;
         };
         /** Get Song */
-        get: operations["get_song_api_songs__song_id__get"];
+        get: operations["get_song_api_songs__song_ref__get"];
         /** Update Song */
-        put: operations["update_song_api_songs__song_id__put"];
+        put: operations["update_song_api_songs__song_ref__put"];
         post?: never;
         /** Delete Song */
-        delete: operations["delete_song_api_songs__song_id__delete"];
+        delete: operations["delete_song_api_songs__song_ref__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/songs/{song_id}/pdf": {
+    "/api/songs/{song_ref}/pdf": {
         parameters: {
             query?: never;
             header?: never;
@@ -214,7 +214,7 @@ export interface paths {
             cookie?: never;
         };
         /** Download Song Pdf */
-        get: operations["download_song_pdf_api_songs__song_id__pdf_get"];
+        get: operations["download_song_pdf_api_songs__song_ref__pdf_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -223,7 +223,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/songs/{song_id}/revisions": {
+    "/api/songs/{song_ref}/revisions": {
         parameters: {
             query?: never;
             header?: never;
@@ -231,7 +231,7 @@ export interface paths {
             cookie?: never;
         };
         /** List Revisions */
-        get: operations["list_revisions_api_songs__song_id__revisions_get"];
+        get: operations["list_revisions_api_songs__song_ref__revisions_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -240,7 +240,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/songs/{song_id}/messages": {
+    "/api/songs/{song_ref}/messages": {
         parameters: {
             query?: never;
             header?: never;
@@ -248,17 +248,17 @@ export interface paths {
             cookie?: never;
         };
         /** List Messages */
-        get: operations["list_messages_api_songs__song_id__messages_get"];
+        get: operations["list_messages_api_songs__song_ref__messages_get"];
         put?: never;
         /** Save Messages */
-        post: operations["save_messages_api_songs__song_id__messages_post"];
+        post: operations["save_messages_api_songs__song_ref__messages_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/songs/{song_id}/status": {
+    "/api/songs/{song_ref}/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -267,7 +267,7 @@ export interface paths {
         };
         get?: never;
         /** Update Song Status */
-        put: operations["update_song_status_api_songs__song_id__status_put"];
+        put: operations["update_song_status_api_songs__song_ref__status_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -838,6 +838,8 @@ export interface components {
         SongOut: {
             /** Id */
             id: number;
+            /** Uuid */
+            uuid: string;
             /** User Id */
             user_id: number;
             /** Profile Id */
@@ -1474,12 +1476,12 @@ export interface operations {
             };
         };
     };
-    get_song_api_songs__song_id__get: {
+    get_song_api_songs__song_ref__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                song_id: number;
+                song_ref: string;
             };
             cookie?: never;
         };
@@ -1505,12 +1507,12 @@ export interface operations {
             };
         };
     };
-    update_song_api_songs__song_id__put: {
+    update_song_api_songs__song_ref__put: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                song_id: number;
+                song_ref: string;
             };
             cookie?: never;
         };
@@ -1540,12 +1542,12 @@ export interface operations {
             };
         };
     };
-    delete_song_api_songs__song_id__delete: {
+    delete_song_api_songs__song_ref__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                song_id: number;
+                song_ref: string;
             };
             cookie?: never;
         };
@@ -1571,12 +1573,12 @@ export interface operations {
             };
         };
     };
-    download_song_pdf_api_songs__song_id__pdf_get: {
+    download_song_pdf_api_songs__song_ref__pdf_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                song_id: number;
+                song_ref: string;
             };
             cookie?: never;
         };
@@ -1602,12 +1604,12 @@ export interface operations {
             };
         };
     };
-    list_revisions_api_songs__song_id__revisions_get: {
+    list_revisions_api_songs__song_ref__revisions_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                song_id: number;
+                song_ref: string;
             };
             cookie?: never;
         };
@@ -1633,12 +1635,12 @@ export interface operations {
             };
         };
     };
-    list_messages_api_songs__song_id__messages_get: {
+    list_messages_api_songs__song_ref__messages_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                song_id: number;
+                song_ref: string;
             };
             cookie?: never;
         };
@@ -1664,12 +1666,12 @@ export interface operations {
             };
         };
     };
-    save_messages_api_songs__song_id__messages_post: {
+    save_messages_api_songs__song_ref__messages_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                song_id: number;
+                song_ref: string;
             };
             cookie?: never;
         };
@@ -1699,12 +1701,12 @@ export interface operations {
             };
         };
     };
-    update_song_status_api_songs__song_id__status_put: {
+    update_song_status_api_songs__song_ref__status_put: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                song_id: number;
+                song_ref: string;
             };
             cookie?: never;
         };

@@ -6,6 +6,7 @@ import type { Song } from '@/types';
 
 const MOCK_SONG = vi.hoisted<Song>(() => ({
   id: 42,
+  uuid: 'test-uuid-123',
   user_id: 1,
   profile_id: 1,
   title: 'Amazing Grace',
@@ -43,6 +44,7 @@ const stubContext: AppShellContext = {
   rewriteResult: null,
   rewriteMeta: null,
   currentSongId: null,
+  currentSongUuid: null,
   chatMessages: [],
   setChatMessages: vi.fn(),
   onNewRewrite: vi.fn(),
@@ -89,7 +91,7 @@ describe('LibraryTab navigation (issue #94)', () => {
     const user = userEvent.setup();
 
     render(
-      <MemoryRouter initialEntries={['/app/library/42']}>
+      <MemoryRouter initialEntries={['/app/library/test-uuid-123']}>
         <NavButton />
         <Routes>
           <Route path="/app" element={<ContextWrapper />}>

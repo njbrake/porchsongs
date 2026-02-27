@@ -44,6 +44,7 @@ import api from '@/api';
 function makeSong(overrides: Partial<Song> = {}): Song {
   return {
     id: 1,
+    uuid: `test-uuid-${String(overrides.id ?? 1)}`,
     user_id: 1,
     profile_id: 1,
     title: 'Test Song',
@@ -71,6 +72,7 @@ function setupContext(overrides: Partial<AppShellContext> = {}): void {
     rewriteResult: null,
     rewriteMeta: null,
     currentSongId: null,
+    currentSongUuid: null,
     chatMessages: [] as ChatMessage[],
     setChatMessages: vi.fn(),
     onNewRewrite: vi.fn(),

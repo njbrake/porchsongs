@@ -7,7 +7,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ..auth.dependencies import get_current_user
-from ..auth.scoping import get_user_profile, get_user_song
+from ..auth.scoping import get_user_profile, get_user_song, get_user_song_by_uuid
 from ..database import get_db
 from ..models import (
     ChatMessage,
@@ -29,6 +29,15 @@ from ..schemas import (
 from ..services.pdf_service import generate_song_pdf
 
 router = APIRouter(tags=["songs"])
+
+
+def _resolve_song(db: Session, user: User, song_ref: str) -> Song:
+    """Resolve a song by UUID string or integer ID for backward compat."""
+    try:
+        song_id = int(song_ref)
+        return get_user_song(db, user, song_id)
+    except ValueError:
+        return get_user_song_by_uuid(db, user, song_ref)
 
 
 @router.get("/songs", response_model=list[SongOut])
@@ -94,22 +103,22 @@ async def delete_folder(
     return OkResponse(ok=True)
 
 
-@router.get("/songs/{song_id}", response_model=SongOut)
+@router.get("/songs/{song_ref}", response_model=SongOut)
 async def get_song(
-    song_id: int,
+    song_ref: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Song:
-    return get_user_song(db, current_user, song_id)
+    return _resolve_song(db, current_user, song_ref)
 
 
-@router.get("/songs/{song_id}/pdf")
+@router.get("/songs/{song_ref}/pdf")
 async def download_song_pdf(
-    song_id: int,
+    song_ref: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Response:
-    song = get_user_song(db, current_user, song_id)
+    song = _resolve_song(db, current_user, song_ref)
     pdf_bytes = generate_song_pdf(song.title or "Untitled", song.artist, song.rewritten_content)
 
     title = song.title or "Untitled"
@@ -159,14 +168,14 @@ async def create_song(
     return song
 
 
-@router.put("/songs/{song_id}", response_model=SongOut)
+@router.put("/songs/{song_ref}", response_model=SongOut)
 async def update_song(
-    song_id: int,
+    song_ref: str,
     data: SongUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Song:
-    song = get_user_song(db, current_user, song_id)
+    song = _resolve_song(db, current_user, song_ref)
     if data.title is not None:
         song.title = data.title
     if data.artist is not None:
@@ -184,28 +193,28 @@ async def update_song(
     return song
 
 
-@router.delete("/songs/{song_id}", response_model=OkResponse)
+@router.delete("/songs/{song_ref}", response_model=OkResponse)
 async def delete_song(
-    song_id: int,
+    song_ref: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> OkResponse:
-    song = get_user_song(db, current_user, song_id)
+    song = _resolve_song(db, current_user, song_ref)
     db.delete(song)
     db.commit()
     return OkResponse(ok=True)
 
 
-@router.get("/songs/{song_id}/revisions", response_model=list[SongRevisionOut])
+@router.get("/songs/{song_ref}/revisions", response_model=list[SongRevisionOut])
 async def list_revisions(
-    song_id: int,
+    song_ref: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[SongRevision]:
-    get_user_song(db, current_user, song_id)
+    song = _resolve_song(db, current_user, song_ref)
     revisions = (
         db.query(SongRevision)
-        .filter(SongRevision.song_id == song_id)
+        .filter(SongRevision.song_id == song.id)
         .order_by(SongRevision.version.asc())
         .all()
     )
@@ -230,16 +239,16 @@ def _display_content(raw: str) -> str:
     return raw
 
 
-@router.get("/songs/{song_id}/messages", response_model=list[ChatMessageOut])
+@router.get("/songs/{song_ref}/messages", response_model=list[ChatMessageOut])
 async def list_messages(
-    song_id: int,
+    song_ref: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[ChatMessageOut]:
-    get_user_song(db, current_user, song_id)
+    song = _resolve_song(db, current_user, song_ref)
     rows = (
         db.query(ChatMessage)
-        .filter(ChatMessage.song_id == song_id)
+        .filter(ChatMessage.song_id == song.id)
         .order_by(ChatMessage.created_at.asc())
         .all()
     )
@@ -258,18 +267,18 @@ async def list_messages(
     ]
 
 
-@router.post("/songs/{song_id}/messages", response_model=list[ChatMessageOut], status_code=201)
+@router.post("/songs/{song_ref}/messages", response_model=list[ChatMessageOut], status_code=201)
 async def save_messages(
-    song_id: int,
+    song_ref: str,
     messages: list[ChatMessageCreate],
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[ChatMessage]:
-    get_user_song(db, current_user, song_id)
+    song = _resolve_song(db, current_user, song_ref)
     rows = []
     for msg in messages:
         row = ChatMessage(
-            song_id=song_id,
+            song_id=song.id,
             role=msg.role,
             content=msg.content,
             is_note=msg.is_note,
@@ -284,14 +293,14 @@ async def save_messages(
     return rows
 
 
-@router.put("/songs/{song_id}/status", response_model=SongOut)
+@router.put("/songs/{song_ref}/status", response_model=SongOut)
 async def update_song_status(
-    song_id: int,
+    song_ref: str,
     data: SongStatusUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Song:
-    song = get_user_song(db, current_user, song_id)
+    song = _resolve_song(db, current_user, song_ref)
     song.status = data.status
     db.commit()
     db.refresh(song)

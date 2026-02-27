@@ -67,7 +67,7 @@ test.describe('Song Lifecycle', () => {
     await page.getByRole('button', { name: 'Parse' }).click();
 
     // Wait for parse to complete
-    await expect(page.getByPlaceholder('Song title')).toHaveValue(PARSED_TITLE, { timeout: 10_000 });
+    await expect(page.getByLabel('Song title')).toHaveValue(PARSED_TITLE, { timeout: 10_000 });
 
     // Send a chat message — this triggers auto-save via onBeforeSend
     const chatInput = page.getByPlaceholder('Tell the AI how to change the song...');

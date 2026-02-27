@@ -8,12 +8,13 @@
   <img alt="Python" src="https://img.shields.io/badge/python-3.11+-blue?logo=python&logoColor=white" />
   <img alt="React" src="https://img.shields.io/badge/react-19-61dafb?logo=react&logoColor=white" />
   <img alt="FastAPI" src="https://img.shields.io/badge/fastapi-0.115-009688?logo=fastapi&logoColor=white" />
-  <img alt="any-llm" src="https://img.shields.io/badge/LLM_providers-38+-c06830" />
+  <a href="https://any-llm.ai/"><img alt="any-llm" src="https://img.shields.io/badge/LLM_providers-38+-c06830" /></a>
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green" />
 </p>
 
 <p align="center">
-  A personal song lyric rewriter. Edit and refine your lyrics with AI — workshop them into something that actually sounds like you.
+  A personal song lyric rewriter. Edit and refine your lyrics with AI — workshop them into something that actually sounds like you.<br />
+  Powered by <a href="https://any-llm.ai/">any-llm</a> — use any LLM provider you want.
 </p>
 
 ---
@@ -151,8 +152,18 @@ cd frontend && npx eslint src/
 cd frontend && npm run typecheck
 ```
 
-## LLM Providers
+## LLM Providers — Powered by any-llm
 
-Built on [any-llm](https://github.com/mozilla-ai/any-llm) — 38+ providers including OpenAI, Anthropic, Google, Mistral, Groq, and Ollama. Bring your own API key.
+porchsongs uses **[any-llm](https://any-llm.ai/)** as its LLM backbone — a unified interface to **38+ providers** including OpenAI, Anthropic, Google, Mistral, Groq, and Ollama. Swap providers by changing a single setting; no code changes needed.
 
-For fully local/offline use, try [llamafile](https://github.com/mozilla-ai/llamafile).
+| | |
+|---|---|
+| **Website** | [any-llm.ai](https://any-llm.ai/) |
+| **GitHub** | [mozilla-ai/any-llm](https://github.com/mozilla-ai/any-llm) |
+
+any-llm gives porchsongs:
+- **Provider flexibility** — use whichever LLM API you already have a key for
+- **Local/offline support** — run fully offline with [llamafile](https://github.com/mozilla-ai/llamafile) or Ollama
+- **Consistent interface** — streaming, async, and tool use work the same across all providers
+
+Bring your own API key, configure it in Settings, and start rewriting.

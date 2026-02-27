@@ -32,8 +32,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // OSS mode — no auth needed, immediately ready
           setAuthState('ready');
         } else {
-          // Premium mode — try to restore existing session
-          api.tryRestoreSession().then((user) => {
+          // Premium mode — try to restore existing session with timeout
+          const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000));
+          Promise.race([api.tryRestoreSession(), timeout]).then((user) => {
             if (user) {
               setCurrentAuthUser(user);
               setAuthState('ready');
@@ -43,7 +44,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
         }
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        console.error('[AuthContext] Failed to fetch auth config:', err);
         setAuthState('ready');
       });
   }, []);

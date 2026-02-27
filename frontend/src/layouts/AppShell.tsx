@@ -7,6 +7,7 @@ import useProviderConnections from '@/hooks/useProviderConnections';
 import useSavedModels from '@/hooks/useSavedModels';
 import Header from '@/components/Header';
 import Tabs from '@/components/Tabs';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Profile, RewriteResult, RewriteMeta, ChatMessage, Song } from '@/types';
 
@@ -49,6 +50,7 @@ export default function AppShell() {
 
   // Profile state
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileError, setProfileError] = useState(false);
 
   // LLM settings (persisted in localStorage)
   const [provider, setProvider] = useLocalStorage(STORAGE_KEYS.PROVIDER, '');
@@ -85,8 +87,8 @@ export default function AppShell() {
   const llmSettings = { provider, model, reasoning_effort: reasoningEffort };
 
   // Load profile on mount; auto-create if none exist
-  useEffect(() => {
-    if (authState !== 'ready') return;
+  const loadProfile = useCallback(() => {
+    setProfileError(false);
     api.listProfiles().then(async profiles => {
       const def = profiles.find(p => p.is_default) || profiles[0];
       if (def) {
@@ -95,8 +97,16 @@ export default function AppShell() {
         const created = await api.createProfile({ is_default: true });
         setProfile(created);
       }
-    }).catch(() => {});
-  }, [authState]);
+    }).catch((err: unknown) => {
+      console.error('[AppShell] Failed to load profile:', err);
+      setProfileError(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (authState !== 'ready') return;
+    loadProfile();
+  }, [authState, loadProfile]);
 
   // Auto-restore active song on mount (page refresh recovery)
   useEffect(() => {
@@ -208,6 +218,16 @@ export default function AppShell() {
   // Redirect to login if not authenticated
   if (authState === 'login') {
     return <Navigate to="/app/login" replace />;
+  }
+
+  // Show error banner if profile loading failed
+  if (profileError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-3 text-muted-foreground">
+        <p className="text-sm">Unable to load your profile. The server may be unavailable.</p>
+        <Button onClick={loadProfile}>Retry</Button>
+      </div>
+    );
   }
 
   const ctx: AppShellContext = {

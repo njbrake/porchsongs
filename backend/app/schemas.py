@@ -81,7 +81,7 @@ class ProviderConnectionOut(BaseModel):
 # --- Parse ---
 class ParseRequest(BaseModel):
     profile_id: int
-    content: str
+    content: str = Field(max_length=100_000)
     provider: str
     model: str
     reasoning_effort: str | None = None
@@ -99,15 +99,15 @@ class ParseResponse(BaseModel):
 # --- Songs ---
 class SongCreate(BaseModel):
     profile_id: int
-    title: str | None = None
-    artist: str | None = None
+    title: str | None = Field(default=None, max_length=500)
+    artist: str | None = Field(default=None, max_length=500)
     source_url: str | None = None
-    original_content: str
-    rewritten_content: str
+    original_content: str = Field(max_length=100_000)
+    rewritten_content: str = Field(max_length=100_000)
     changes_summary: str | None = None
     llm_provider: str | None = None
     llm_model: str | None = None
-    folder: str | None = None
+    folder: str | None = Field(default=None, max_length=100)
 
 
 class SongOut(BaseModel):
@@ -147,12 +147,12 @@ class SongRevisionOut(BaseModel):
 
 
 class SongUpdate(BaseModel):
-    title: str | None = None
-    artist: str | None = None
-    original_content: str | None = None
-    rewritten_content: str | None = None
+    title: str | None = Field(default=None, max_length=500)
+    artist: str | None = Field(default=None, max_length=500)
+    original_content: str | None = Field(default=None, max_length=100_000)
+    rewritten_content: str | None = Field(default=None, max_length=100_000)
     font_size: float | None = Field(default=None, ge=0, le=100)
-    folder: str | None = None
+    folder: str | None = Field(default=None, max_length=100)
 
 
 class FolderRename(BaseModel):
@@ -172,7 +172,7 @@ class ChatMessage(BaseModel):
 
 class ChatMessageCreate(BaseModel):
     role: str
-    content: str
+    content: str = Field(max_length=10_000)
     is_note: bool = False
 
 

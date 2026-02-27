@@ -181,9 +181,6 @@ async def delete_song(
     db: Session = Depends(get_db),
 ) -> OkResponse:
     song = get_user_song(db, current_user, song_id)
-    # Delete related revisions and chat messages
-    db.query(SongRevision).filter(SongRevision.song_id == song.id).delete()
-    db.query(ChatMessage).filter(ChatMessage.song_id == song.id).delete()
     db.delete(song)
     db.commit()
     return OkResponse(ok=True)

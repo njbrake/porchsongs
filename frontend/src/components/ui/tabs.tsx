@@ -11,7 +11,7 @@ const TabsList = forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      'flex border-b-2 border-border px-4 sm:px-8 bg-card overflow-x-auto',
+      'flex border-b border-border px-4 sm:px-8 bg-card overflow-x-auto',
       className
     )}
     {...props}
@@ -26,7 +26,7 @@ const TabsTrigger = forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      'px-4 sm:px-6 py-3 text-sm text-muted-foreground cursor-pointer border-b-2 border-transparent -mb-[2px] transition-colors whitespace-nowrap hover:text-foreground data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:font-semibold',
+      'px-4 sm:px-6 py-3 text-sm text-muted-foreground cursor-pointer border-b-2 border-transparent -mb-px transition-colors whitespace-nowrap hover:text-foreground data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:font-semibold',
       className
     )}
     {...props}

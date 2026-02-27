@@ -17,7 +17,7 @@ export default function Header({ user, authRequired, onLogout, isPremium }: Head
   const logoTo = isPremium ? '/' : '/app/rewrite';
 
   return (
-    <header className="flex justify-between items-center px-3 sm:px-8 py-1 sm:py-1.5 bg-linear-to-br from-header-bg-from to-header-bg-to text-header-text shadow-md">
+    <header className="flex justify-between items-center px-3 sm:px-8 py-2 sm:py-2.5 bg-linear-to-r from-header-bg-from to-header-bg-to text-header-text border-b border-header-border">
       <div className="flex items-baseline gap-0 min-w-0">
         <Link
           className="flex items-baseline gap-0 no-underline text-inherit cursor-pointer shrink-0"
@@ -30,7 +30,7 @@ export default function Header({ user, authRequired, onLogout, isPremium }: Head
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <button
-          className="bg-white/15 border border-white/25 text-header-text p-1.5 rounded-full cursor-pointer hover:bg-white/25 transition-colors"
+          className="bg-black/5 border border-border text-header-text p-1.5 rounded-full cursor-pointer hover:bg-black/10 transition-colors"
           onClick={toggleTheme}
           aria-label={currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           title={currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -44,10 +44,10 @@ export default function Header({ user, authRequired, onLogout, isPremium }: Head
         {wakeLock.supported && (
           <button
             className={cn(
-              'border text-xs px-2 sm:px-3 py-1.5 rounded-full cursor-pointer transition-colors text-header-text hover:bg-white/25',
+              'border text-xs px-2 sm:px-3 py-1.5 rounded-full cursor-pointer transition-colors text-header-text hover:bg-black/10',
               wakeLock.active
-                ? 'bg-white/25 border-white/40'
-                : 'bg-white/15 border-white/25 opacity-70 hover:opacity-100'
+                ? 'bg-primary/10 border-primary/30'
+                : 'bg-black/5 border-border opacity-70 hover:opacity-100'
             )}
             onClick={wakeLock.toggle}
             title={wakeLock.active ? 'Screen staying awake — click to disable' : 'Keep screen awake while viewing song'}
@@ -60,7 +60,7 @@ export default function Header({ user, authRequired, onLogout, isPremium }: Head
         )}
         {authRequired && (
           <button
-            className="bg-white/15 border border-white/25 text-header-text text-xs px-2 sm:px-3 py-1.5 rounded-full cursor-pointer hover:bg-white/25 transition-colors"
+            className="bg-black/5 border border-border text-header-text text-xs px-2 sm:px-3 py-1.5 rounded-full cursor-pointer hover:bg-black/10 transition-colors"
             onClick={onLogout}
           >
             Log out

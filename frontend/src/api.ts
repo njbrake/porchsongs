@@ -30,6 +30,7 @@ const STORAGE_KEYS = {
   PROVIDER: 'porchsongs_provider',
   MODEL: 'porchsongs_model',
   REASONING_EFFORT: 'porchsongs_reasoning_effort',
+  THEME: 'porchsongs_theme',
 } as const;
 
 export { STORAGE_KEYS };

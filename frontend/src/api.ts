@@ -222,9 +222,9 @@ const api = {
     });
     if (error) _throwApiError(error, 'Failed to delete folder');
   },
-  getSong: async (id: number) => {
-    const { data, error } = await client.GET('/api/songs/{song_id}', {
-      params: { path: { song_id: id } },
+  getSong: async (ref: string) => {
+    const { data, error } = await client.GET('/api/songs/{song_ref}', {
+      params: { path: { song_ref: ref } },
     });
     if (error) _throwApiError(error, 'Failed to get song');
     return data as Song;
@@ -236,23 +236,23 @@ const api = {
     if (error) _throwApiError(error, 'Failed to save song');
     return data as Song;
   },
-  updateSong: async (id: number, body: Partial<Song>) => {
-    const { data, error } = await client.PUT('/api/songs/{song_id}', {
-      params: { path: { song_id: id } },
+  updateSong: async (ref: string, body: Partial<Song>) => {
+    const { data, error } = await client.PUT('/api/songs/{song_ref}', {
+      params: { path: { song_ref: ref } },
       body: body as never,
     });
     if (error) _throwApiError(error, 'Failed to update song');
     return data as Song;
   },
-  deleteSong: async (id: number) => {
-    const { error } = await client.DELETE('/api/songs/{song_id}', {
-      params: { path: { song_id: id } },
+  deleteSong: async (ref: string) => {
+    const { error } = await client.DELETE('/api/songs/{song_ref}', {
+      params: { path: { song_ref: ref } },
     });
     if (error) _throwApiError(error, 'Failed to delete song');
   },
-  getSongRevisions: async (id: number) => {
-    const { data, error } = await client.GET('/api/songs/{song_id}/revisions', {
-      params: { path: { song_id: id } },
+  getSongRevisions: async (ref: string) => {
+    const { data, error } = await client.GET('/api/songs/{song_ref}/revisions', {
+      params: { path: { song_ref: ref } },
     });
     if (error) _throwApiError(error, 'Failed to get revisions');
     return data as SongRevision[];
@@ -265,9 +265,9 @@ const api = {
     signal?: AbortSignal,
     onReasoning?: (token: string) => void,
   ): Promise<ChatResult & { version: number }> => _streamSse<ChatResult & { version: number }>('/chat/stream', data, onToken, signal, onReasoning),
-  getChatHistory: async (songId: number) => {
-    const { data, error } = await client.GET('/api/songs/{song_id}/messages', {
-      params: { path: { song_id: songId } },
+  getChatHistory: async (songRef: string) => {
+    const { data, error } = await client.GET('/api/songs/{song_ref}/messages', {
+      params: { path: { song_ref: songRef } },
     });
     if (error) _throwApiError(error, 'Failed to get chat history');
     return data as ChatHistoryRow[];
@@ -319,14 +319,14 @@ const api = {
     if (error) _throwApiError(error, 'Failed to delete connection');
   },
 
-  // PDF
-  downloadSongPdf: async (id: number, title: string | null, artist: string | null) => {
+  // PDF — uses UUID
+  downloadSongPdf: async (songUuid: string, title: string | null, artist: string | null) => {
     const filename = `${title || 'Untitled'} - ${artist || 'Unknown'}.pdf`;
-    let res = await fetch(`/api/songs/${id}/pdf`, { headers: _getAuthHeaders() });
+    let res = await fetch(`/api/songs/${songUuid}/pdf`, { headers: _getAuthHeaders() });
     if (res.status === 401) {
       const refreshed = await tryRefresh();
       if (refreshed) {
-        res = await fetch(`/api/songs/${id}/pdf`, { headers: _getAuthHeaders() });
+        res = await fetch(`/api/songs/${songUuid}/pdf`, { headers: _getAuthHeaders() });
       } else {
         window.dispatchEvent(new CustomEvent('porchsongs-logout'));
         throw new Error('Authentication required. Please log in.');

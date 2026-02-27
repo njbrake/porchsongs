@@ -185,10 +185,10 @@ function PerformanceSheet({ song, onSongUpdated }: { song: Song; onSongUpdated: 
 
   const persistFontSize = useCallback((value: number | null) => {
     const sendValue = value === null ? 0 : value;
-    api.updateSong(song.id, { font_size: sendValue } as Partial<Song>).then(updated => {
+    api.updateSong(song.uuid, { font_size: sendValue } as Partial<Song>).then(updated => {
       onSongUpdated(updated);
     }).catch(() => {});
-  }, [song.id, onSongUpdated]);
+  }, [song.uuid, onSongUpdated]);
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setLocalFontSize(Number(e.target.value));
@@ -278,7 +278,7 @@ function EditableTitle({ song, onSaved }: { song: Song; onSaved: (song: Song) =>
     setEditing(false);
     if (trimmed === (song.title || '')) return;
     try {
-      const updated = await api.updateSong(song.id, { title: trimmed || null } as Partial<Song>);
+      const updated = await api.updateSong(song.uuid, { title: trimmed || null } as Partial<Song>);
       onSaved(updated);
     } catch {
       setValue(song.title || '');
@@ -316,7 +316,7 @@ function EditableTitle({ song, onSaved }: { song: Song; onSaved: (song: Song) =>
 
 interface SongMenuProps {
   song: Song;
-  onDelete: (id: number) => void;
+  onDelete: (uuid: string) => void;
   onRename: (song: Song) => void;
   onEdit: (song: Song) => void;
   folders: string[];
@@ -363,7 +363,7 @@ function SongMenu({ song, onDelete, onRename, onEdit, folders, onMoveToFolder, o
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-danger hover:!bg-danger-light" onClick={() => onDelete(song.id)}>
+        <DropdownMenuItem className="text-danger hover:!bg-danger-light" onClick={() => onDelete(song.uuid)}>
           Delete
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -376,7 +376,7 @@ type SortDir = 'asc' | 'desc';
 
 type DialogState =
   | { kind: 'none' }
-  | { kind: 'delete'; songId: number }
+  | { kind: 'delete'; songUuid: string }
   | { kind: 'bulkDelete'; count: number }
   | { kind: 'rename'; song: Song }
   | { kind: 'newFolder'; song?: Song }
@@ -396,7 +396,7 @@ export default function LibraryTab() {
   const onLoadSong = ctx.onLoadSong;
   const { id: idParam } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const initialSongId = idParam ? parseInt(idParam, 10) : null;
+  const initialSongRef = idParam ?? null;
   const [songs, setSongs] = useState<Song[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [viewingSong, setViewingSong] = useState<Song | null>(null);
@@ -405,10 +405,10 @@ export default function LibraryTab() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFolder, setActiveFolder] = useState<string | null>(null);
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
-  const [draggingSongId, setDraggingSongId] = useState<number | null>(null);
+  const [draggingSongUuid, setDraggingSongUuid] = useState<string | null>(null);
   const [localFolders, setLocalFolders] = useState<string[]>([]);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const selectMode = selectedIds.size > 0;
+  const [selectedUuids, setSelectedUuids] = useState<Set<string>>(new Set());
+  const selectMode = selectedUuids.size > 0;
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [page, setPage] = useState(0);
@@ -477,21 +477,21 @@ export default function LibraryTab() {
   const pagedSongs = sortedSongs.slice(page * SONGS_PER_PAGE, (page + 1) * SONGS_PER_PAGE);
 
   useEffect(() => {
-    if (initialSongId != null && loaded) {
-      const song = songs.find(s => s.id === initialSongId);
+    if (initialSongRef != null && loaded) {
+      const song = songs.find(s => s.uuid === initialSongRef);
       if (song) {
         setViewingSong(song);
         setShowDetails(false);
         setRevisions([]);
       }
-    } else if (initialSongId == null) {
+    } else if (initialSongRef == null) {
       // URL changed to /app/library (no song id) — return to list view
       setViewingSong(null);
     }
-  }, [initialSongId, loaded, songs]);
+  }, [initialSongRef, loaded, songs]);
 
-  const pushSongUrl = useCallback((songId: number | null) => {
-    const target = songId ? `/app/library/${songId}` : '/app/library';
+  const pushSongUrl = useCallback((songUuid: string | null) => {
+    const target = songUuid ? `/app/library/${songUuid}` : '/app/library';
     navigate(target, { replace: true });
   }, [navigate]);
 
@@ -499,7 +499,7 @@ export default function LibraryTab() {
     setViewingSong(song);
     setShowDetails(false);
     setRevisions([]);
-    pushSongUrl(song.id);
+    pushSongUrl(song.uuid);
   };
 
   const handleBack = () => {
@@ -511,7 +511,7 @@ export default function LibraryTab() {
     setShowDetails(prev => !prev);
     if (!showDetails && viewingSong && revisions.length === 0) {
       try {
-        const revs = await api.getSongRevisions(viewingSong.id);
+        const revs = await api.getSongRevisions(viewingSong.uuid);
         setRevisions(revs);
       } catch {
         // ignore
@@ -519,15 +519,15 @@ export default function LibraryTab() {
     }
   };
 
-  const handleDeleteRequest = (id: number) => {
-    setDialogState({ kind: 'delete', songId: id });
+  const handleDeleteRequest = (uuid: string) => {
+    setDialogState({ kind: 'delete', songUuid: uuid });
   };
 
-  const handleDeleteConfirmed = async (id: number) => {
+  const handleDeleteConfirmed = async (uuid: string) => {
     try {
-      await api.deleteSong(id);
-      setSongs(prev => prev.filter(s => s.id !== id));
-      if (viewingSong?.id === id) {
+      await api.deleteSong(uuid);
+      setSongs(prev => prev.filter(s => s.uuid !== uuid));
+      if (viewingSong?.uuid === uuid) {
         setViewingSong(null);
         pushSongUrl(null);
       }
@@ -537,8 +537,8 @@ export default function LibraryTab() {
   };
 
   const handleSongUpdated = (updated: Song) => {
-    setSongs(prev => prev.map(s => s.id === updated.id ? updated : s));
-    if (viewingSong?.id === updated.id) setViewingSong(updated);
+    setSongs(prev => prev.map(s => s.uuid === updated.uuid ? updated : s));
+    if (viewingSong?.uuid === updated.uuid) setViewingSong(updated);
   };
 
   const handleRenameRequest = (song: Song) => {
@@ -553,7 +553,7 @@ export default function LibraryTab() {
       if (newTitle !== (song.title || '')) updates.title = newTitle || null;
       if (newArtist !== (song.artist || '')) updates.artist = newArtist || null;
       if (Object.keys(updates).length === 0) return;
-      const updated = await api.updateSong(song.id, updates as Partial<Song>);
+      const updated = await api.updateSong(song.uuid, updates as Partial<Song>);
       handleSongUpdated(updated);
     } catch (err) {
       toast.error('Failed to rename: ' + (err as Error).message);
@@ -562,7 +562,7 @@ export default function LibraryTab() {
 
   const handleMoveToFolder = async (song: Song, folderName: string) => {
     try {
-      const updated = await api.updateSong(song.id, { folder: folderName } as Partial<Song>);
+      const updated = await api.updateSong(song.uuid, { folder: folderName } as Partial<Song>);
       handleSongUpdated(updated);
     } catch (err) {
       toast.error('Failed to move song: ' + (err as Error).message);
@@ -573,14 +573,14 @@ export default function LibraryTab() {
     setDialogState({ kind: 'newFolder', song });
   };
 
-  const handleDragStart = (e: DragEvent<HTMLDivElement>, songId: number) => {
-    e.dataTransfer.setData('text/plain', String(songId));
+  const handleDragStart = (e: DragEvent<HTMLDivElement>, songUuid: string) => {
+    e.dataTransfer.setData('text/plain', songUuid);
     e.dataTransfer.effectAllowed = 'move';
-    setDraggingSongId(songId);
+    setDraggingSongUuid(songUuid);
   };
 
   const handleDragEnd = () => {
-    setDraggingSongId(null);
+    setDraggingSongUuid(null);
     setDragOverFolder(null);
   };
 
@@ -597,15 +597,15 @@ export default function LibraryTab() {
   const handleFolderDrop = async (e: DragEvent, folderName: string) => {
     e.preventDefault();
     setDragOverFolder(null);
-    const songId = parseInt(e.dataTransfer.getData('text/plain'), 10);
-    if (!songId) return;
-    const song = songs.find(s => s.id === songId);
+    const songUuid = e.dataTransfer.getData('text/plain');
+    if (!songUuid) return;
+    const song = songs.find(s => s.uuid === songUuid);
     if (!song) return;
     await handleMoveToFolder(song, folderName);
   };
 
   const handleCreateFolder = () => {
-    setDialogState({ kind: 'newFolder', song: draggingSongId ? songs.find(s => s.id === draggingSongId) : undefined });
+    setDialogState({ kind: 'newFolder', song: draggingSongUuid ? songs.find(s => s.uuid === draggingSongUuid) : undefined });
   };
 
   const handleRenameFolderRequest = (folder: string) => {
@@ -651,36 +651,36 @@ export default function LibraryTab() {
     setActiveFolder(trimmed);
   };
 
-  const toggleSelect = (songId: number) => {
-    setSelectedIds(prev => {
+  const toggleSelect = (songUuid: string) => {
+    setSelectedUuids(prev => {
       const next = new Set(prev);
-      if (next.has(songId)) next.delete(songId);
-      else next.add(songId);
+      if (next.has(songUuid)) next.delete(songUuid);
+      else next.add(songUuid);
       return next;
     });
   };
 
   const selectAll = () => {
-    setSelectedIds(new Set(filteredSongs.map(s => s.id)));
+    setSelectedUuids(new Set(filteredSongs.map(s => s.uuid)));
   };
 
   const clearSelection = () => {
-    setSelectedIds(new Set());
+    setSelectedUuids(new Set());
   };
 
   const handleBulkDeleteRequest = () => {
-    setDialogState({ kind: 'bulkDelete', count: selectedIds.size });
+    setDialogState({ kind: 'bulkDelete', count: selectedUuids.size });
   };
 
   const handleBulkDeleteConfirmed = async () => {
     try {
-      await Promise.all([...selectedIds].map(id => api.deleteSong(id)));
-      setSongs(prev => prev.filter(s => !selectedIds.has(s.id)));
-      if (viewingSong && selectedIds.has(viewingSong.id)) {
+      await Promise.all([...selectedUuids].map(uuid => api.deleteSong(uuid)));
+      setSongs(prev => prev.filter(s => !selectedUuids.has(s.uuid)));
+      if (viewingSong && selectedUuids.has(viewingSong.uuid)) {
         setViewingSong(null);
         pushSongUrl(null);
       }
-      setSelectedIds(new Set());
+      setSelectedUuids(new Set());
     } catch (err) {
       toast.error('Failed to delete some songs: ' + (err as Error).message);
     }
@@ -689,13 +689,13 @@ export default function LibraryTab() {
   const handleBulkMoveToFolder = async (folderName: string) => {
     try {
       const results = await Promise.all(
-        [...selectedIds].map(id => api.updateSong(id, { folder: folderName } as Partial<Song>))
+        [...selectedUuids].map(uuid => api.updateSong(uuid, { folder: folderName } as Partial<Song>))
       );
       setSongs(prev => prev.map(s => {
-        const updated = results.find(r => r.id === s.id);
+        const updated = results.find(r => r.uuid === s.uuid);
         return updated || s;
       }));
-      setSelectedIds(new Set());
+      setSelectedUuids(new Set());
     } catch (err) {
       toast.error('Failed to move some songs: ' + (err as Error).message);
     }
@@ -703,7 +703,7 @@ export default function LibraryTab() {
 
   const handleDownloadPdf = (song: Song) => {
     toast.promise(
-      api.downloadSongPdf(song.id, song.title, song.artist),
+      api.downloadSongPdf(song.uuid, song.title, song.artist),
       {
         loading: 'Generating PDF...',
         success: 'PDF downloaded',
@@ -740,7 +740,7 @@ export default function LibraryTab() {
           <div className="flex gap-2 justify-end flex-wrap">
             <Button variant="secondary" onClick={() => handleDownloadPdf(song)}>Download PDF</Button>
             <Button variant="secondary" onClick={() => onLoadSong(song)}>Edit in Rewrite</Button>
-            <Button variant="danger" onClick={() => handleDeleteRequest(song.id)}>Delete</Button>
+            <Button variant="danger" onClick={() => handleDeleteRequest(song.uuid)}>Delete</Button>
           </div>
         </div>
 
@@ -795,7 +795,7 @@ export default function LibraryTab() {
           confirmLabel="Delete"
           variant="destructive"
           onConfirm={() => {
-            if (dialogState.kind === 'delete') handleDeleteConfirmed(dialogState.songId);
+            if (dialogState.kind === 'delete') handleDeleteConfirmed(dialogState.songUuid);
           }}
         />
       </div>
@@ -907,9 +907,9 @@ export default function LibraryTab() {
             onDragOver={(e: DragEvent<HTMLButtonElement>) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
             onDrop={(e: DragEvent<HTMLButtonElement>) => {
               e.preventDefault();
-              const songId = parseInt(e.dataTransfer.getData('text/plain'), 10);
-              if (!songId) return;
-              const song = songs.find(s => s.id === songId);
+              const songUuid = e.dataTransfer.getData('text/plain');
+              if (!songUuid) return;
+              const song = songs.find(s => s.uuid === songUuid);
               if (song) setDialogState({ kind: 'newFolder', song });
             }}
             title="Create new folder"
@@ -922,7 +922,7 @@ export default function LibraryTab() {
 
       {selectMode && (
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-4 py-2.5 bg-primary-light border border-primary rounded-md flex-wrap">
-          <span className="text-sm font-semibold text-primary mr-1">{selectedIds.size} selected</span>
+          <span className="text-sm font-semibold text-primary mr-1">{selectedUuids.size} selected</span>
           <Button variant="secondary" size="sm" onClick={selectAll}>Select All</Button>
           <Button variant="secondary" size="sm" onClick={clearSelection}>Clear</Button>
           {folders.length > 0 && (
@@ -947,20 +947,20 @@ export default function LibraryTab() {
         {pagedSongs.map(song => {
           const date = new Date(song.created_at).toLocaleDateString();
           const artist = song.artist ? ` by ${song.artist}` : '';
-          const isSelected = selectedIds.has(song.id);
+          const isSelected = selectedUuids.has(song.uuid);
           const preview = lyricsPreview(song.rewritten_content);
 
           return (
             <Card
-              key={song.id}
+              key={song.uuid}
               className={cn(
                 'cursor-pointer transition-colors',
-                draggingSongId === song.id && 'opacity-40',
+                draggingSongUuid === song.uuid && 'opacity-40',
                 isSelected && 'border-primary bg-selected-bg'
               )}
-              onClick={() => selectMode ? toggleSelect(song.id) : handleView(song)}
+              onClick={() => selectMode ? toggleSelect(song.uuid) : handleView(song)}
               draggable={!selectMode || undefined}
-              onDragStart={!selectMode ? (e) => handleDragStart(e, song.id) : undefined}
+              onDragStart={!selectMode ? (e) => handleDragStart(e, song.uuid) : undefined}
               onDragEnd={!selectMode ? handleDragEnd : undefined}
             >
               <div className="flex justify-between items-center p-4 hover:bg-panel transition-colors">
@@ -970,7 +970,7 @@ export default function LibraryTab() {
                 >
                   <Checkbox
                     checked={isSelected}
-                    onChange={() => toggleSelect(song.id)}
+                    onChange={() => toggleSelect(song.uuid)}
                   />
                 </label>
                 <div className="flex-1 min-w-0">
@@ -1047,7 +1047,7 @@ export default function LibraryTab() {
         confirmLabel="Delete"
         variant="destructive"
         onConfirm={() => {
-          if (dialogState.kind === 'delete') handleDeleteConfirmed(dialogState.songId);
+          if (dialogState.kind === 'delete') handleDeleteConfirmed(dialogState.songUuid);
         }}
       />
 

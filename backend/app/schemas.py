@@ -112,6 +112,7 @@ class SongCreate(BaseModel):
 
 class SongOut(BaseModel):
     id: int
+    uuid: str
     user_id: int
     profile_id: int
     title: str | None

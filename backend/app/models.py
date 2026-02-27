@@ -1,3 +1,4 @@
+import uuid as _uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
@@ -74,6 +75,9 @@ class Song(Base):
     __tablename__ = "songs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    uuid: Mapped[str] = mapped_column(
+        String, unique=True, index=True, nullable=False, default=lambda: str(_uuid.uuid4())
+    )
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id"), index=True, nullable=False
     )

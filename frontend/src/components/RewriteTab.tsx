@@ -359,7 +359,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
           disabled={disabled}
           onChange={e => onChangeReasoningEffort(e.target.value)}
         >
-          <option value="off">Off</option>
+          <option value="none">Off</option>
           <option value="low">Low</option>
           <option value="medium">Medium</option>
           <option value="high">High</option>
@@ -414,7 +414,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
           onChange={e => onChangeReasoningEffort(e.target.value)}
           aria-label="Reasoning effort"
         >
-          <option value="off">Effort: Off</option>
+          <option value="none">Effort: Off</option>
           <option value="low">Effort: Low</option>
           <option value="medium">Effort: Med</option>
           <option value="high">Effort: High</option>

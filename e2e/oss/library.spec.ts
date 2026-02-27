@@ -87,8 +87,8 @@ test.describe('OSS Library', () => {
 
     // Should navigate to the Rewrite tab with song content loaded
     await expect(page).toHaveURL(/\/app\/rewrite/);
-    await expect(page.getByLabel('Song title')).toHaveValue(PARSED_TITLE, { timeout: 5_000 });
-    await expect(page.getByLabel('Artist')).toHaveValue(PARSED_ARTIST);
+    await expect(page.getByLabel('Song title').first()).toHaveValue(PARSED_TITLE, { timeout: 5_000 });
+    await expect(page.getByLabel('Artist').first()).toHaveValue(PARSED_ARTIST);
 
     // Chat input should be visible (song is in WORKSHOPPING state)
     await expect(page.getByPlaceholder('Tell the AI how to change the song...')).toBeVisible();

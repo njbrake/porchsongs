@@ -45,11 +45,11 @@ test.describe('OSS Rewrite Flow', () => {
     await page.getByRole('button', { name: 'Parse' }).click();
 
     // Wait for parsed content to appear — title and artist inputs should be visible
-    const titleInput = page.getByLabel('Song title');
+    const titleInput = page.getByLabel('Song title').first();
     await expect(titleInput).toBeVisible({ timeout: 10_000 });
     await expect(titleInput).toHaveValue(PARSED_TITLE);
 
-    const artistInput = page.getByLabel('Artist');
+    const artistInput = page.getByLabel('Artist').first();
     await expect(artistInput).toBeVisible();
     await expect(artistInput).toHaveValue(PARSED_ARTIST);
 

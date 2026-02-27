@@ -20,6 +20,7 @@ import {
   PARSED_CONTENT,
   REWRITTEN_CONTENT,
   CHANGES_SUMMARY,
+  makeSongCreatePayload,
 } from '../fixtures/mock-data';
 
 test.describe('Song Lifecycle', () => {
@@ -80,5 +81,50 @@ test.describe('Song Lifecycle', () => {
     await navigateToTab(page, 'Library');
     await expect(page.getByText(PARSED_TITLE).first()).toBeVisible({ timeout: 5_000 });
     await expect(page.getByText(new RegExp(`by ${PARSED_ARTIST}`)).first()).toBeVisible();
+  });
+
+  test('chat edit updates rewritten lyrics', async ({ page, baseURL }) => {
+    // Seed a song via API so we can load it directly
+    const profileId = await getDefaultProfileId(baseURL!);
+    await createSongViaApi(baseURL!, makeSongCreatePayload(profileId));
+
+    // Mock the chat SSE endpoint
+    const chatResponse = mockChatStreamResponse(
+      `<content>\n${REWRITTEN_CONTENT}\n</content>\n\n${CHANGES_SUMMARY}`,
+      {
+        rewritten_content: REWRITTEN_CONTENT,
+        original_content: null,
+        assistant_message: CHANGES_SUMMARY,
+        changes_summary: CHANGES_SUMMARY,
+        version: 2,
+        reasoning: null,
+        usage: null,
+      },
+    );
+    await interceptLlmEndpoints(page, { chatBody: chatResponse });
+
+    // Navigate to Library, open song, click "Edit in Rewrite"
+    await page.goto('/');
+    await waitForAppReady(page);
+    await navigateToTab(page, 'Library');
+
+    await expect(page.getByText(/by John Newton/).first()).toBeVisible({ timeout: 5_000 });
+    await page.getByText(/by John Newton/).first().click();
+
+    await expect(page.getByRole('button', { name: /Edit in Rewrite/i })).toBeVisible({ timeout: 5_000 });
+    await page.getByRole('button', { name: /Edit in Rewrite/i }).click();
+    await expect(page).toHaveURL(/\/app\/rewrite/);
+
+    // Send a chat message
+    const chatInput = page.getByPlaceholder('Tell the AI how to change the song...');
+    await expect(chatInput).toBeVisible({ timeout: 5_000 });
+    await chatInput.fill('Change "wretch" to "soul"');
+    await page.getByRole('button', { name: 'Send' }).click();
+
+    // Verify the assistant response appears in chat
+    await expect(page.getByText(CHANGES_SUMMARY).first()).toBeVisible({ timeout: 10_000 });
+
+    // Verify the rewritten content updated (check for "soul" instead of "wretch")
+    await expect(page.getByText(/saved a soul like/).first()).toBeVisible({ timeout: 5_000 });
   });
 });

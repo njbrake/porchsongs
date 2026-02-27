@@ -89,8 +89,8 @@ export default function ResizableColumns({
   }, [defaultLeftPercent]);
 
   // On mobile: full width, no inline style. On desktop: split widths.
-  const leftStyle = isDesktop ? { width: `calc(${leftPercent}% - 4px)` } : undefined;
-  const rightStyle = isDesktop ? { width: `calc(${100 - leftPercent}% - 4px)` } : undefined;
+  const leftStyle = isDesktop ? { width: `calc(${leftPercent}% - 6px)` } : undefined;
+  const rightStyle = isDesktop ? { width: `calc(${100 - leftPercent}% - 6px)` } : undefined;
 
   return (
     <div ref={containerRef} className={cn('flex overflow-hidden', className)}>
@@ -104,7 +104,7 @@ export default function ResizableColumns({
 
       {/* Drag handle — hidden on mobile */}
       <div
-        className="hidden md:flex items-center justify-center w-2 cursor-col-resize select-none shrink-0 group"
+        className="hidden md:flex items-center justify-center w-3 cursor-col-resize select-none shrink-0 group touch-none"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -113,7 +113,14 @@ export default function ResizableColumns({
         aria-orientation="vertical"
         aria-label="Resize columns"
       >
-        <div className="w-px h-full bg-border group-hover:bg-primary group-active:bg-primary transition-colors" />
+        <div className="flex flex-col items-center gap-1 transition-colors">
+          <div className="w-1 h-full rounded-full bg-border group-hover:bg-primary group-active:bg-primary transition-colors" />
+          <div className="absolute flex flex-col gap-0.5">
+            <div className="w-1 h-1 rounded-full bg-border group-hover:bg-primary group-active:bg-primary transition-colors" />
+            <div className="w-1 h-1 rounded-full bg-border group-hover:bg-primary group-active:bg-primary transition-colors" />
+            <div className="w-1 h-1 rounded-full bg-border group-hover:bg-primary group-active:bg-primary transition-colors" />
+          </div>
+        </div>
       </div>
 
       {/* Right column */}

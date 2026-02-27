@@ -599,6 +599,33 @@ def test_health(client: TestClient) -> None:
     assert "version" in data
 
 
+def test_health_degraded_when_db_unreachable(client: TestClient) -> None:
+    from collections.abc import Generator
+
+    from sqlalchemy.orm import Session
+
+    from app.database import get_db
+    from app.main import app
+
+    original = app.dependency_overrides.get(get_db)
+
+    def _broken_db() -> Generator[Session]:
+        mock_session = MagicMock(spec=Session)
+        mock_session.execute.side_effect = Exception("connection refused")
+        yield mock_session
+
+    app.dependency_overrides[get_db] = _broken_db
+    resp = client.get("/api/health")
+
+    if original is not None:
+        app.dependency_overrides[get_db] = original
+
+    assert resp.status_code == 503
+    data = resp.json()
+    assert data["status"] == "degraded"
+    assert "version" in data
+
+
 def test_parse_missing_tags_fallback(client: TestClient) -> None:
     """When LLM returns no XML tags, original_content should fall back to raw input."""
     profile = client.post("/api/profiles", json={}).json()

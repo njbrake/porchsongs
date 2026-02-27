@@ -407,6 +407,9 @@ export default function LibraryTab() {
         setShowDetails(false);
         setRevisions([]);
       }
+    } else if (initialSongId == null) {
+      // URL changed to /app/library (no song id) — return to list view
+      setViewingSong(null);
     }
   }, [initialSongId, loaded, songs]);
 

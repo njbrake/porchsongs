@@ -70,6 +70,7 @@ export default function ModelsTab({
           onChange={(e: ChangeEvent<HTMLSelectElement>) => onChangeReasoningEffort(e.target.value)}
           className="max-w-[200px]"
         >
+          <option value="off">Off</option>
           <option value="low">Low</option>
           <option value="medium">Medium</option>
           <option value="high">High</option>

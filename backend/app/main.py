@@ -3,12 +3,15 @@ from importlib.metadata import version as pkg_version
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from .config import settings
+from .database import get_db
 from .routers import auth, profiles, rewrite, songs
 from .schemas import HealthResponse
 
@@ -38,8 +41,16 @@ app.include_router(rewrite.router, prefix="/api")
 
 
 @app.get("/api/health", response_model=HealthResponse, tags=["health"])
-async def health() -> HealthResponse:
+async def health(db: Session = Depends(get_db)) -> HealthResponse | JSONResponse:
     """Public health-check endpoint for container orchestration."""
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        logger.warning("Health check failed: database unreachable")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "degraded", "version": __version__},
+        )
     return HealthResponse(status="ok", version=__version__)
 
 

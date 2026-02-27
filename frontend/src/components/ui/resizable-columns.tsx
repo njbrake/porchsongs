@@ -104,7 +104,7 @@ export default function ResizableColumns({
 
       {/* Drag handle — hidden on mobile */}
       <div
-        className="hidden md:flex items-center justify-center w-3 cursor-col-resize select-none shrink-0 group touch-none"
+        className="hidden md:flex justify-center w-3 cursor-col-resize select-none shrink-0 group touch-none"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -113,14 +113,7 @@ export default function ResizableColumns({
         aria-orientation="vertical"
         aria-label="Resize columns"
       >
-        <div className="flex flex-col items-center gap-1 transition-colors">
-          <div className="w-1 h-full rounded-full bg-border group-hover:bg-primary group-active:bg-primary transition-colors" />
-          <div className="absolute flex flex-col gap-0.5">
-            <div className="w-1 h-1 rounded-full bg-border group-hover:bg-primary group-active:bg-primary transition-colors" />
-            <div className="w-1 h-1 rounded-full bg-border group-hover:bg-primary group-active:bg-primary transition-colors" />
-            <div className="w-1 h-1 rounded-full bg-border group-hover:bg-primary group-active:bg-primary transition-colors" />
-          </div>
-        </div>
+        <div className="w-px bg-border group-hover:bg-primary group-active:bg-primary transition-colors" />
       </div>
 
       {/* Right column */}

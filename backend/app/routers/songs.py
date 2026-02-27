@@ -1,4 +1,6 @@
 import json
+import re
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import Response
@@ -112,12 +114,20 @@ async def download_song_pdf(
 
     title = song.title or "Untitled"
     artist = song.artist or "Unknown"
-    filename = f"{title} - {artist}.pdf"
+    raw_filename = f"{title} - {artist}.pdf"
+    # Strip characters that break HTTP headers
+    safe_filename = re.sub(r'[\x00-\x1f"\\;]', "", raw_filename)
+    # RFC 5987 encoded filename for Unicode support
+    encoded_filename = quote(raw_filename, safe=" -_.!~*'()")
 
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=\"{safe_filename}\"; filename*=UTF-8''{encoded_filename}"
+            )
+        },
     )
 
 

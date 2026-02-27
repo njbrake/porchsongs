@@ -137,3 +137,35 @@ def test_song_pdf_endpoint(client: TestClient, db_session: Session, test_user: U
     assert "Content-Disposition" in resp.headers
     assert "Test Song - Test Artist.pdf" in resp.headers["Content-Disposition"]
     assert resp.content[:5] == b"%PDF-"
+
+
+def test_pdf_filename_sanitizes_special_chars(
+    client: TestClient, db_session: Session, test_user: User
+) -> None:
+    """Content-Disposition filename strips quotes and newlines."""
+    profile = Profile(user_id=test_user.id, is_default=True)
+    db_session.add(profile)
+    db_session.commit()
+    db_session.refresh(profile)
+
+    song = Song(
+        user_id=test_user.id,
+        profile_id=profile.id,
+        title='He said "hello"',
+        artist="O'Brien",
+        original_content="original",
+        rewritten_content="content",
+        status="completed",
+        current_version=1,
+    )
+    db_session.add(song)
+    db_session.commit()
+    db_session.refresh(song)
+
+    resp = client.get(f"/api/songs/{song.id}/pdf")
+    assert resp.status_code == 200
+    cd = resp.headers["Content-Disposition"]
+    # Sanitized ASCII filename should not contain raw double quotes
+    assert 'He said hello' in cd
+    # UTF-8 encoded filename should be present for Unicode support
+    assert "filename*=UTF-8''" in cd

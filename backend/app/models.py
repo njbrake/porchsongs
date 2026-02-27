@@ -17,10 +17,14 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
     terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    profiles: Mapped[list["Profile"]] = relationship("Profile", back_populates="user")
-    songs: Mapped[list["Song"]] = relationship("Song", back_populates="user")
+    profiles: Mapped[list["Profile"]] = relationship(
+        "Profile", back_populates="user", cascade="all, delete-orphan"
+    )
+    songs: Mapped[list["Song"]] = relationship(
+        "Song", back_populates="user", cascade="all, delete-orphan"
+    )
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
-        "RefreshToken", back_populates="user"
+        "RefreshToken", back_populates="user", cascade="all, delete-orphan"
     )
 
 
@@ -58,6 +62,12 @@ class Profile(Base):
     )
 
     user: Mapped["User"] = relationship("User", back_populates="profiles")
+    connections: Mapped[list["ProviderConnection"]] = relationship(
+        "ProviderConnection", back_populates="profile", cascade="all, delete-orphan"
+    )
+    models: Mapped[list["ProfileModel"]] = relationship(
+        "ProfileModel", back_populates="profile", cascade="all, delete-orphan"
+    )
 
 
 class Song(Base):
@@ -90,6 +100,12 @@ class Song(Base):
     )
 
     user: Mapped["User"] = relationship("User", back_populates="songs")
+    revisions: Mapped[list["SongRevision"]] = relationship(
+        "SongRevision", back_populates="song", cascade="all, delete-orphan"
+    )
+    chat_messages: Mapped[list["ChatMessage"]] = relationship(
+        "ChatMessage", back_populates="song", cascade="all, delete-orphan"
+    )
 
 
 class SongRevision(Base):
@@ -106,6 +122,8 @@ class SongRevision(Base):
     edit_context: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
+    song: Mapped["Song"] = relationship("Song", back_populates="revisions")
+
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
@@ -119,6 +137,8 @@ class ChatMessage(Base):
     is_note: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
+    song: Mapped["Song"] = relationship("Song", back_populates="chat_messages")
+
 
 class ProviderConnection(Base):
     __tablename__ = "provider_connections"
@@ -130,6 +150,8 @@ class ProviderConnection(Base):
     provider: Mapped[str] = mapped_column(String, nullable=False)
     api_base: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+
+    profile: Mapped["Profile"] = relationship("Profile", back_populates="connections")
 
 
 class ProfileModel(Base):
@@ -143,3 +165,5 @@ class ProfileModel(Base):
     model: Mapped[str] = mapped_column(String, nullable=False)
     api_base: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+
+    profile: Mapped["Profile"] = relationship("Profile", back_populates="models")

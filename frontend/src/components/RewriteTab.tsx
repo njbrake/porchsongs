@@ -463,7 +463,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
                 value={instruction}
                 onChange={e => setInstruction(e.target.value)}
                 placeholder="Optional instructions — e.g. &quot;only grab the first song&quot; or &quot;skip the intro&quot;"
-                className="mt-3"
+                className="mt-3 font-ui"
                 onKeyDown={e => {
                   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canParse) {
                     e.preventDefault();

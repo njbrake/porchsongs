@@ -20,7 +20,7 @@ const CardHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
     <div
       ref={ref}
       className={cn(
-        'px-4 py-2.5 bg-panel text-xs text-muted-foreground uppercase tracking-wide font-semibold',
+        'px-4 py-2.5 bg-panel text-sm text-foreground font-semibold border-b border-border',
         className
       )}
       {...props}

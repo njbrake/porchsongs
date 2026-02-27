@@ -684,7 +684,7 @@ export default function LibraryTab() {
 
             {song.changes_summary && (
               <Card>
-                <CardHeader className="text-sm font-semibold normal-case tracking-normal bg-card">Changes</CardHeader>
+                <CardHeader className="bg-card">Changes</CardHeader>
                 <div className="p-4 text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{song.changes_summary}</div>
               </Card>
             )}

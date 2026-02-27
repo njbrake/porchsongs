@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, type DragEvent } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, type DragEvent, type MouseEvent } from 'react';
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
 import api from '@/api';
@@ -69,6 +69,83 @@ const PRE_BASE_CLASS = 'font-mono text-xs sm:text-code leading-snug whitespace-p
 
 const FOLDER_PILL_CLASS = 'bg-card border border-border rounded-full px-3 py-1.5 text-xs cursor-pointer transition-all text-muted-foreground font-medium hover:border-primary hover:text-foreground whitespace-nowrap';
 const FOLDER_PILL_ACTIVE = 'bg-primary text-white border-primary';
+
+interface FolderPillProps {
+  folder: string;
+  isActive: boolean;
+  isDragOver: boolean;
+  onSelect: (folder: string) => void;
+  onRename: (folder: string) => void;
+  onDelete: (folder: string) => void;
+  onDragOver: (e: DragEvent, folder: string) => void;
+  onDragLeave: () => void;
+  onDrop: (e: DragEvent, folder: string) => void;
+}
+
+function FolderPill({
+  folder,
+  isActive,
+  isDragOver,
+  onSelect,
+  onRename,
+  onDelete,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+}: FolderPillProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const openedByContextMenu = useRef(false);
+
+  const handleContextMenu = (e: MouseEvent) => {
+    e.preventDefault();
+    openedByContextMenu.current = true;
+    setMenuOpen(true);
+  };
+
+  const handleOpenChange = (open: boolean) => {
+    if (open && !openedByContextMenu.current) {
+      /* Ignore Radix trying to open the menu from trigger click */
+      return;
+    }
+    openedByContextMenu.current = false;
+    setMenuOpen(open);
+  };
+
+  return (
+    <DropdownMenu open={menuOpen} onOpenChange={handleOpenChange}>
+      <DropdownMenuTrigger asChild>
+        <button
+          data-testid={`folder-pill-${folder}`}
+          className={cn(
+            FOLDER_PILL_CLASS,
+            isActive && FOLDER_PILL_ACTIVE,
+            isDragOver && 'bg-primary-light border-primary text-primary shadow-[0_0_0_2px_var(--color-primary-light)]'
+          )}
+          onClick={() => {
+            onSelect(folder);
+          }}
+          onContextMenu={handleContextMenu}
+          onDragOver={(e) => onDragOver(e, folder)}
+          onDragLeave={onDragLeave}
+          onDrop={(e) => onDrop(e, folder)}
+        >
+          {folder}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent>
+        <DropdownMenuItem onClick={() => onRename(folder)}>
+          Rename
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="text-danger hover:!bg-danger-light"
+          onClick={() => onDelete(folder)}
+        >
+          Delete folder
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 function PerformanceSheet({ song, onSongUpdated }: { song: Song; onSongUpdated: (song: Song) => void }) {
   const text = song.rewritten_content;
@@ -796,35 +873,18 @@ export default function LibraryTab() {
             </button>
           )}
           {folders.map(f => (
-            <DropdownMenu key={f}>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className={cn(
-                    FOLDER_PILL_CLASS,
-                    activeFolder === f && FOLDER_PILL_ACTIVE,
-                    dragOverFolder === f && 'bg-primary-light border-primary text-primary shadow-[0_0_0_2px_var(--color-primary-light)]'
-                  )}
-                  onClick={() => setActiveFolder(f)}
-                  onDragOver={(e) => handleFolderDragOver(e, f)}
-                  onDragLeave={handleFolderDragLeave}
-                  onDrop={(e) => handleFolderDrop(e, f)}
-                  onContextMenu={(e) => { e.preventDefault(); }}
-                >
-                  {f}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => handleRenameFolderRequest(f)}>
-                  Rename
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="text-danger hover:!bg-danger-light"
-                  onClick={() => handleDeleteFolderRequest(f)}
-                >
-                  Delete folder
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <FolderPill
+              key={f}
+              folder={f}
+              isActive={activeFolder === f}
+              isDragOver={dragOverFolder === f}
+              onSelect={setActiveFolder}
+              onRename={handleRenameFolderRequest}
+              onDelete={handleDeleteFolderRequest}
+              onDragOver={handleFolderDragOver}
+              onDragLeave={handleFolderDragLeave}
+              onDrop={handleFolderDrop}
+            />
           ))}
           {hasFolders && hasUnfiled && (
             <button

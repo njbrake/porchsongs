@@ -96,4 +96,68 @@ test.describe('OSS Library', () => {
     // Song content should be displayed (check for chord annotation from PARSED_CONTENT)
     await expect(page.getByText(/Amazing grace how/).first()).toBeVisible();
   });
+
+  test('inline title rename persists', async ({ page, baseURL }) => {
+    const profileId = await getDefaultProfileId(baseURL!);
+    await createSongViaApi(baseURL!, makeSongCreatePayload(profileId));
+
+    await page.goto('/');
+    await waitForAppReady(page);
+    await navigateToTab(page, 'Library');
+
+    // Wait for song to appear, then click title to activate inline edit
+    const titleSpan = page.getByTitle('Click to rename').first();
+    await expect(titleSpan).toBeVisible({ timeout: 5_000 });
+    await titleSpan.click();
+
+    // Input should appear — clear and type new title
+    const editInput = page.locator('input[placeholder="Untitled"]');
+    await expect(editInput).toBeVisible({ timeout: 2_000 });
+    await editInput.fill('Grace Reborn');
+    await editInput.press('Enter');
+
+    // Wait for the API update to complete
+    await page.waitForResponse(
+      (res) => res.url().includes('/api/songs/') && res.request().method() === 'PUT' && res.ok(),
+    );
+
+    // Verify new title appears in library
+    await expect(page.getByText('Grace Reborn').first()).toBeVisible({ timeout: 5_000 });
+
+    // Reload and verify persistence
+    await page.reload();
+    await waitForAppReady(page);
+    await navigateToTab(page, 'Library');
+    await expect(page.getByText('Grace Reborn').first()).toBeVisible({ timeout: 5_000 });
+  });
+
+  test('menu rename updates title and artist', async ({ page, baseURL }) => {
+    const profileId = await getDefaultProfileId(baseURL!);
+    await createSongViaApi(baseURL!, makeSongCreatePayload(profileId));
+
+    await page.goto('/');
+    await waitForAppReady(page);
+    await navigateToTab(page, 'Library');
+
+    // Wait for song to appear, open the actions menu
+    await expect(page.getByText('Amazing Grace').first()).toBeVisible({ timeout: 5_000 });
+    await page.getByLabel('Song actions').first().click();
+
+    // Click "Rename" in the dropdown
+    await page.getByRole('menuitem', { name: /Rename/i }).click();
+
+    // Fill in the rename dialog
+    const titleInput = page.locator('#prompt-title');
+    await expect(titleInput).toBeVisible({ timeout: 2_000 });
+    await titleInput.fill('Amazing Grace (Updated)');
+
+    const artistInput = page.locator('#prompt-artist');
+    await artistInput.fill('John Newton Jr.');
+
+    await page.getByRole('button', { name: /Save/i }).click();
+
+    // Verify updated title and artist appear
+    await expect(page.getByText('Amazing Grace (Updated)').first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(/by John Newton Jr\./).first()).toBeVisible();
+  });
 });

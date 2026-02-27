@@ -201,4 +201,41 @@ test.describe('OSS Library', () => {
     await navigateToTab(page, 'Library');
     await expect(page.getByText('Song To Delete')).not.toBeVisible({ timeout: 3_000 });
   });
+
+  test('move song to folder and filter by folder', async ({ page, baseURL }) => {
+    const profileId = await getDefaultProfileId(baseURL!);
+    // Create songs with unique titles and folder assignment
+    await createSongViaApi(baseURL!, {
+      ...makeSongCreatePayload(profileId),
+      title: 'Folder Test Hymn',
+      folder: 'TestFolder',
+    });
+    await createSongViaApi(baseURL!, {
+      ...makeSecondSongPayload(profileId),
+      title: 'Folder Test Pop',
+    });
+
+    await page.goto('/');
+    await waitForAppReady(page);
+    await navigateToTab(page, 'Library');
+
+    // Search for our test songs to isolate from other test data
+    const searchInput = page.getByPlaceholder(/search/i);
+    await searchInput.fill('Folder Test');
+
+    // Wait for both songs to appear
+    await expect(page.getByText('Folder Test Hymn').first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Folder Test Pop').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'TestFolder' })).toBeVisible();
+
+    // Click "Unfiled" — only the unfoldered song should be visible
+    await page.getByRole('button', { name: 'Unfiled' }).click();
+    await expect(page.getByText('Folder Test Pop').first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Folder Test Hymn')).not.toBeVisible();
+
+    // Click "All" to clear filter — both songs should be visible again
+    await page.getByRole('button', { name: /^All$/ }).click();
+    await expect(page.getByText('Folder Test Hymn').first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Folder Test Pop').first()).toBeVisible();
+  });
 });

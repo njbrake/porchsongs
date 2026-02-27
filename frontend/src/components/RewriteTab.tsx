@@ -390,6 +390,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
           disabled={disabled}
           onChange={e => onChangeReasoningEffort(e.target.value)}
         >
+          <option value="off">Off</option>
           <option value="low">Low</option>
           <option value="medium">Medium</option>
           <option value="high">High</option>

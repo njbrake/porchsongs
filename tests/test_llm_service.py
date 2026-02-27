@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from app.services.llm_service import (
     _build_chat_kwargs,
+    _build_parse_kwargs,
     _parse_chat_response,
     _parse_clean_response,
 )
@@ -32,6 +33,40 @@ def test_build_chat_kwargs_system_prompt() -> None:
     # User/assistant messages passed through unchanged
     assert kwargs["messages"][1] == {"role": "user", "content": "make it sadder"}  # type: ignore[index]
     assert kwargs["messages"][2] == {"role": "assistant", "content": "ok"}  # type: ignore[index]
+
+
+def test_build_chat_kwargs_reasoning_effort_off() -> None:
+    """reasoning_effort='off' should be passed through to disable thinking."""
+    song = SimpleNamespace(
+        original_content="G  Am\nHello world",
+        rewritten_content="G  Am\nHello changed world",
+    )
+    messages = [{"role": "user", "content": "make it sadder"}]
+    kwargs = _build_chat_kwargs(song, messages, "openai", "gpt-4o", reasoning_effort="off")
+    assert kwargs["reasoning_effort"] == "off"
+
+
+def test_build_chat_kwargs_reasoning_effort_high() -> None:
+    """reasoning_effort='high' should be included in kwargs."""
+    song = SimpleNamespace(
+        original_content="G  Am\nHello world",
+        rewritten_content="G  Am\nHello changed world",
+    )
+    messages = [{"role": "user", "content": "make it sadder"}]
+    kwargs = _build_chat_kwargs(song, messages, "openai", "gpt-4o", reasoning_effort="high")
+    assert kwargs["reasoning_effort"] == "high"
+
+
+def test_build_parse_kwargs_reasoning_effort_off() -> None:
+    """reasoning_effort='off' should be passed through to disable thinking."""
+    kwargs = _build_parse_kwargs("some content", "openai", "gpt-4o", reasoning_effort="off")
+    assert kwargs["reasoning_effort"] == "off"
+
+
+def test_build_parse_kwargs_reasoning_effort_low() -> None:
+    """reasoning_effort='low' should be included in kwargs."""
+    kwargs = _build_parse_kwargs("some content", "openai", "gpt-4o", reasoning_effort="low")
+    assert kwargs["reasoning_effort"] == "low"
 
 
 # --- _parse_chat_response ---

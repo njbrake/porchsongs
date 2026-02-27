@@ -1,6 +1,9 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { toast } from 'sonner';
 import ChatPanel from '@/components/ChatPanel';
 import type { ChatMessage } from '@/types';
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 describe('ChatPanel', () => {
   const defaults = {
@@ -78,5 +81,22 @@ describe('ChatPanel', () => {
     render(<ChatPanel {...defaults} messages={messages} />);
     const imgs = screen.getAllByAltText('Attached');
     expect(imgs).toHaveLength(2);
+  });
+
+  it('rejects images larger than 5 MB with a toast error', async () => {
+    render(<ChatPanel {...defaults} />);
+    const input = screen.getByPlaceholderText(/Tell the AI/);
+    const dropZone = input.closest('div')!;
+
+    const largeFile = new File(['x'.repeat(6 * 1024 * 1024)], 'huge.png', { type: 'image/png' });
+    Object.defineProperty(largeFile, 'size', { value: 6 * 1024 * 1024 });
+
+    await act(async () => {
+      fireEvent.drop(dropZone, {
+        dataTransfer: { files: [largeFile] },
+      });
+    });
+
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('too large'));
   });
 });

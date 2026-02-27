@@ -94,14 +94,25 @@ function FolderPill({
   onDrop,
 }: FolderPillProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const openedByContextMenu = useRef(false);
 
   const handleContextMenu = (e: MouseEvent) => {
     e.preventDefault();
+    openedByContextMenu.current = true;
     setMenuOpen(true);
   };
 
+  const handleOpenChange = (open: boolean) => {
+    if (open && !openedByContextMenu.current) {
+      /* Ignore Radix trying to open the menu from trigger click */
+      return;
+    }
+    openedByContextMenu.current = false;
+    setMenuOpen(open);
+  };
+
   return (
-    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+    <DropdownMenu open={menuOpen} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <button
           data-testid={`folder-pill-${folder}`}
@@ -110,9 +121,7 @@ function FolderPill({
             isActive && FOLDER_PILL_ACTIVE,
             isDragOver && 'bg-primary-light border-primary text-primary shadow-[0_0_0_2px_var(--color-primary-light)]'
           )}
-          onClick={(e) => {
-            /* Prevent the DropdownMenu trigger from opening on left-click */
-            e.preventDefault();
+          onClick={() => {
             onSelect(folder);
           }}
           onContextMenu={handleContextMenu}

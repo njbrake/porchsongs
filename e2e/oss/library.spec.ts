@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { waitForAppReady, navigateToTab, createSongViaApi, getDefaultProfileId } from '../fixtures/test-helpers';
-import { makeSongCreatePayload, makeSecondSongPayload, PARSED_TITLE } from '../fixtures/mock-data';
+import { makeSongCreatePayload, makeSecondSongPayload, PARSED_TITLE, PARSED_ARTIST, PARSED_CONTENT } from '../fixtures/mock-data';
 
 test.describe('OSS Library', () => {
   test('empty library shows empty state', async ({ page }) => {
@@ -67,5 +67,33 @@ test.describe('OSS Library', () => {
     // Should open the song detail view with an "All Songs" back button and "Edit in Rewrite"
     await expect(page.getByRole('button', { name: /All Songs/i })).toBeVisible({ timeout: 5_000 });
     await expect(page.getByRole('button', { name: /Edit in Rewrite/i })).toBeVisible();
+  });
+
+  test('Edit in Rewrite loads song into rewrite tab', async ({ page, baseURL }) => {
+    const profileId = await getDefaultProfileId(baseURL!);
+    await createSongViaApi(baseURL!, makeSongCreatePayload(profileId));
+
+    await page.goto('/');
+    await waitForAppReady(page);
+    await navigateToTab(page, 'Library');
+
+    // Open song detail
+    await expect(page.getByText(/by John Newton/).first()).toBeVisible({ timeout: 5_000 });
+    await page.getByText(/by John Newton/).first().click();
+
+    // Click "Edit in Rewrite"
+    await expect(page.getByRole('button', { name: /Edit in Rewrite/i })).toBeVisible({ timeout: 5_000 });
+    await page.getByRole('button', { name: /Edit in Rewrite/i }).click();
+
+    // Should navigate to the Rewrite tab with song content loaded
+    await expect(page).toHaveURL(/\/app\/rewrite/);
+    await expect(page.getByPlaceholder('Song title')).toHaveValue(PARSED_TITLE, { timeout: 5_000 });
+    await expect(page.getByPlaceholder('Artist')).toHaveValue(PARSED_ARTIST);
+
+    // Chat input should be visible (song is in WORKSHOPPING state)
+    await expect(page.getByPlaceholder('Tell the AI how to change the song...')).toBeVisible();
+
+    // Song content should be displayed (check for chord annotation from PARSED_CONTENT)
+    await expect(page.getByText(/Amazing grace how/).first()).toBeVisible();
   });
 });

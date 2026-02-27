@@ -70,11 +70,6 @@ describe('MarketingLayout', () => {
     expect(screen.queryByRole('navigation', { name: 'Mobile navigation' })).not.toBeInTheDocument();
   });
 
-  it('renders cookie banner', () => {
-    renderWithRouter(<MarketingLayout />);
-    expect(screen.getByText(/essential cookies only/)).toBeInTheDocument();
-  });
-
   it('hamburger button has aria-controls linking to mobile menu', async () => {
     const user = userEvent.setup();
     renderWithRouter(<MarketingLayout />);

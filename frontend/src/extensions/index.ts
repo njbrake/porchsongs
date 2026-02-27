@@ -3,7 +3,6 @@ export {
   getPremiumRouteElements,
   getLoginPageElement,
   getDefaultSettingsTab,
-  getCatchAllRedirect,
   shouldRedirectRootToApp,
 } from './routes';
 export {
@@ -18,7 +17,6 @@ export {
   listPlans,
   createCheckout,
   createPortal,
-  deleteAccount,
 } from './api';
 export type {
   SubscriptionInfo,

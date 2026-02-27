@@ -114,18 +114,7 @@ Frontend: Vitest + React Testing Library. Use `renderWithRouter()` from `src/tes
 
 ## Definition of Done
 
-**Bug fixes must include a test** that reproduces the bug and verifies the fix. Feature changes should include tests for new behavior. If an existing test file covers the component/module, add tests there; otherwise create a new `*.test.ts(x)` file following existing patterns.
-
-Every change must pass all checks:
-
-```bash
-uv run ruff check backend/                    # backend lint
-uv run ruff format --check backend/           # backend formatting
-cd frontend && npx eslint src/                # frontend lint
-cd frontend && npm run typecheck              # TypeScript type check
-DATABASE_URL="sqlite:///:memory:" uv run pytest  # backend tests
-cd frontend && npx vitest run                 # frontend tests
-```
+See [tips/definition-of-done.md](tips/definition-of-done.md) for the full checklist including PR video requirements.
 
 ## Key Constraints
 

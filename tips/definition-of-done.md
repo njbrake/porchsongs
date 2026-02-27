@@ -64,20 +64,22 @@ Videos are saved to `test-results/` as `.webm` files. The filename is auto-gener
 
 ### Attaching to the PR
 
-Upload the `.webm` file to the GitHub PR description by dragging it into the description editor, or use the `gh` CLI:
+**Option A — Manual (inline playback):** Drag the `.webm` file into the PR description editor on GitHub. This is the only way to get inline video playback (GitHub reserves it for `user-attachments/assets/` URLs).
+
+**Option B — Script (download link):** Use the upload script to attach the video as a release asset and post a PR comment with a download link:
 
 ```bash
-# Reference the video in the PR body (GitHub renders .webm inline)
-gh pr create --title "feat: update song card layout" --body "$(cat <<'EOF'
-## Summary
-- Redesigned song card with new chord coloring
+./scripts/upload-pr-video.sh <pr-number> <path-to-video.webm>
+```
 
-## Demo video
-<!-- Drag the .webm file here, or paste after creating the PR -->
+The script uploads the video to the `ci-assets` pre-release and posts a comment on the PR. The video renders as a download link (not inline player) — reviewers click to download and view.
 
-## Test plan
-- [x] Visual verification via Playwright recording
-- [x] Frontend tests pass
-EOF
-)"
+**For AI agents:** Always use Option B after creating a PR with UI changes. The script handles release asset upload and PR commenting automatically. Example workflow:
+
+```bash
+# 1. Record the video (see "How to record" above)
+# 2. Find the video file
+VIDEO_FILE=$(ls -t test-results/*.webm 2>/dev/null | head -1)
+# 3. Upload and comment on the PR
+./scripts/upload-pr-video.sh 123 "$VIDEO_FILE"
 ```

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { waitForAppReady, navigateToTab } from '../fixtures/test-helpers';
+import { waitForAppReady, navigateToTab, mockProviders, mockProviderModels } from '../fixtures/test-helpers';
 
 test.describe('OSS Settings', () => {
   test.beforeEach(async ({ page }) => {
@@ -34,5 +34,61 @@ test.describe('OSS Settings', () => {
   test('account tab NOT visible in OSS mode', async ({ page }) => {
     // In OSS (non-premium) mode, there should be no "Account" sub-tab
     await expect(page.getByRole('button', { name: 'Account' })).not.toBeVisible();
+  });
+
+  test('system prompt editing persists changes', async ({ page }) => {
+    await page.getByRole('button', { name: 'System Prompts' }).click();
+
+    // Edit the parse prompt
+    const parsePrompt = page.locator('#parse-prompt');
+    await expect(parsePrompt).toBeVisible({ timeout: 5_000 });
+    await parsePrompt.fill('Custom parse prompt for testing');
+
+    // Edit the chat prompt
+    const chatPrompt = page.locator('#chat-prompt');
+    await chatPrompt.fill('Custom chat prompt for testing');
+
+    // Save
+    await page.getByRole('button', { name: /Save Changes/i }).click();
+    await expect(page.getByText('Saved!')).toBeVisible({ timeout: 5_000 });
+
+    // Navigate away and back
+    await navigateToTab(page, 'Library');
+    await navigateToTab(page, 'Settings');
+    await page.getByRole('button', { name: 'System Prompts' }).click();
+
+    // Verify prompts persisted
+    await expect(parsePrompt).toHaveValue('Custom parse prompt for testing', { timeout: 5_000 });
+    await expect(chatPrompt).toHaveValue('Custom chat prompt for testing');
+  });
+
+  test('model/provider selection persists in localStorage', async ({ page }) => {
+    // Mock providers so we have options available
+    await mockProviders(page);
+    await mockProviderModels(page);
+
+    // Navigate to Rewrite tab to access model selector
+    await navigateToTab(page, 'Rewrite');
+
+    // Set provider/model via localStorage (simulating selection)
+    await page.evaluate(() => {
+      localStorage.setItem('porchsongs_provider', 'anthropic');
+      localStorage.setItem('porchsongs_model', 'claude-3-opus');
+      localStorage.setItem('porchsongs_reasoning_effort', 'low');
+    });
+
+    // Reload and verify settings persisted
+    await page.reload();
+    await waitForAppReady(page);
+
+    const stored = await page.evaluate(() => ({
+      provider: localStorage.getItem('porchsongs_provider'),
+      model: localStorage.getItem('porchsongs_model'),
+      effort: localStorage.getItem('porchsongs_reasoning_effort'),
+    }));
+
+    expect(stored.provider).toBe('anthropic');
+    expect(stored.model).toBe('claude-3-opus');
+    expect(stored.effort).toBe('low');
   });
 });

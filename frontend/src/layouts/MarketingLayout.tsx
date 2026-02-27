@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import CookieBanner from '@/components/CookieBanner';
 
 const NAV_LINKS = [
   { to: '/', label: 'Home' },
@@ -117,7 +116,6 @@ export default function MarketingLayout() {
         <p>&copy; {new Date().getFullYear()} porchsongs. All rights reserved.</p>
       </footer>
 
-      <CookieBanner />
     </div>
   );
 }

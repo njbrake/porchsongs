@@ -849,3 +849,78 @@ def test_delete_connection_not_found(client: TestClient) -> None:
     profile = client.post("/api/profiles", json={}).json()
     resp = client.delete(f"/api/profiles/{profile['id']}/connections/9999")
     assert resp.status_code == 404
+
+
+# --- Input Size Validation ---
+
+
+def test_parse_rejects_oversized_content(client: TestClient) -> None:
+    profile = client.post("/api/profiles", json={}).json()
+    resp = client.post(
+        "/api/parse",
+        json={
+            "profile_id": profile["id"],
+            "content": "x" * 100_001,
+            "provider": "openai",
+            "model": "gpt-4",
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_song_create_rejects_oversized_content(client: TestClient) -> None:
+    profile = client.post("/api/profiles", json={}).json()
+    resp = client.post(
+        "/api/songs",
+        json={
+            "profile_id": profile["id"],
+            "original_content": "x" * 100_001,
+            "rewritten_content": "ok",
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_song_create_rejects_oversized_title(client: TestClient) -> None:
+    profile = client.post("/api/profiles", json={}).json()
+    resp = client.post(
+        "/api/songs",
+        json={
+            "profile_id": profile["id"],
+            "title": "x" * 501,
+            "original_content": "ok",
+            "rewritten_content": "ok",
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_song_update_rejects_oversized_title(client: TestClient) -> None:
+    profile = client.post("/api/profiles", json={}).json()
+    song = client.post(
+        "/api/songs",
+        json={
+            "profile_id": profile["id"],
+            "original_content": "ok",
+            "rewritten_content": "ok",
+        },
+    ).json()
+    resp = client.put(f"/api/songs/{song['id']}", json={"title": "x" * 501})
+    assert resp.status_code == 422
+
+
+def test_chat_message_rejects_oversized_content(client: TestClient) -> None:
+    profile = client.post("/api/profiles", json={}).json()
+    song = client.post(
+        "/api/songs",
+        json={
+            "profile_id": profile["id"],
+            "original_content": "ok",
+            "rewritten_content": "ok",
+        },
+    ).json()
+    resp = client.post(
+        f"/api/songs/{song['id']}/messages",
+        json=[{"role": "user", "content": "x" * 10_001}],
+    )
+    assert resp.status_code == 422

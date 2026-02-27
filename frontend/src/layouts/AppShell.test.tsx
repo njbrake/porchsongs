@@ -68,4 +68,12 @@ describe('AppShell layout', () => {
     expect(link).toHaveAttribute('target', '_blank');
     expect(screen.getByText(/Made with/)).toBeInTheDocument();
   });
+
+  it('renders footer with X (Twitter) link', () => {
+    renderWithRouter(<AppShell />, { route: '/app/rewrite' });
+
+    const link = screen.getByRole('link', { name: 'X (Twitter)' });
+    expect(link).toHaveAttribute('href', 'https://x.com/natebrake');
+    expect(link).toHaveAttribute('target', '_blank');
+  });
 });

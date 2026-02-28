@@ -8,6 +8,10 @@ export function OnboardingBanner(): null {
   return null;
 }
 
+export function QuotaUpgradeLink(_props: { className?: string }): null {
+  return null;
+}
+
 export function isQuotaError(_message: string): boolean {
   return false;
 }

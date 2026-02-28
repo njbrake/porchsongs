@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
 import Markdown from 'react-markdown';
 import { toast } from 'sonner';
 import { cn, stripXmlTags } from '@/lib/utils';
 import api from '@/api';
-import { isQuotaError } from '@/extensions/quota';
+import { isQuotaError, QuotaUpgradeLink } from '@/extensions/quota';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -401,9 +400,7 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
                   Retry
                 </Button>
                 {isQuotaError(msg.content) && (
-                  <Link to="/app/settings/account" className="text-sm font-semibold text-primary underline">
-                    Upgrade your plan
-                  </Link>
+                  <QuotaUpgradeLink className="text-sm font-semibold text-primary underline" />
                 )}
               </div>
             )}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useOutletContext, Link } from 'react-router-dom';
+import { useOutletContext } from 'react-router-dom';
 import api, { STORAGE_KEYS } from '@/api';
 import ComparisonView from '@/components/ComparisonView';
 import ChatPanel from '@/components/ChatPanel';
@@ -28,7 +28,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn, copyToClipboard as copyText } from '@/lib/utils';
-import { QuotaBanner, OnboardingBanner, isQuotaError } from '@/extensions/quota';
+import { QuotaBanner, OnboardingBanner, isQuotaError, QuotaUpgradeLink } from '@/extensions/quota';
 import type { AppShellContext } from '@/layouts/AppShell';
 import type { Profile, Song, RewriteResult, RewriteMeta, ChatMessage, LlmSettings, SavedModel, ParseResult } from '@/types';
 
@@ -452,9 +452,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
           <div className="flex-1">
             <span>{error}</span>
             {isQuotaError(error) && (
-              <Link to="/app/settings/account" className="ml-2 font-semibold text-primary underline">
-                Upgrade your plan
-              </Link>
+              <QuotaUpgradeLink className="ml-2 font-semibold text-primary underline" />
             )}
           </div>
           <Button variant="ghost" size="sm" className="text-error-text p-1 leading-none" onClick={() => setError(null)}>

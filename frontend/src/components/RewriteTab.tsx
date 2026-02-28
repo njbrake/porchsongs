@@ -470,10 +470,10 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
 
           <OnboardingBanner />
 
-          <Card>
-            <CardContent className="pt-6">
+          <Card className="flex-1 min-h-0 flex flex-col">
+            <CardContent className="pt-6 flex-1 flex flex-col min-h-0">
               <Textarea
-                rows={10}
+                className="flex-1 min-h-0 resize-none"
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 placeholder="Paste your lyrics and chords here — any format works"

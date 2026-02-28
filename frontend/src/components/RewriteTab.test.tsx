@@ -101,6 +101,23 @@ describe('RewriteTab', () => {
     expect(abortSpy).toHaveBeenCalled();
   });
 
+  it('input card expands to fill available space with flex layout', () => {
+    const props = makeProps();
+    render(<RewriteTab {...props} />);
+
+    // The Card wrapping the textareas should use flex-1 to fill space
+    const lyricsTextarea = screen.getByPlaceholderText(/Paste your lyrics/);
+    const card = lyricsTextarea.closest('.shadow-sm');
+    expect(card).toBeTruthy();
+    expect(card!.className).toContain('flex-1');
+    expect(card!.className).toContain('flex-col');
+    expect(card!.className).toContain('min-h-0');
+
+    // The lyrics textarea should also grow to fill the card
+    expect(lyricsTextarea.className).toContain('flex-1');
+    expect(lyricsTextarea.className).toContain('min-h-0');
+  });
+
   it('uses flex layout instead of hardcoded viewport-height offset in workshopping state', () => {
     const props = makeProps({
       rewriteResult: {

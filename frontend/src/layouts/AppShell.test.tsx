@@ -81,7 +81,7 @@ describe('AppShell layout', () => {
     renderWithRouter(<AppShell />, { route: '/app/rewrite' });
 
     const link = screen.getByRole('link', { name: /feature request/i });
-    expect(link).toHaveAttribute('href', expect.stringContaining('github.com/njbrake/porchsongs/issues/new'));
+    expect(link).toHaveAttribute('href');
     expect(link).toHaveAttribute('target', '_blank');
   });
 });

@@ -20,14 +20,13 @@ import { Select } from '@/components/ui/select';
 import Spinner from '@/components/ui/spinner';
 import StreamingPre from '@/components/ui/streaming-pre';
 import { Alert } from '@/components/ui/alert';
-import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { cn, copyToClipboard as copyText } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { QuotaBanner, OnboardingBanner, isQuotaError, QuotaUpgradeLink } from '@/extensions/quota';
 import type { AppShellContext } from '@/layouts/AppShell';
 import type { Profile, Song, RewriteResult, RewriteMeta, ChatMessage, LlmSettings, SavedModel, ParseResult } from '@/types';
@@ -686,12 +685,6 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
           <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
             <DialogHeader>
               <DialogTitle>Original</DialogTitle>
-              <Button variant="secondary" size="sm" onClick={() => {
-                if (copyText(rewriteResult.original_content)) toast.success('Copied to clipboard');
-                else toast.error('Failed to copy');
-              }}>
-                Copy
-              </Button>
             </DialogHeader>
             <pre className="p-3 sm:p-4 font-mono text-xs sm:text-code leading-relaxed whitespace-pre-wrap break-words overflow-y-auto flex-1 min-h-0">{rewriteResult.original_content}</pre>
           </DialogContent>

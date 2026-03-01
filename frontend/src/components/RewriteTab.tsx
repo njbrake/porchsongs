@@ -28,8 +28,10 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { QuotaBanner, OnboardingBanner, isQuotaError, QuotaUpgradeLink } from '@/extensions/quota';
+import { SAMPLE_SONGS, sampleToParseResult } from '@/data/sample-songs';
 import type { AppShellContext } from '@/layouts/AppShell';
 import type { Profile, Song, RewriteResult, RewriteMeta, ChatMessage, LlmSettings, SavedModel, ParseResult } from '@/types';
+import type { SampleSong } from '@/data/sample-songs';
 
 interface RewriteTabProps {
   profile: Profile | null;
@@ -193,6 +195,18 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
 
   const handleCancelParse = () => {
     parseAbortRef.current?.abort();
+  };
+
+  const handleLoadSample = (sample: SampleSong) => {
+    const result = sampleToParseResult(sample);
+    setParseResult(result);
+    setParsedContent(result.original_content);
+    setSongTitle(result.title ?? '');
+    setSongArtist(result.artist ?? '');
+    setInput('');
+    setInstruction('');
+    setError(null);
+    onNewRewrite(null, null);
   };
 
   const handleBeforeSend = useCallback(async (): Promise<number> => {
@@ -504,6 +518,24 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
                   {parseBlocker ?? shortcutHint}
                 </span>
               </div>
+
+              {hasProfile && hasModel && (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Or try a sample:{' '}
+                  {SAMPLE_SONGS.map((s, i) => (
+                    <span key={s.title}>
+                      {i > 0 && ' · '}
+                      <button
+                        type="button"
+                        className="text-primary hover:underline cursor-pointer"
+                        onClick={() => handleLoadSample(s)}
+                      >
+                        {s.title}
+                      </button>
+                    </span>
+                  ))}
+                </p>
+              )}
             </CardContent>
           </Card>
         </>

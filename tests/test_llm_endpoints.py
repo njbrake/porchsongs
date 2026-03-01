@@ -449,8 +449,10 @@ def test_get_default_prompts(client: TestClient) -> None:
     data = resp.json()
     assert "parse" in data
     assert "chat" in data
-    assert "songwriter" in data["parse"].lower()
-    assert "songwriter" in data["chat"].lower()
+    assert "porchsongs" in data["parse"].lower()
+    assert "song lyric editing assistant" in data["parse"].lower()
+    assert "porchsongs" in data["chat"].lower()
+    assert "song lyric editing assistant" in data["chat"].lower()
 
 
 # --- System prompt fields on profiles ---

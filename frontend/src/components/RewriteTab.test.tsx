@@ -161,4 +161,23 @@ describe('RewriteTab', () => {
     const overflowTriggers = screen.getAllByRole('button', { name: 'More actions' });
     expect(overflowTriggers.length).toBeGreaterThanOrEqual(1);
   });
+
+  it('shows sample song link and loads sample into parsed state on click', async () => {
+    const props = makeProps();
+    render(<RewriteTab {...props} />);
+
+    // Sample link should be visible in the input state
+    const sampleLink = screen.getByText('When the Saints Go Marching In');
+    expect(sampleLink).toBeInTheDocument();
+
+    // Click the sample — should skip to parsed state (chat panel + content)
+    fireEvent.click(sampleLink);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('chat-panel')).toBeInTheDocument();
+    });
+
+    // The input textarea should no longer be visible (we're past the input state)
+    expect(screen.queryByPlaceholderText(/Paste your lyrics/)).not.toBeInTheDocument();
+  });
 });

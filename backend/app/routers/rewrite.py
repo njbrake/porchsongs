@@ -138,7 +138,7 @@ async def parse(
     request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> dict[str, str | None]:
+) -> ParseResponse:
     profile = get_user_profile(db, current_user, req.profile_id)
     api_base = _lookup_api_base(db, req.profile_id, req.provider, req.model)
 
@@ -161,7 +161,16 @@ async def parse(
     except Exception as e:
         raise HTTPException(status_code=502, detail=_format_llm_error(e, req.provider)) from None
 
-    return result
+    usage_data = result.get("usage")
+    usage = TokenUsage(**usage_data) if usage_data else None
+
+    return ParseResponse(
+        original_content=result["original_content"],
+        title=result.get("title"),
+        artist=result.get("artist"),
+        reasoning=result.get("reasoning"),
+        usage=usage,
+    )
 
 
 @router.post("/parse/stream")
@@ -177,6 +186,7 @@ async def parse_stream(
     async def event_generator() -> AsyncIterator[str]:
         accumulated = ""
         reasoning_accumulated = ""
+        usage_data: dict[str, int] | None = None
         try:
             stream = llm_service.parse_content_stream(
                 content=req.content,
@@ -194,6 +204,8 @@ async def parse_stream(
                 if kind == "reasoning":
                     reasoning_accumulated += text
                     yield f"event: reasoning\ndata: {json.dumps(text)}\n\n"
+                elif kind == "usage":
+                    usage_data = json.loads(text)
                 else:
                     accumulated += text
                     yield f"event: token\ndata: {json.dumps(text)}\n\n"
@@ -205,11 +217,12 @@ async def parse_stream(
 
         # Parse the accumulated response
         parsed = llm_service._parse_clean_response(accumulated, req.content)
-        done_data: dict[str, str | None] = {
+        done_data: dict[str, object] = {
             "original_content": parsed["original"],
             "title": parsed["title"],
             "artist": parsed["artist"],
             "reasoning": reasoning_accumulated or None,
+            "usage": usage_data,
         }
         yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
 

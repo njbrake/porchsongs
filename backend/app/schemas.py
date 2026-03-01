@@ -78,6 +78,11 @@ class ProviderConnectionOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TokenUsage(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
 # --- Parse ---
 class ParseRequest(BaseModel):
     profile_id: int
@@ -94,6 +99,7 @@ class ParseResponse(BaseModel):
     title: str | None = None
     artist: str | None = None
     reasoning: str | None = None
+    usage: TokenUsage | None = None
 
 
 # --- Songs ---
@@ -199,11 +205,6 @@ class ChatRequest(BaseModel):
     model: str
     reasoning_effort: str | None = None
     max_tokens: int | None = None
-
-
-class TokenUsage(BaseModel):
-    input_tokens: int = 0
-    output_tokens: int = 0
 
 
 class ChatResponse(BaseModel):

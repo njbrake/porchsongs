@@ -201,12 +201,14 @@ async def parse_content(
     clean_response = await acompletion(**kwargs)
     clean_result = _parse_clean_response(_get_content(clean_response), content)
     reasoning = _get_reasoning(clean_response)
+    usage = _get_usage(clean_response)
 
     return {
         "original_content": clean_result["original"],
         "title": clean_result["title"],
         "artist": clean_result["artist"],
         "reasoning": reasoning,
+        "usage": usage,
     }
 
 
@@ -227,7 +229,11 @@ async def parse_content_stream(
     kwargs = _build_parse_kwargs(
         content, provider, model, api_base, reasoning_effort, instruction, system_prompt, max_tokens
     )
+    if provider == "openai":
+        kwargs["stream_options"] = {"include_usage": True}
     response = await acompletion(stream=True, **kwargs)
+
+    import json
 
     async for chunk in response:
         if not chunk.choices:  # type: ignore[union-attr]
@@ -241,6 +247,15 @@ async def parse_content_stream(
                     yield ("reasoning", str(reasoning_content))
             if delta.content:
                 yield ("token", delta.content)
+
+        # Check for usage in the chunk (sent in the final chunk by most providers)
+        chunk_usage = getattr(chunk, "usage", None)
+        if chunk_usage is not None:
+            usage_data = {
+                "input_tokens": getattr(chunk_usage, "prompt_tokens", 0) or 0,
+                "output_tokens": getattr(chunk_usage, "completion_tokens", 0) or 0,
+            }
+            yield ("usage", json.dumps(usage_data))
 
 
 def _extract_xml_section(raw: str, tag: str) -> str | None:

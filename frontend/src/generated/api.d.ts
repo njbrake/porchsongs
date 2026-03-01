@@ -690,6 +690,7 @@ export interface components {
             artist?: string | null;
             /** Reasoning */
             reasoning?: string | null;
+            usage?: components["schemas"]["TokenUsage"] | null;
         };
         /** ProfileCreate */
         ProfileCreate: {

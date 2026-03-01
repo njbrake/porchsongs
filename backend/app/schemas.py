@@ -90,7 +90,7 @@ class ParseRequest(BaseModel):
     provider: str
     model: str
     reasoning_effort: str | None = None
-    instruction: str | None = None
+    instruction: str | None = Field(default=None, max_length=2000)
     max_tokens: int | None = None
 
 

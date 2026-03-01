@@ -3,11 +3,65 @@
 from types import SimpleNamespace
 
 from app.services.llm_service import (
+    CHAT_SYSTEM_PROMPT,
+    CLEAN_SYSTEM_PROMPT,
     _build_chat_kwargs,
     _build_parse_kwargs,
     _parse_chat_response,
     _parse_clean_response,
 )
+
+# --- System prompt guardrails ---
+
+
+def test_clean_system_prompt_identifies_as_porchsongs() -> None:
+    """CLEAN_SYSTEM_PROMPT should identify the LLM as PorchSongs."""
+    assert "PorchSongs" in CLEAN_SYSTEM_PROMPT
+    assert "song lyric editing assistant" in CLEAN_SYSTEM_PROMPT
+
+
+def test_clean_system_prompt_describes_application() -> None:
+    """CLEAN_SYSTEM_PROMPT should explain it is part of the PorchSongs application."""
+    assert "PorchSongs application" in CLEAN_SYSTEM_PROMPT
+    assert "rewrite and customize song lyrics" in CLEAN_SYSTEM_PROMPT
+
+
+def test_clean_system_prompt_declines_off_topic() -> None:
+    """CLEAN_SYSTEM_PROMPT should instruct declining unrelated discussions."""
+    assert "unrelated to song editing" in CLEAN_SYSTEM_PROMPT
+
+
+def test_chat_system_prompt_identifies_as_porchsongs() -> None:
+    """CHAT_SYSTEM_PROMPT should identify the LLM as PorchSongs."""
+    assert "PorchSongs" in CHAT_SYSTEM_PROMPT
+    assert "song lyric editing assistant" in CHAT_SYSTEM_PROMPT
+
+
+def test_chat_system_prompt_describes_application() -> None:
+    """CHAT_SYSTEM_PROMPT should explain it is part of the PorchSongs application."""
+    assert "PorchSongs application" in CHAT_SYSTEM_PROMPT
+    assert "rewrite and customize song lyrics" in CHAT_SYSTEM_PROMPT
+
+
+def test_chat_system_prompt_stays_on_topic() -> None:
+    """CHAT_SYSTEM_PROMPT should instruct staying on-topic and declining unrelated requests."""
+    assert "Stay on topic" in CHAT_SYSTEM_PROMPT
+    assert "politely decline" in CHAT_SYSTEM_PROMPT
+
+
+def test_chat_system_prompt_preserves_existing_instructions() -> None:
+    """CHAT_SYSTEM_PROMPT should still contain existing formatting/chord instructions."""
+    assert "Preserve syllable counts" in CHAT_SYSTEM_PROMPT
+    assert "chord lines" in CHAT_SYSTEM_PROMPT
+    assert "<content>" in CHAT_SYSTEM_PROMPT
+
+
+def test_clean_system_prompt_preserves_existing_instructions() -> None:
+    """CLEAN_SYSTEM_PROMPT should still contain existing cleanup/chord instructions."""
+    assert "CHORD PRESERVATION" in CLEAN_SYSTEM_PROMPT
+    assert "<meta>" in CLEAN_SYSTEM_PROMPT
+    assert "<original>" in CLEAN_SYSTEM_PROMPT
+
 
 # --- _build_chat_kwargs ---
 

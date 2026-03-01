@@ -76,4 +76,12 @@ describe('AppShell layout', () => {
     expect(link).toHaveAttribute('href', 'https://x.com/natebrake');
     expect(link).toHaveAttribute('target', '_blank');
   });
+
+  it('renders feature request link in footer', () => {
+    renderWithRouter(<AppShell />, { route: '/app/rewrite' });
+
+    const link = screen.getByRole('link', { name: /feature request/i });
+    expect(link).toHaveAttribute('href', expect.stringContaining('github.com/njbrake/porchsongs/issues/new'));
+    expect(link).toHaveAttribute('target', '_blank');
+  });
 });

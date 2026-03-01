@@ -17,3 +17,7 @@ export function getDefaultSettingsTab(_isPremium: boolean): string {
 export function shouldRedirectRootToApp(_isPremium: boolean): boolean {
   return true;
 }
+
+export function getFeatureRequestUrl(): string {
+  return 'https://github.com/njbrake/porchsongs/issues/new?title=Feature+request:+&labels=enhancement';
+}

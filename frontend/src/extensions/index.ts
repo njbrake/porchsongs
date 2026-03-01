@@ -4,6 +4,7 @@ export {
   getLoginPageElement,
   getDefaultSettingsTab,
   shouldRedirectRootToApp,
+  getFeatureRequestUrl,
 } from './routes';
 export {
   getExtraSettingsTabs,

@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     jwt_expiry_minutes: int = 15
     refresh_token_days: int = 30
     premium_plugin: str | None = None
+    default_max_tokens: int = 16384
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 

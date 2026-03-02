@@ -154,6 +154,7 @@ async def parse(
                 instruction=req.instruction,
                 system_prompt=profile.system_prompt_parse,
                 max_tokens=req.max_tokens,
+                api_key=req.api_key,
             ),
         )
     except HTTPException:
@@ -197,6 +198,7 @@ async def parse_stream(
                 instruction=req.instruction,
                 system_prompt=profile.system_prompt_parse,
                 max_tokens=req.max_tokens,
+                api_key=req.api_key,
             )
             async for kind, text in stream:
                 if await request.is_disconnected():
@@ -338,6 +340,7 @@ async def chat(
                 reasoning_effort=req.reasoning_effort,
                 system_prompt=profile.system_prompt_chat if profile else None,
                 max_tokens=req.max_tokens,
+                api_key=req.api_key,
             ),
         )
     except HTTPException:
@@ -398,6 +401,7 @@ async def chat_stream(
                 reasoning_effort=req.reasoning_effort,
                 system_prompt=profile.system_prompt_chat if profile else None,
                 max_tokens=req.max_tokens,
+                api_key=req.api_key,
             )
             async for kind, text in stream:
                 if await request.is_disconnected():

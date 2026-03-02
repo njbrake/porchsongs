@@ -155,6 +155,7 @@ def _build_parse_kwargs(
     instruction: str | None = None,
     system_prompt: str | None = None,
     max_tokens: int | None = None,
+    api_key: str | None = None,
 ) -> dict[str, object]:
     """Build the common kwargs dict for parse LLM calls."""
     user_text = "Clean up this pasted input. Identify the title and artist."
@@ -172,8 +173,12 @@ def _build_parse_kwargs(
     }
     if api_base:
         kwargs["api_base"] = api_base
-    if reasoning_effort:
-        kwargs["reasoning_effort"] = reasoning_effort
+    if api_key:
+        kwargs["api_key"] = api_key
+    # Always pass reasoning_effort explicitly. any_llm defaults to "auto" which
+    # lets Anthropic enable extended thinking automatically — causing max_tokens
+    # vs budget_tokens conflicts. Passing None tells any_llm to disable thinking.
+    kwargs["reasoning_effort"] = reasoning_effort
     from ..config import settings
 
     kwargs["max_tokens"] = max_tokens if max_tokens is not None else settings.default_max_tokens
@@ -200,13 +205,22 @@ async def parse_content(
     instruction: str | None = None,
     system_prompt: str | None = None,
     max_tokens: int | None = None,
+    api_key: str | None = None,
 ) -> dict[str, str | None]:
     """Clean up raw pasted content and identify title/artist (non-streaming).
 
     Returns dict with: original_content, title, artist, reasoning
     """
     kwargs = _build_parse_kwargs(
-        content, provider, model, api_base, reasoning_effort, instruction, system_prompt, max_tokens
+        content,
+        provider,
+        model,
+        api_base,
+        reasoning_effort,
+        instruction,
+        system_prompt,
+        max_tokens,
+        api_key,
     )
     clean_response = await acompletion(**kwargs)
     clean_result = _parse_clean_response(_get_content(clean_response), content)
@@ -231,13 +245,22 @@ async def parse_content_stream(
     instruction: str | None = None,
     system_prompt: str | None = None,
     max_tokens: int | None = None,
+    api_key: str | None = None,
 ) -> AsyncIterator[tuple[str, str]]:
     """Stream parse tokens as ``(type, text)`` tuples.
 
     Types: ``"token"`` for content, ``"reasoning"`` for reasoning/thinking.
     """
     kwargs = _build_parse_kwargs(
-        content, provider, model, api_base, reasoning_effort, instruction, system_prompt, max_tokens
+        content,
+        provider,
+        model,
+        api_base,
+        reasoning_effort,
+        instruction,
+        system_prompt,
+        max_tokens,
+        api_key,
     )
     if provider == "openai":
         kwargs["stream_options"] = {"include_usage": True}
@@ -354,6 +377,7 @@ def _build_chat_kwargs(
     reasoning_effort: str | None = None,
     system_prompt: str | None = None,
     max_tokens: int | None = None,
+    api_key: str | None = None,
 ) -> dict[str, object]:
     """Build the common kwargs dict for chat LLM calls."""
     system_content = system_prompt or CHAT_SYSTEM_PROMPT
@@ -376,8 +400,12 @@ def _build_chat_kwargs(
     }
     if api_base:
         kwargs["api_base"] = api_base
-    if reasoning_effort:
-        kwargs["reasoning_effort"] = reasoning_effort
+    if api_key:
+        kwargs["api_key"] = api_key
+    # Always pass reasoning_effort explicitly. any_llm defaults to "auto" which
+    # lets Anthropic enable extended thinking automatically — causing max_tokens
+    # vs budget_tokens conflicts. Passing None tells any_llm to disable thinking.
+    kwargs["reasoning_effort"] = reasoning_effort
     from ..config import settings
 
     kwargs["max_tokens"] = max_tokens if max_tokens is not None else settings.default_max_tokens
@@ -393,6 +421,7 @@ async def chat_edit_content(
     reasoning_effort: str | None = None,
     system_prompt: str | None = None,
     max_tokens: int | None = None,
+    api_key: str | None = None,
 ) -> dict[str, str | None]:
     """Process a chat-based content edit (non-streaming).
 
@@ -403,7 +432,15 @@ async def chat_edit_content(
     without ``<content>`` tags.
     """
     kwargs = _build_chat_kwargs(
-        song, messages, provider, model, api_base, reasoning_effort, system_prompt, max_tokens
+        song,
+        messages,
+        provider,
+        model,
+        api_base,
+        reasoning_effort,
+        system_prompt,
+        max_tokens,
+        api_key,
     )
     response = await acompletion(**kwargs)
 
@@ -434,6 +471,7 @@ async def chat_edit_content_stream(
     reasoning_effort: str | None = None,
     system_prompt: str | None = None,
     max_tokens: int | None = None,
+    api_key: str | None = None,
 ) -> AsyncIterator[tuple[str, str]]:
     """Stream a chat-based content edit token by token as ``(type, text)`` tuples.
 
@@ -441,7 +479,15 @@ async def chat_edit_content_stream(
     ``"usage"`` for final token usage JSON.
     """
     kwargs = _build_chat_kwargs(
-        song, messages, provider, model, api_base, reasoning_effort, system_prompt, max_tokens
+        song,
+        messages,
+        provider,
+        model,
+        api_base,
+        reasoning_effort,
+        system_prompt,
+        max_tokens,
+        api_key,
     )
     if provider == "openai":
         kwargs["stream_options"] = {"include_usage": True}

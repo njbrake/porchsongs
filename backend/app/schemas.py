@@ -92,6 +92,7 @@ class ParseRequest(BaseModel):
     reasoning_effort: str | None = None
     instruction: str | None = Field(default=None, max_length=2000)
     max_tokens: int | None = None
+    api_key: str | None = None
 
 
 class ParseResponse(BaseModel):
@@ -205,6 +206,7 @@ class ChatRequest(BaseModel):
     model: str
     reasoning_effort: str | None = None
     max_tokens: int | None = None
+    api_key: str | None = None
 
 
 class ChatResponse(BaseModel):

@@ -5,7 +5,7 @@ export interface ExtensionTab {
   label: string;
 }
 
-export function getExtraSettingsTabs(_isPremium: boolean): ExtensionTab[] {
+export function getExtraSettingsTabs(_isPremium: boolean, _isAdmin: boolean): ExtensionTab[] {
   return [];
 }
 

@@ -617,6 +617,8 @@ export interface components {
             reasoning_effort?: string | null;
             /** Max Tokens */
             max_tokens?: number | null;
+            /** Api Key */
+            api_key?: string | null;
         };
         /** ChatResponse */
         ChatResponse: {
@@ -679,6 +681,8 @@ export interface components {
             instruction?: string | null;
             /** Max Tokens */
             max_tokens?: number | null;
+            /** Api Key */
+            api_key?: string | null;
         };
         /** ParseResponse */
         ParseResponse: {

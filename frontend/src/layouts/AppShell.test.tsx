@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react';
 import { renderWithRouter } from '@/test/test-utils';
 
-// Mock auth context — ready state with no auth required
+// Mock auth context: ready state with no auth required
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
     authState: 'ready',

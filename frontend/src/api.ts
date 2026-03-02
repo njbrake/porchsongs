@@ -73,7 +73,7 @@ function _throwApiError(error: unknown, fallback: string): never {
   throw new Error(message);
 }
 
-// --- SSE streaming (stays manual — openapi-fetch doesn't handle SSE) ---
+// --- SSE streaming (stays manual, openapi-fetch doesn't handle SSE) ---
 
 async function _streamSse<T>(
   endpoint: string,
@@ -193,7 +193,7 @@ const api = {
     return data as { parse: string; chat: string };
   },
 
-  // Parse (SSE — stays manual)
+  // Parse (SSE, stays manual)
   parseStream: (
     data: Record<string, unknown>,
     onToken: (token: string) => void,
@@ -258,7 +258,7 @@ const api = {
     return data as SongRevision[];
   },
 
-  // Chat (SSE — stays manual)
+  // Chat (SSE, stays manual)
   chatStream: (
     data: Record<string, unknown>,
     onToken: (token: string) => void,
@@ -319,7 +319,7 @@ const api = {
     if (error) _throwApiError(error, 'Failed to delete connection');
   },
 
-  // PDF — uses UUID
+  // PDF (uses UUID)
   downloadSongPdf: async (songUuid: string, title: string | null, artist: string | null) => {
     const filename = `${title || 'Untitled'} - ${artist || 'Unknown'}.pdf`;
     let res = await fetch(`/api/songs/${songUuid}/pdf`, { headers: _getAuthHeaders() });

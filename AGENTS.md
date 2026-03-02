@@ -50,15 +50,15 @@ React Router (`react-router-dom`) with `BrowserRouter`. App routes live under `/
 - OSS mode: `/` redirects to `/app`
 
 Key layers:
-- **`AuthContext`** (`src/contexts/AuthContext.tsx`) — Auth state, login/logout. Wraps entire app.
-- **`AppShell`** (`src/layouts/AppShell.tsx`) — Auth-gated layout for `/app/*`. Holds app state (profile, rewrite, LLM settings) and passes to children via `useOutletContext<AppShellContext>()`.
-- **`MarketingLayout`** (`src/layouts/MarketingLayout.tsx`) — Marketing nav/footer (premium only).
+- **`AuthContext`** (`src/contexts/AuthContext.tsx`): Auth state, login/logout. Wraps entire app.
+- **`AppShell`** (`src/layouts/AppShell.tsx`): Auth-gated layout for `/app/*`. Holds app state (profile, rewrite, LLM settings) and passes to children via `useOutletContext<AppShellContext>()`.
+- **`MarketingLayout`** (`src/layouts/MarketingLayout.tsx`): Marketing nav/footer (premium only).
 
 SEO meta injection (premium): `premium/porchsongs_premium/seo.py` injects route-specific meta tags into `index.html` server-side.
 
 ### Auth
 
-Plugin architecture in `backend/app/auth/`. **OSS is auth-free** — `get_current_user` auto-creates and returns a single local user (`local@porchsongs.local`). No login required. Premium adds Google OAuth via `PREMIUM_PLUGIN` env var, overriding `get_current_user` with JWT validation. JWT tokens, refresh tokens, rate limiting, and login/logout endpoints all live in the premium layer. Every data endpoint uses `Depends(get_current_user)` with `user_id` filtering. The auth ABC (`AuthBackend`), token utilities, and rate limiter remain in OSS for premium to import.
+Plugin architecture in `backend/app/auth/`. **OSS is auth-free**: `get_current_user` auto-creates and returns a single local user (`local@porchsongs.local`). No login required. Premium adds Google OAuth via `PREMIUM_PLUGIN` env var, overriding `get_current_user` with JWT validation. JWT tokens, refresh tokens, rate limiting, and login/logout endpoints all live in the premium layer. Every data endpoint uses `Depends(get_current_user)` with `user_id` filtering. The auth ABC (`AuthBackend`), token utilities, and rate limiter remain in OSS for premium to import.
 
 ### LLM Integration
 
@@ -66,7 +66,7 @@ All LLM calls go through `any-llm-sdk`. API keys from server env vars. Two modes
 
 ### SSE Streaming
 
-Always add `Cache-Control: no-cache` and `X-Accel-Buffering: no` headers. Never use Starlette's `BaseHTTPMiddleware` for SSE — use pure ASGI middleware instead.
+Always add `Cache-Control: no-cache` and `X-Accel-Buffering: no` headers. Never use Starlette's `BaseHTTPMiddleware` for SSE. Use pure ASGI middleware instead.
 
 ### Data Model
 
@@ -96,7 +96,11 @@ Tailwind CSS v4 with `@theme` tokens in `src/index.css`:
 - **Fonts**: `font-mono` / `font-ui` from `@theme`
 - **UI primitives**: Always use components from `src/components/ui/` (`Button`, `Input`, `Card`, etc.) instead of raw HTML
 - **Class names**: Use `cn()` from `@/lib/utils` for conditional classes, not template literals
-- **Cascade layers**: All custom CSS must be inside `@layer base { ... }` — unlayered CSS silently overrides Tailwind utilities
+- **Cascade layers**: All custom CSS must be inside `@layer base { ... }`. Unlayered CSS silently overrides Tailwind utilities
+
+### Content & Copy
+
+- **Never use em dashes** (`—` or `&mdash;`) in user-facing content, comments, titles, or copy. They are a telltale sign of AI-generated text. Use periods, commas, colons, or pipes instead.
 
 ### Code Conventions
 

@@ -1,4 +1,4 @@
-/** OSS stub — premium overlay replaces this with real quota UI. */
+/** OSS stub: premium overlay replaces this with real quota UI. */
 
 export function QuotaBanner(): null {
   return null;

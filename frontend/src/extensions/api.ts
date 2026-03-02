@@ -1,5 +1,5 @@
 export async function tryRestoreSession(): Promise<null> {
-  // OSS mode — no session to restore. Premium overrides this.
+  // OSS mode: no session to restore. Premium overrides this.
   return null;
 }
 

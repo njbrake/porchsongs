@@ -6,7 +6,7 @@ export function getPremiumRouteElements(): ReactNode {
 }
 
 export function getLoginPageElement(): ReactNode {
-  // OSS has no login — redirect to app
+  // OSS has no login, redirect to app
   return <Navigate to="/app" replace />;
 }
 

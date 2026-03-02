@@ -1,6 +1,6 @@
 import type { components } from '@/generated/api';
 
-// --- Backend types (derived from OpenAPI spec — single source of truth) ---
+// --- Backend types (derived from OpenAPI spec, single source of truth) ---
 
 export type Profile = components['schemas']['ProfileOut'];
 export type Song = components['schemas']['SongOut'];
@@ -22,7 +22,7 @@ export type ChatResult = components['schemas']['ChatResponse'];
 export type ProviderInfo = components['schemas']['ProviderInfo'];
 export type ProvidersResponse = components['schemas']['ProvidersResponse'];
 
-// --- Frontend-only types (no backend equivalent — stay manual) ---
+// --- Frontend-only types (no backend equivalent, stay manual) ---
 
 export interface RewriteResult {
   original_content: string;

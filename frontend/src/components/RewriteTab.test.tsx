@@ -3,7 +3,7 @@ import RewriteTab from '@/components/RewriteTab';
 import type { AppShellContext } from '@/layouts/AppShell';
 import type { ChatMessage, SavedModel } from '@/types';
 
-// Mock react-router-dom — provide useOutletContext
+// Mock react-router-dom: provide useOutletContext
 const mockOutletContext: Partial<AppShellContext> = {};
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
@@ -170,7 +170,7 @@ describe('RewriteTab', () => {
     const sampleLink = screen.getByText('When the Saints Go Marching In');
     expect(sampleLink).toBeInTheDocument();
 
-    // Click the sample — should skip to parsed state (chat panel + content)
+    // Click the sample: should skip to parsed state (chat panel + content)
     fireEvent.click(sampleLink);
 
     await waitFor(() => {

@@ -29,10 +29,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((config) => {
         setAuthConfig(config);
         if (!config.required) {
-          // OSS mode — no auth needed, immediately ready
+          // OSS mode: no auth needed, immediately ready
           setAuthState('ready');
         } else {
-          // Premium mode — try to restore existing session with timeout
+          // Premium mode: try to restore existing session with timeout
           const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000));
           Promise.race([api.tryRestoreSession(), timeout]).then((user) => {
             if (user) {

@@ -225,7 +225,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
 
   const handleChatUpdate = useCallback((newContent: string) => {
     if (!rewriteResult && parseResult) {
-      // First chat edit — transition to WORKSHOPPING
+      // First chat edit: transition to WORKSHOPPING
       onNewRewrite(
         {
           original_content: parsedContent,
@@ -304,10 +304,10 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
 
   const handleOriginalContentUpdated = useCallback((newOriginal: string) => {
     if (!rewriteResult && parseResult) {
-      // PARSED state — update the editable parsed content
+      // PARSED state: update the editable parsed content
       setParsedContent(newOriginal);
     } else if (rewriteResult) {
-      // WORKSHOPPING state — update the original in the rewrite result
+      // WORKSHOPPING state: update the original in the rewrite result
       onNewRewrite(
         { ...rewriteResult, original_content: newOriginal },
         rewriteMeta,
@@ -487,7 +487,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
                 className="flex-1 min-h-0 resize-none"
                 value={input}
                 onChange={e => setInput(e.target.value)}
-                placeholder="Paste your lyrics and chords here — any format works"
+                placeholder="Paste your lyrics and chords here. Any format works."
                 onKeyDown={e => {
                   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canParse) {
                     e.preventDefault();
@@ -500,7 +500,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
                 rows={2}
                 value={instruction}
                 onChange={e => setInstruction(e.target.value)}
-                placeholder="Optional instructions — e.g. &quot;only grab the first song&quot; or &quot;skip the intro&quot;"
+                placeholder="Optional instructions, e.g. &quot;only grab the first song&quot; or &quot;skip the intro&quot;"
                 className="mt-3 font-ui"
                 onKeyDown={e => {
                   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canParse) {
@@ -563,7 +563,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
         <div className="flex flex-col flex-1 min-h-0 mt-2 md:mt-0">
           {mobilePaneToggle}
 
-          {/* Unified toolbar — desktop only */}
+          {/* Unified toolbar (desktop only) */}
           <div className="hidden md:flex items-center gap-4 px-4 py-2.5 border-b border-border">
             {compactTitleArtist(isWorkshopping)}
             <div className="flex items-center gap-1.5 ml-auto shrink-0">

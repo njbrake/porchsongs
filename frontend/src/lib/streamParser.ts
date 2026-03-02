@@ -79,7 +79,7 @@ export class StreamParser {
       return { chatDelta: '', contentDelta: '', originalSongDelta: '' };
     }
 
-    // Buffer doesn't match — flush buffer to chat
+    // Buffer doesn't match, flush buffer to chat
     const flushed = this.tagBuffer;
     this.tagBuffer = '';
 
@@ -164,7 +164,7 @@ export class StreamParser {
       return { chatDelta: '', contentDelta: '', originalSongDelta: '' };
     }
 
-    // Buffer doesn't match — flush to chat
+    // Buffer doesn't match, flush to chat
     const flushed = this.tagBuffer;
     this.tagBuffer = '';
 

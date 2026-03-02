@@ -4,7 +4,7 @@ import LibraryTab from '@/components/LibraryTab';
 import type { AppShellContext } from '@/layouts/AppShell';
 import type { Song, ChatMessage, SavedModel } from '@/types';
 
-// Mock react-router-dom — provide useOutletContext + useParams
+// Mock react-router-dom: provide useOutletContext + useParams
 const mockOutletContext: Partial<AppShellContext> = {};
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
@@ -126,7 +126,7 @@ describe('LibraryTab folder pills', () => {
     expect(screen.getByText('Song A')).toBeInTheDocument();
     expect(screen.getByText('Song B')).toBeInTheDocument();
 
-    // The dropdown menu should NOT appear — no "Rename" or "Delete folder" visible
+    // The dropdown menu should NOT appear: no "Rename" or "Delete folder" visible
     expect(screen.queryByText('Rename')).not.toBeInTheDocument();
     expect(screen.queryByText('Delete folder')).not.toBeInTheDocument();
   });

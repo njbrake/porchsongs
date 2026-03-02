@@ -5,6 +5,10 @@
 <h1 align="center">porchsongs</h1>
 
 <p align="center">
+  <a href="https://porchsongs.ai"><img alt="Try it live" src="https://img.shields.io/badge/try_it_live-porchsongs.ai-ff6b35?style=for-the-badge" /></a>
+</p>
+
+<p align="center">
   <img alt="Python" src="https://img.shields.io/badge/python-3.11+-blue?logo=python&logoColor=white" />
   <img alt="React" src="https://img.shields.io/badge/react-19-61dafb?logo=react&logoColor=white" />
   <img alt="FastAPI" src="https://img.shields.io/badge/fastapi-0.115-009688?logo=fastapi&logoColor=white" />
@@ -13,8 +17,8 @@
 </p>
 
 <p align="center">
-  A personal song lyric rewriter. Edit and refine your lyrics with AI — workshop them into something that actually sounds like you.<br />
-  Powered by <a href="https://any-llm.ai/">any-llm</a> — use any LLM provider you want.
+  A personal song lyric rewriter. Edit and refine your lyrics with AI -- workshop them into something that actually sounds like you.<br />
+  Powered by <a href="https://any-llm.ai/">any-llm</a> -- use any LLM provider you want.
 </p>
 
 ---
@@ -23,13 +27,19 @@
   <img src="assets/porchsongs-demo.gif" alt="PorchSongs demo" width="720" />
 </p>
 
-porchsongs preserves meter, rhyme scheme, chord alignment, and emotional meaning — it only swaps out the imagery that doesn't fit.
+porchsongs preserves meter, rhyme scheme, chord alignment, and emotional meaning -- it only swaps out the imagery that doesn't fit.
+
+## Try It Live
+
+**[porchsongs.ai](https://porchsongs.ai)** is the hosted version of porchsongs. Sign in with Google, pick a plan, and start rewriting. No setup, no API keys to manage.
+
+If you prefer to self-host or want full control over your LLM provider, follow the [Quick Start](#quick-start) below.
 
 ## How It Works
 
-1. **Paste your lyrics** — with or without chords, any format works
-2. **Chat to workshop the lyrics** — tell the AI what to change ("swap the truck for my bike," "make verse 2 about coding") and iterate in a live conversation
-3. **Play and enjoy** — chords are automatically realigned above your new lyrics
+1. **Paste your lyrics** -- with or without chords, any format works
+2. **Chat to workshop the lyrics** -- tell the AI what to change ("swap the truck for my bike," "make verse 2 about coding") and iterate in a live conversation
+3. **Play and enjoy** -- chords are automatically realigned above your new lyrics
 
 ## Quick Start
 
@@ -43,7 +53,7 @@ uv run uvicorn app.main:app --reload
 
 Open [http://localhost:8000](http://localhost:8000). Configure your LLM API key in Settings.
 
-By default, porchsongs runs in **zero-config dev mode** — no login required, a local user is auto-created. See [Authentication](#authentication) below for production setups.
+By default, porchsongs runs in **zero-config dev mode** -- no login required, a local user is auto-created. See [Authentication](#authentication) below for production setups.
 
 For frontend development with hot reload:
 
@@ -59,7 +69,7 @@ cd frontend && npm run dev
 
 ```bash
 cp .env.example .env
-# Edit .env — set JWT_SECRET to a long random string
+# Edit .env -- set JWT_SECRET to a long random string
 docker compose up --build
 ```
 
@@ -152,9 +162,9 @@ cd frontend && npx eslint src/
 cd frontend && npm run typecheck
 ```
 
-## LLM Providers — Powered by any-llm
+## LLM Providers -- Powered by any-llm
 
-porchsongs uses **[any-llm](https://any-llm.ai/)** as its LLM backbone — a unified interface to **38+ providers** including OpenAI, Anthropic, Google, Mistral, Groq, and Ollama. Swap providers by changing a single setting; no code changes needed.
+porchsongs uses **[any-llm](https://any-llm.ai/)** as its LLM backbone -- a unified interface to **38+ providers** including OpenAI, Anthropic, Google, Mistral, Groq, and Ollama. Swap providers by changing a single setting; no code changes needed.
 
 | | |
 |---|---|
@@ -162,8 +172,8 @@ porchsongs uses **[any-llm](https://any-llm.ai/)** as its LLM backbone — a uni
 | **GitHub** | [mozilla-ai/any-llm](https://github.com/mozilla-ai/any-llm) |
 
 any-llm gives porchsongs:
-- **Provider flexibility** — use whichever LLM API you already have a key for
-- **Local/offline support** — run fully offline with [llamafile](https://github.com/mozilla-ai/llamafile) or Ollama
-- **Consistent interface** — streaming, async, and tool use work the same across all providers
+- **Provider flexibility** -- use whichever LLM API you already have a key for
+- **Local/offline support** -- run fully offline with [llamafile](https://github.com/mozilla-ai/llamafile) or Ollama
+- **Consistent interface** -- streaming, async, and tool use work the same across all providers
 
 Bring your own API key, configure it in Settings, and start rewriting.

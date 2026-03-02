@@ -19,6 +19,11 @@ dependencies = [
     "bcrypt>=4.2.0",
 ]
 
+[project.urls]
+Homepage = "https://porchsongs.ai"
+Repository = "https://github.com/njbrake/porchsongs"
+"Bug Tracker" = "https://github.com/njbrake/porchsongs/issues"
+
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",

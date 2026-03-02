@@ -120,6 +120,25 @@ Frontend: Vitest + React Testing Library. Use `renderWithRouter()` from `src/tes
 
 See [tips/definition-of-done.md](tips/definition-of-done.md) for the full checklist including PR video requirements.
 
+## Fixing Broken Git Worktrees in the Sandbox
+
+Git worktrees store absolute paths. When a worktree is created on the host (e.g. `/Users/you/scm/porchsongs/...`) and the sandbox mounts the same tree at `/workspace/porchsongs/...`, the cross-references between the main repo and its worktrees break. Fix by rewriting the paths:
+
+```bash
+HOST_PREFIX="/Users/you/scm/porchsongs"   # adjust to match your host
+SANDBOX_PREFIX="/workspace/porchsongs"
+
+# Fix main repo -> worktree references
+sed -i "s|$HOST_PREFIX|$SANDBOX_PREFIX|g" .git/worktrees/*/gitdir 2>/dev/null
+
+# Fix worktree -> main repo back-references
+find .claude/worktrees -maxdepth 2 -name ".git" -type f \
+  -exec sed -i "s|$HOST_PREFIX|$SANDBOX_PREFIX|g" {} \; 2>/dev/null
+
+# Verify
+git worktree list   # should show /workspace/... paths
+```
+
 ## Key Constraints
 
 - **TypeScript** strict mode with `noUncheckedIndexedAccess`

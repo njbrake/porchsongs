@@ -528,10 +528,8 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
 
       {/* INPUT state */}
       {isInput && !loading && (
-        <>
+        <OnboardingBanner>
           {!isPremium && modelControls()}
-
-          <OnboardingBanner />
 
           <Card className="flex-1 min-h-0 flex flex-col">
             <CardContent className="pt-6 flex-1 flex flex-col min-h-0">
@@ -590,7 +588,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
               )}
             </CardContent>
           </Card>
-        </>
+        </OnboardingBanner>
       )}
 
       {/* PARSING state (loading, no parse result yet) */}

@@ -52,6 +52,7 @@ export interface AppShellContext {
   savedModels: ReturnType<typeof useSavedModels>['savedModels'];
   onOpenSettings: () => void;
   isPremium: boolean;
+  isAdmin: boolean;
   // Settings-specific props
   provider: string;
   model: string;
@@ -263,6 +264,7 @@ export default function AppShell() {
     savedModels,
     onOpenSettings: () => navigate('/app/settings/models'),
     isPremium,
+    isAdmin: currentAuthUser?.role === 'admin',
     provider,
     model,
     onSave: (p, m) => { setProvider(p); setModel(m); },

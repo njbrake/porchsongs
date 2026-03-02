@@ -27,8 +27,9 @@ export default function SettingsPage() {
     reasoningEffort,
     onChangeReasoningEffort,
     isPremium,
+    isAdmin,
   } = ctx;
-  const extraTabs = getExtraSettingsTabs(isPremium);
+  const extraTabs = getExtraSettingsTabs(isPremium, isAdmin);
   const ossTabs = showOssSettingsTabs(isPremium) ? [...SETTINGS_TABS] : [];
   const visibleTabs = [...extraTabs, ...ossTabs];
   const defaultTab = visibleTabs[0]?.key ?? 'models';

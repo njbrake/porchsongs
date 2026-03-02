@@ -57,6 +57,7 @@ const stubContext: AppShellContext = {
   savedModels: [],
   onOpenSettings: vi.fn(),
   isPremium: false,
+  isAdmin: false,
   provider: '',
   model: '',
   onSave: vi.fn(),

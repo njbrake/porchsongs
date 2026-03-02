@@ -616,7 +616,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
           {mobilePaneToggle}
 
           {/* Unified toolbar (desktop only) */}
-          <div className="hidden md:flex items-center gap-4 px-4 py-2.5 border-b border-border">
+          <div data-testid="song-toolbar" className="hidden md:flex items-center gap-4 px-4 py-2.5 border-b border-border">
             {compactTitleArtist(isWorkshopping)}
             <div className="flex items-center gap-1.5 ml-auto shrink-0">
               {!isPremium && compactModelControls()}

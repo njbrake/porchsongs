@@ -379,7 +379,7 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
 
   return (
     <Card className={cn(flat ? 'border-0 shadow-none rounded-none bg-transparent' : 'mt-0', 'flex flex-col flex-1 overflow-hidden')}>
-      <CardHeader className={cn('flex items-center justify-between gap-2', flat && 'md:hidden')}>
+      <CardHeader className={cn('flex items-center justify-between gap-2', flat && 'hidden')}>
         <span>Chat Workshop</span>
         {headerRight && (
           <div className="flex items-center gap-1.5">{headerRight}</div>

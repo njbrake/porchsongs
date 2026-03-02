@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import Spinner from '@/components/ui/spinner';
 import StreamingPre from '@/components/ui/streaming-pre';
@@ -182,6 +182,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
       setSongTitle(result.title || '');
       setSongArtist(result.artist || '');
       setInstruction('');
+      setMobilePane('content');
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         setError((err as Error).message);
@@ -207,6 +208,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
     setInstruction('');
     setError(null);
     onNewRewrite(null, null);
+    setMobilePane('content');
   };
 
   const handleBeforeSend = useCallback(async (): Promise<number> => {
@@ -438,21 +440,71 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
     );
   };
 
-  // Mobile pane toggle
+  // Mobile pane toggle + toolbar
   const mobilePaneToggle = (
-    <div className="flex md:hidden rounded-md border border-border overflow-hidden mb-3">
-      <button
-        className={cn('flex-1 py-2 text-sm font-semibold text-center transition-colors', mobilePane === 'chat' ? 'bg-primary text-white' : 'bg-card text-muted-foreground')}
-        onClick={() => setMobilePane('chat')}
-      >
-        Chat Workshop
-      </button>
-      <button
-        className={cn('flex-1 py-2 text-sm font-semibold text-center transition-colors', mobilePane === 'content' ? 'bg-primary text-white' : 'bg-card text-muted-foreground')}
-        onClick={() => setMobilePane('content')}
-      >
-        Your Version
-      </button>
+    <div className="flex flex-col md:hidden gap-2 mb-2">
+      <div className="flex rounded-md border border-border overflow-hidden">
+        <button
+          className={cn('flex-1 py-2 text-sm font-semibold text-center transition-colors', mobilePane === 'chat' ? 'bg-primary text-white' : 'bg-card text-muted-foreground')}
+          onClick={() => setMobilePane('chat')}
+        >
+          Chat
+        </button>
+        <button
+          className={cn('flex-1 py-2 text-sm font-semibold text-center transition-colors', mobilePane === 'content' ? 'bg-primary text-white' : 'bg-card text-muted-foreground')}
+          onClick={() => setMobilePane('content')}
+        >
+          Song
+        </button>
+      </div>
+      <div className="flex items-center gap-2 px-1">
+        {compactTitleArtist(isWorkshopping)}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {isWorkshopping && (
+            <>
+              <Button variant="secondary" size="sm" onClick={() => setShowOriginal(true)}>
+                Original
+              </Button>
+              <Button
+                variant="secondary"
+                className="h-7 px-2.5 text-xs"
+                onClick={handleSave}
+                disabled={saveStatus === 'saving' || !currentSongUuid}
+              >
+                {saveStatus === 'saved' ? 'Saved!' :
+                 saveStatus === 'saving' ? 'Saving...' : 'Save'}
+              </Button>
+            </>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" aria-label="More actions">
+                &hellip;
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {isParsed && parseResult?.reasoning && (
+                <DropdownMenuItem onClick={() => setParseReasoningExpanded(prev => !prev)}>
+                  {parseReasoningExpanded ? 'Hide thinking' : 'Show thinking'}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={handleNewSong}>New Song</DropdownMenuItem>
+              {isWorkshopping && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-danger hover:!bg-danger-light"
+                    disabled={!currentSongUuid}
+                    onClick={() => setScrapDialogOpen(true)}
+                  >
+                    Scrap This
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
     </div>
   );
 
@@ -673,18 +725,6 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
             right={
               isParsed ? (
                 <div className="flex flex-col flex-1 overflow-hidden">
-                  <CardHeader className={cn('flex items-center justify-between gap-2', 'md:hidden')}>
-                    {compactTitleArtist()}
-                    {parseResult?.reasoning && (
-                      <Button
-                        variant="link-inline"
-                        className="text-xs shrink-0 opacity-80 hover:opacity-100"
-                        onClick={() => setParseReasoningExpanded(prev => !prev)}
-                      >
-                        {parseReasoningExpanded ? 'Hide thinking' : 'Show thinking'}
-                      </Button>
-                    )}
-                  </CardHeader>
                   {parseReasoningExpanded && parseResult?.reasoning && (
                     <pre className="whitespace-pre-wrap break-words text-xs px-4 py-2 font-mono max-h-[30vh] overflow-y-auto opacity-70 border-b border-border">{parseResult.reasoning}</pre>
                   )}

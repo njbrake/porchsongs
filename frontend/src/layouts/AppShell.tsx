@@ -89,7 +89,7 @@ export default function AppShell() {
   const [rewriteMeta, setRewriteMeta] = useState<RewriteMeta | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
-  // Track current song — integer ID for chat requests, UUID for URL routing
+  // Track current song: integer ID for chat requests, UUID for URL routing
   const [currentSongId, setCurrentSongIdRaw] = useState<number | null>(null);
   const [currentSongUuid, setCurrentSongUuidRaw] = useState<string | null>(() => {
     return localStorage.getItem(STORAGE_KEYS.CURRENT_SONG_ID) || null;

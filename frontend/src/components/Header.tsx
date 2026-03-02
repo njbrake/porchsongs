@@ -50,7 +50,7 @@ export default function Header({ user, authRequired, onLogout, isPremium }: Head
                 : 'bg-black/5 border-border opacity-70 hover:opacity-100'
             )}
             onClick={wakeLock.toggle}
-            title={wakeLock.active ? 'Screen staying awake — click to disable' : 'Keep screen awake while viewing song'}
+            title={wakeLock.active ? 'Screen staying awake, click to disable' : 'Keep screen awake while viewing song'}
           >
             Stay Awake
           </button>

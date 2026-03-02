@@ -38,7 +38,7 @@ export default function App() {
       {/* Premium route elements (marketing pages, etc.) */}
       {getPremiumRouteElements()}
 
-      {/* Login — OSS redirects to /app, premium renders its LoginPage */}
+      {/* Login: OSS redirects to /app, premium renders its LoginPage */}
       <Route path="/app/login" element={getLoginPageElement()} />
 
       {/* Authenticated app */}

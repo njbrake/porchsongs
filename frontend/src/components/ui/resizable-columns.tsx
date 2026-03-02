@@ -102,7 +102,7 @@ export default function ResizableColumns({
         {left}
       </div>
 
-      {/* Drag handle — hidden on mobile */}
+      {/* Drag handle (hidden on mobile) */}
       <div
         className="hidden md:flex justify-center w-3 cursor-col-resize select-none shrink-0 group touch-none"
         onPointerDown={onPointerDown}

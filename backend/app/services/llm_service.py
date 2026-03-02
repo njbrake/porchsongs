@@ -174,8 +174,9 @@ def _build_parse_kwargs(
         kwargs["api_base"] = api_base
     if reasoning_effort:
         kwargs["reasoning_effort"] = reasoning_effort
-    if max_tokens is not None:
-        kwargs["max_tokens"] = max_tokens
+    from ..config import settings
+
+    kwargs["max_tokens"] = max_tokens if max_tokens is not None else settings.default_max_tokens
     return kwargs
 
 
@@ -377,8 +378,9 @@ def _build_chat_kwargs(
         kwargs["api_base"] = api_base
     if reasoning_effort:
         kwargs["reasoning_effort"] = reasoning_effort
-    if max_tokens is not None:
-        kwargs["max_tokens"] = max_tokens
+    from ..config import settings
+
+    kwargs["max_tokens"] = max_tokens if max_tokens is not None else settings.default_max_tokens
     return kwargs
 
 

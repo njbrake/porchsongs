@@ -67,4 +67,6 @@ export interface AuthConfig {
   required: boolean;
   google_client_id?: string;
   require_invite_code?: boolean;
+  magic_link_enabled?: boolean;
+  github_oauth_enabled?: boolean;
 }

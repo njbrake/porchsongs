@@ -1,6 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const OSS_PORT = 8765;
+const E2E_DATABASE_URL =
+  process.env.DATABASE_URL ||
+  'postgresql://postgres:postgres@localhost:5432/porchsongs_e2e';
 
 export default defineConfig({
   testDir: './e2e',
@@ -26,12 +29,12 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `bash e2e/scripts/start-server.sh ${OSS_PORT} "sqlite:////tmp/e2e_oss.db"`,
+      command: `bash e2e/scripts/start-server.sh ${OSS_PORT} "${E2E_DATABASE_URL}"`,
       port: OSS_PORT,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
       env: {
-        DATABASE_URL: 'sqlite:////tmp/e2e_oss.db',
+        DATABASE_URL: E2E_DATABASE_URL,
       },
     },
   ],

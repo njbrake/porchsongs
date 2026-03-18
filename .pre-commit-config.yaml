@@ -59,7 +59,7 @@ repos:
       - id: backend-tests
         name: backend tests
         language: system
-        entry: sh -c 'DATABASE_URL="sqlite:///:memory:" uv run pytest -x -q'
+        entry: sh -c 'DATABASE_URL="postgresql://postgres:postgres@localhost:5432/porchsongs_test" uv run pytest -x -q'
         pass_filenames: false
         files: ^(backend|tests)/.*\.py$
         stages: [pre-push]

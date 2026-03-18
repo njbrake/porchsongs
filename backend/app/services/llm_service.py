@@ -176,9 +176,6 @@ def _build_parse_kwargs(
         kwargs["api_base"] = api_base
     if api_key:
         kwargs["api_key"] = api_key
-    # Always pass reasoning_effort explicitly. any_llm defaults to "auto" which
-    # lets Anthropic enable extended thinking automatically — causing max_tokens
-    # vs budget_tokens conflicts. Passing None tells any_llm to disable thinking.
     kwargs["reasoning_effort"] = reasoning_effort
     from ..config import settings
 
@@ -403,9 +400,6 @@ def _build_chat_kwargs(
         kwargs["api_base"] = api_base
     if api_key:
         kwargs["api_key"] = api_key
-    # Always pass reasoning_effort explicitly. any_llm defaults to "auto" which
-    # lets Anthropic enable extended thinking automatically — causing max_tokens
-    # vs budget_tokens conflicts. Passing None tells any_llm to disable thinking.
     kwargs["reasoning_effort"] = reasoning_effort
     from ..config import settings
 

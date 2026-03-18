@@ -112,14 +112,17 @@ PREMIUM_PLUGIN=porchsongs_premium.plugin
 
 ## Database
 
-porchsongs uses **PostgreSQL** in production and **SQLite** for local development/testing.
+porchsongs uses **PostgreSQL** everywhere (production, development, and testing).
 
 ```bash
 # Production (set in .env or environment)
 DATABASE_URL=postgresql://porchsongs:porchsongs@localhost:5432/porchsongs
 
-# Local dev with SQLite
-DATABASE_URL=sqlite:///dev.db
+# Local dev / testing
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/porchsongs_test
+
+# Quick PostgreSQL setup via Docker
+docker run --name porchsongs-pg -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=porchsongs_test -p 5432:5432 -d postgres:16
 
 # Apply migrations
 uv run alembic upgrade head

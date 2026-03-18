@@ -4,7 +4,7 @@
 #
 # The script:
 # 1. Builds the frontend if dist/ doesn't exist
-# 2. Creates the SQLite database using Base.metadata.create_all (avoids Alembic/Postgres migrations)
+# 2. Creates database tables using Base.metadata (drop + create for clean state)
 # 3. Starts uvicorn on the given port
 
 set -euo pipefail
@@ -25,12 +25,6 @@ if [ ! -d "frontend/dist" ]; then
   (cd frontend && npm install && npm run build)
 fi
 
-# Delete old SQLite file if it exists, then create fresh tables
-DB_PATH="${DATABASE_URL#sqlite:///}"
-if [ -f "$DB_PATH" ]; then
-  rm -f "$DB_PATH"
-fi
-
 # Export env vars passed as extra arguments (e.g. APP_SECRET=xxx)
 for arg in "$@"; do
   export "$arg"
@@ -38,11 +32,12 @@ done
 
 export DATABASE_URL
 
-# Create tables using SQLAlchemy metadata (no Alembic needed)
+# Create fresh tables (drop existing to ensure clean state)
 cd backend
 uv run python -c "
 from app.database import engine, Base
 from app import models  # noqa: F401
+Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
 print('[e2e] Database tables created')
 "

@@ -1,31 +1,51 @@
 """Shared fixtures for tests."""
 
+import os
 from collections.abc import Generator
 from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from app.auth.dependencies import get_current_user
 from app.database import Base, get_db
 from app.main import app
 from app.models import User
 
+TEST_DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://postgres:postgres@localhost:5432/porchsongs_test",
+)
+
+
+@pytest.fixture(scope="session")
+def db_engine() -> Generator[Engine]:
+    """Create a PostgreSQL engine shared across the entire test session."""
+    engine = create_engine(TEST_DATABASE_URL)
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    yield engine
+    Base.metadata.drop_all(bind=engine)
+    engine.dispose()
+
 
 @pytest.fixture()
-def db_session() -> Generator[Session]:
-    """Create an in-memory SQLite database for each test."""
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    TestSession = sessionmaker(bind=engine)
-    session = TestSession()
+def _clean_tables(db_engine: Engine) -> None:
+    """Truncate all tables before a test for isolation."""
+    with db_engine.connect() as conn:
+        table_names = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
+        if table_names:
+            conn.execute(text(f"TRUNCATE {table_names} RESTART IDENTITY CASCADE"))
+            conn.commit()
+
+
+@pytest.fixture()
+def db_session(db_engine: Engine, _clean_tables: None) -> Generator[Session]:
+    """Create a PostgreSQL session for each test."""
+    session_factory = sessionmaker(bind=db_engine)
+    session = session_factory()
     try:
         yield session
     finally:

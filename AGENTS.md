@@ -17,8 +17,8 @@ cd backend && uv run uvicorn app.main:app --reload
 # Frontend dev with hot reload (proxies /api to localhost:8000)
 cd frontend && npm run dev
 
-# Tests
-DATABASE_URL="sqlite:///:memory:" uv run pytest              # backend
+# Tests (requires PostgreSQL running locally)
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/porchsongs_test" uv run pytest  # backend
 cd frontend && npx vitest run                                # frontend unit
 cd e2e && npx playwright test                                # e2e (starts servers automatically)
 
@@ -66,7 +66,7 @@ Always add `Cache-Control: no-cache` and `X-Accel-Buffering: no` headers. Never 
 
 ### Data Model
 
-PostgreSQL in production, in-memory SQLite for tests. Alembic migrations in `alembic/`. Song lifecycle: paste → parse → auto-save draft → iterate via chat → completed. Songs organized into folders. PDF export via `fpdf2`.
+PostgreSQL everywhere (production and tests). Alembic migrations in `alembic/`. Song lifecycle: paste → parse → auto-save draft → iterate via chat → completed. Songs organized into folders. PDF export via `fpdf2`.
 
 ## Frontend Development
 
@@ -181,9 +181,9 @@ Key options:
 #### Starting the app for visual testing
 
 ```bash
-# From the repo root, start backend
-DATABASE_URL="sqlite:///./porchsongs.db" uv run alembic upgrade head
-DATABASE_URL="sqlite:///./porchsongs.db" uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+# From the repo root, start backend (requires PostgreSQL running locally)
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/porchsongs_test" uv run alembic upgrade head
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/porchsongs_test" uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 &
 
 # Start frontend dev server
 cd frontend && npm run dev -- --host 0.0.0.0 --port 5173 &
@@ -224,7 +224,7 @@ Tailwind CSS v4 with `@theme` tokens in `src/index.css`:
 
 ## Testing
 
-Backend: in-memory SQLite with `StaticPool`. Mock LLM calls via `AsyncMock` on `app.services.llm_service.acompletion`. Auth tests use `auth_client` fixture without `get_current_user` override.
+Backend: PostgreSQL with session-scoped engine, tables truncated between tests for isolation. Mock LLM calls via `AsyncMock` on `app.services.llm_service.acompletion`. Auth tests use `auth_client` fixture without `get_current_user` override.
 
 Frontend: Vitest + React Testing Library. Use `renderWithRouter()` from `src/test/test-utils.tsx` for components using React Router.
 
@@ -243,7 +243,7 @@ uv run ruff check backend/                    # backend lint
 uv run ruff format --check backend/           # backend formatting
 cd frontend && npx eslint src/                # frontend lint
 cd frontend && npm run typecheck              # TypeScript type check
-DATABASE_URL="sqlite:///:memory:" uv run pytest  # backend tests
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/porchsongs_test" uv run pytest  # backend tests
 cd frontend && npx vitest run                 # frontend tests
 ```
 
@@ -335,8 +335,8 @@ cd frontend && npm run typecheck
 cd frontend && npx eslint src/
 cd frontend && npx vitest run
 
-# Backend tests
-DATABASE_URL="sqlite:///:memory:" uv run pytest -x -q
+# Backend tests (requires PostgreSQL running locally)
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/porchsongs_test" uv run pytest -x -q
 ```
 
 ### Git operations

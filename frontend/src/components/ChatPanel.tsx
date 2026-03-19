@@ -185,11 +185,11 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
     setImages(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  // Use scrollTop instead of scrollIntoView to avoid iOS Safari viewport zoom bug
+  // Use scrollTo instead of scrollIntoView to avoid iOS Safari viewport zoom bug
   useEffect(() => {
     const el = scrollContainerRef.current;
     if (el) {
-      el.scrollTop = el.scrollHeight;
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     }
   }, [messages, reasoningText]);
 

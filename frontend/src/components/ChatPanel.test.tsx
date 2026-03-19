@@ -5,6 +5,9 @@ import type { ChatMessage } from '@/types';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
+// jsdom doesn't implement scrollTo
+Element.prototype.scrollTo = vi.fn();
+
 describe('ChatPanel', () => {
   const defaults = {
     songId: 1,
@@ -83,18 +86,15 @@ describe('ChatPanel', () => {
     expect(imgs).toHaveLength(2);
   });
 
-  it('auto-scrolls via scrollTop instead of scrollIntoView', () => {
+  it('uses scrollTo instead of scrollIntoView for iOS compatibility', () => {
     const messages: ChatMessage[] = [
       { role: 'user', content: 'Hello' },
       { role: 'assistant', content: 'Hi there' },
     ];
     const { container } = render(<ChatPanel {...defaults} messages={messages} />);
-    // The scroll container should exist and not contain a messagesEnd sentinel div
     const scrollContainer = container.querySelector('.overflow-y-auto');
     expect(scrollContainer).toBeInTheDocument();
-    // Verify no scrollIntoView sentinel element (the old messagesEndRef div)
-    const lastChild = scrollContainer!.lastElementChild;
-    expect(lastChild).not.toBeEmptyDOMElement();
+    expect(scrollContainer!.scrollTo).toHaveBeenCalledWith({ top: expect.any(Number), behavior: 'smooth' });
   });
 
   it('rejects images larger than 5 MB with a toast error', async () => {

@@ -2,30 +2,16 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Sheet, SheetContent, SheetClose } from '@/components/ui/sheet';
+import { buildTabItems, activeKeyFromPath } from '@/components/Tabs';
 import { useAuth } from '@/contexts/AuthContext';
-import { getDefaultSettingsTab } from '@/extensions';
 import { cn } from '@/lib/utils';
-
-function buildNavItems(isPremium: boolean) {
-  return [
-    { key: 'rewrite', path: '/app/rewrite', label: 'Rewrite' },
-    { key: 'library', path: '/app/library', label: 'Library' },
-    { key: 'settings', path: `/app/settings/${getDefaultSettingsTab(isPremium)}`, label: 'Settings' },
-  ] as const;
-}
-
-function activeKeyFromPath(pathname: string): string {
-  if (pathname.startsWith('/app/library')) return 'library';
-  if (pathname.startsWith('/app/settings')) return 'settings';
-  return 'rewrite';
-}
 
 export default function MobileNav() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { isPremium } = useAuth();
-  const navItems = buildNavItems(isPremium);
+  const navItems = buildTabItems(isPremium);
   const active = activeKeyFromPath(pathname);
 
   const handleNav = (path: string) => {

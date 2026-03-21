@@ -231,6 +231,7 @@ describe('RewriteTab', () => {
 
   it('reads clipboard content when paste button is clicked', async () => {
     const clipboardText = '[G]Amazing [C]Grace how [D]sweet the [G]sound';
+    const originalClipboard = navigator.clipboard;
     Object.assign(navigator, {
       clipboard: { readText: vi.fn().mockResolvedValue(clipboardText) },
     });
@@ -248,9 +249,12 @@ describe('RewriteTab', () => {
 
     // Button should disappear after pasting
     expect(screen.queryByRole('button', { name: 'Paste from clipboard' })).not.toBeInTheDocument();
+
+    Object.assign(navigator, { clipboard: originalClipboard });
   });
 
   it('silently handles clipboard access denial', async () => {
+    const originalClipboard = navigator.clipboard;
     Object.assign(navigator, {
       clipboard: { readText: vi.fn().mockRejectedValue(new DOMException('Denied')) },
     });
@@ -265,6 +269,8 @@ describe('RewriteTab', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Paste from clipboard' })).toBeInTheDocument();
     });
+
+    Object.assign(navigator, { clipboard: originalClipboard });
   });
 
   it('shows "Or try a sample" when server reports existing songs (cross-browser)', async () => {

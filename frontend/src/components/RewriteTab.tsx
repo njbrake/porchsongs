@@ -584,7 +584,6 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
                   variant="secondary"
                   className="mb-3 md:hidden"
                   onClick={handlePasteFromClipboard}
-                  aria-label="Paste from clipboard"
                 >
                   Paste from clipboard
                 </Button>

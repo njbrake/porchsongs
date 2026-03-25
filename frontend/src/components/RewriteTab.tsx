@@ -99,7 +99,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
   const parseAbortRef = useRef<AbortController | null>(null);
   const [mobilePane, setMobilePane] = useState<'chat' | 'content'>('chat');
   const [error, setError] = useState<string | null>(null);
-  const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'saving' | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [songTitle, setSongTitle] = useState('');
   const [songArtist, setSongArtist] = useState('');
@@ -318,7 +318,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
   };
 
   const handleSave = async () => {
-    if (!currentSongUuid || !rewriteResult) return;
+    if (!currentSongUuid || !rewriteResult || !isDirty) return;
     setSaveStatus('saving');
     try {
       await api.updateSong(currentSongUuid, {
@@ -327,7 +327,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
         rewritten_content: rewriteResult.rewritten_content,
         original_content: rewriteResult.original_content,
       } as Partial<Song>);
-      setSaveStatus('saved');
+      setSaveStatus(null);
       setIsDirty(false);
     } catch (err) {
       setError('Failed to save: ' + (err as Error).message);

@@ -21,8 +21,8 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://porchsongs.ai"
-Repository = "https://github.com/njbrake/porchsongs"
-"Bug Tracker" = "https://github.com/njbrake/porchsongs/issues"
+Repository = "https://github.com/Brake-Labs/porchsongs"
+"Bug Tracker" = "https://github.com/Brake-Labs/porchsongs/issues"
 
 [dependency-groups]
 dev = [

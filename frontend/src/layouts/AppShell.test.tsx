@@ -70,7 +70,7 @@ describe('AppShell layout', () => {
     renderWithRouter(<AppShell />, { route: '/app/rewrite' });
 
     const link = screen.getByRole('link', { name: 'GitHub' });
-    expect(link).toHaveAttribute('href', 'https://github.com/njbrake/porchsongs');
+    expect(link).toHaveAttribute('href', 'https://github.com/Brake-Labs/porchsongs');
     expect(link).toHaveAttribute('target', '_blank');
     expect(screen.getByText(/Made with/)).toBeInTheDocument();
   });

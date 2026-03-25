@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-REPO="${GITHUB_REPO:-njbrake/porchsongs}"
+REPO="${GITHUB_REPO:-Brake-Labs/porchsongs}"
 PR_NUMBER="${1:?Usage: $0 <pr-number> <video-file>}"
 VIDEO_FILE="${2:?Usage: $0 <pr-number> <video-file>}"
 TAG_NAME="ci-assets"

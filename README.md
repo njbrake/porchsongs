@@ -104,7 +104,7 @@ APP_SECRET='$2b$12$...'
 
 ### Premium plugin
 
-For Google OAuth and other premium features, see the [porchsongs-premium](https://github.com/njbrake/porchsongs-premium) repo.
+For Google OAuth and other premium features, see the [porchsongs-premium](https://github.com/Brake-Labs/porchsongs-premium) repo.
 
 ```bash
 PREMIUM_PLUGIN=porchsongs_premium.plugin

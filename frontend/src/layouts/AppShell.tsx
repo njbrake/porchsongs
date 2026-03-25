@@ -332,7 +332,7 @@ export default function AppShell() {
               Feature request
             </a>
             <a
-              href="https://github.com/njbrake/porchsongs"
+              href="https://github.com/Brake-Labs/porchsongs"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="GitHub"

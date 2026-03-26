@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 from any_llm import LLMProvider, alist_models, amessages
@@ -11,6 +13,74 @@ from any_llm.types.messages import MessageResponse, MessageStreamEvent
 if TYPE_CHECKING:
     from ..models import Song
     from ..schemas import ProviderInfo
+
+# Map reasoning_effort values to Anthropic's thinking/output_config format.
+# amessages() is a native pass-through that does NOT convert reasoning_effort
+# (unlike acompletion which uses _convert_params). We must do it ourselves.
+_REASONING_EFFORT_TO_ANTHROPIC = {
+    "minimal": "low",
+    "low": "low",
+    "medium": "medium",
+    "high": "high",
+    "xhigh": "max",
+}
+
+
+@dataclass(frozen=True, slots=True)
+class LLMCallParams:
+    """Typed parameters for amessages() calls.
+
+    Using a dataclass instead of dict[str, Any] so the type checker catches
+    invalid fields (e.g. passing reasoning_effort directly to amessages).
+    """
+
+    model: str
+    provider: str
+    messages: list[dict[str, Any]]
+    system: str
+    max_tokens: int
+    api_base: str | None = None
+    api_key: str | None = None
+    thinking: dict[str, Any] | None = None
+    output_config: dict[str, str] | None = None
+
+    async def send(
+        self, *, stream: bool = False
+    ) -> MessageResponse | AsyncIterator[MessageStreamEvent]:
+        """Call amessages() with typed arguments."""
+        # output_config is Anthropic-specific; pass via **kwargs only when set.
+        extra: dict[str, Any] = {}
+        if self.output_config is not None:
+            extra["output_config"] = self.output_config
+        return await amessages(
+            model=self.model,
+            provider=self.provider,
+            messages=self.messages,
+            system=self.system,
+            max_tokens=self.max_tokens,
+            api_base=self.api_base,
+            api_key=self.api_key,
+            thinking=self.thinking,
+            stream=stream,
+            **extra,
+        )
+
+
+def _resolve_thinking(
+    reasoning_effort: str | None,
+) -> tuple[dict[str, Any] | None, dict[str, str] | None]:
+    """Convert reasoning_effort to (thinking, output_config) for amessages().
+
+    Returns (None, None) when no thinking config is needed.
+    """
+    if not reasoning_effort or reasoning_effort == "auto":
+        return None, None
+    if reasoning_effort == "none":
+        return {"type": "disabled"}, None
+    effort = _REASONING_EFFORT_TO_ANTHROPIC.get(reasoning_effort)
+    if effort is not None:
+        return {"type": "adaptive"}, {"effort": effort}
+    return None, None
 
 
 def _get_content(response: MessageResponse) -> str:
@@ -180,7 +250,7 @@ def _add_cache_breakpoint(message: dict[str, Any]) -> dict[str, Any]:
     return message
 
 
-def _build_parse_kwargs(
+def _build_parse_params(
     content: str,
     provider: str,
     model: str,
@@ -190,8 +260,8 @@ def _build_parse_kwargs(
     system_prompt: str | None = None,
     max_tokens: int | None = None,
     api_key: str | None = None,
-) -> dict[str, Any]:
-    """Build the common kwargs dict for parse LLM calls."""
+) -> LLMCallParams:
+    """Build typed parameters for parse LLM calls."""
     user_text = "Clean up this pasted input. Identify the title and artist."
     if instruction:
         user_text += f"\n\nUSER INSTRUCTIONS:\n{instruction}"
@@ -199,22 +269,19 @@ def _build_parse_kwargs(
 
     from ..config import settings
 
-    kwargs: dict[str, Any] = {
-        "model": model,
-        "provider": provider,
-        "messages": [
-            {"role": "user", "content": user_text},
-        ],
-        "system": system_prompt or CLEAN_SYSTEM_PROMPT,
-        "max_tokens": max_tokens if max_tokens is not None else settings.default_max_tokens,
-    }
-    if api_base:
-        kwargs["api_base"] = api_base
-    if api_key:
-        kwargs["api_key"] = api_key
-    if reasoning_effort:
-        kwargs["reasoning_effort"] = reasoning_effort
-    return kwargs
+    thinking, output_config = _resolve_thinking(reasoning_effort)
+
+    return LLMCallParams(
+        model=model,
+        provider=provider,
+        messages=[{"role": "user", "content": user_text}],
+        system=system_prompt or CLEAN_SYSTEM_PROMPT,
+        max_tokens=max_tokens if max_tokens is not None else settings.default_max_tokens,
+        api_base=api_base,
+        api_key=api_key,
+        thinking=thinking,
+        output_config=output_config,
+    )
 
 
 async def parse_content(
@@ -232,7 +299,7 @@ async def parse_content(
 
     Returns dict with: original_content, title, artist, reasoning, usage
     """
-    kwargs = _build_parse_kwargs(
+    params = _build_parse_params(
         content,
         provider,
         model,
@@ -243,7 +310,7 @@ async def parse_content(
         max_tokens,
         api_key,
     )
-    clean_response = cast("MessageResponse", await amessages(**kwargs))
+    clean_response = cast("MessageResponse", await params.send())
     clean_result = _parse_clean_response(_get_content(clean_response), content)
     reasoning = _get_reasoning(clean_response)
     usage = _get_usage(clean_response)
@@ -273,7 +340,7 @@ async def parse_content_stream(
     Types: ``"token"`` for content, ``"reasoning"`` for reasoning/thinking,
     ``"usage"`` for final token usage JSON.
     """
-    kwargs = _build_parse_kwargs(
+    params = _build_parse_params(
         content,
         provider,
         model,
@@ -286,10 +353,8 @@ async def parse_content_stream(
     )
     response = cast(
         "AsyncIterator[MessageStreamEvent]",
-        await amessages(stream=True, **kwargs),
+        await params.send(stream=True),
     )
-
-    import json
 
     input_usage: dict[str, int | None] = {}
 
@@ -398,7 +463,7 @@ def _parse_chat_response(raw: str) -> dict[str, str | None]:
     return {"content": None, "original_content": original_content, "explanation": explanation}
 
 
-def _build_chat_kwargs(
+def _build_chat_params(
     song: Song,
     messages: list[dict[str, object]],
     provider: str,
@@ -409,8 +474,8 @@ def _build_chat_kwargs(
     max_tokens: int | None = None,
     api_key: str | None = None,
     history_len: int = 0,
-) -> dict[str, Any]:
-    """Build the common kwargs dict for chat LLM calls."""
+) -> LLMCallParams:
+    """Build typed parameters for chat LLM calls."""
     system_content = system_prompt or CHAT_SYSTEM_PROMPT
     system_content += "\n\nORIGINAL SONG:\n" + song.original_content
 
@@ -435,20 +500,19 @@ def _build_chat_kwargs(
 
     from ..config import settings
 
-    kwargs: dict[str, Any] = {
-        "model": model,
-        "provider": provider,
-        "messages": llm_messages,
-        "system": system_content,
-        "max_tokens": max_tokens if max_tokens is not None else settings.default_max_tokens,
-    }
-    if api_base:
-        kwargs["api_base"] = api_base
-    if api_key:
-        kwargs["api_key"] = api_key
-    if reasoning_effort:
-        kwargs["reasoning_effort"] = reasoning_effort
-    return kwargs
+    thinking, output_config = _resolve_thinking(reasoning_effort)
+
+    return LLMCallParams(
+        model=model,
+        provider=provider,
+        messages=llm_messages,
+        system=system_content,
+        max_tokens=max_tokens if max_tokens is not None else settings.default_max_tokens,
+        api_base=api_base,
+        api_key=api_key,
+        thinking=thinking,
+        output_config=output_config,
+    )
 
 
 async def chat_edit_content(
@@ -471,7 +535,7 @@ async def chat_edit_content(
     ``rewritten_content`` is ``None`` when the LLM responded conversationally
     without ``<content>`` tags.
     """
-    kwargs = _build_chat_kwargs(
+    params = _build_chat_params(
         song,
         messages,
         provider,
@@ -483,7 +547,7 @@ async def chat_edit_content(
         api_key,
         history_len=history_len,
     )
-    response = cast("MessageResponse", await amessages(**kwargs))
+    response = cast("MessageResponse", await params.send())
 
     raw_response = _get_content(response)
     parsed = _parse_chat_response(raw_response)
@@ -520,7 +584,7 @@ async def chat_edit_content_stream(
     Types: ``"token"`` for content, ``"reasoning"`` for reasoning/thinking,
     ``"usage"`` for final token usage JSON.
     """
-    kwargs = _build_chat_kwargs(
+    params = _build_chat_params(
         song,
         messages,
         provider,
@@ -534,10 +598,8 @@ async def chat_edit_content_stream(
     )
     response = cast(
         "AsyncIterator[MessageStreamEvent]",
-        await amessages(stream=True, **kwargs),
+        await params.send(stream=True),
     )
-
-    import json
 
     input_usage: dict[str, int | None] = {}
 

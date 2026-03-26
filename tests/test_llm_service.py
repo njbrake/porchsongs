@@ -1,6 +1,9 @@
 """Tests for llm_service pure functions (no LLM calls)."""
 
+import asyncio
+import json
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 from app.services.llm_service import (
     CHAT_SYSTEM_PROMPT,
@@ -11,6 +14,8 @@ from app.services.llm_service import (
     _parse_chat_response,
     _parse_clean_response,
     _resolve_thinking,
+    chat_edit_content_stream,
+    parse_content_stream,
 )
 
 # --- System prompt guardrails ---
@@ -326,3 +331,187 @@ def test_parse_clean_missing_tags_fallback() -> None:
     assert result["original"] == "fallback original"
     assert result["title"] is None
     assert result["artist"] is None
+
+
+# --- Streaming event parsing (attribute access, not dict access) ---
+
+
+def _make_stream_events(
+    text_chunks: list[str],
+    *,
+    thinking_chunks: list[str] | None = None,
+    input_tokens: int = 10,
+    output_tokens: int = 20,
+    cache_creation: int | None = None,
+    cache_read: int | None = None,
+) -> list[SimpleNamespace]:
+    """Build a list of SimpleNamespace events mimicking Anthropic Pydantic stream models.
+
+    Uses attribute access (not dict access) to match real SDK behavior.
+    """
+    events: list[SimpleNamespace] = []
+    # message_start
+    events.append(
+        SimpleNamespace(
+            type="message_start",
+            message=SimpleNamespace(
+                usage=SimpleNamespace(
+                    input_tokens=input_tokens,
+                    cache_creation_input_tokens=cache_creation,
+                    cache_read_input_tokens=cache_read,
+                ),
+            ),
+            delta=None,
+            usage=None,
+        )
+    )
+    # thinking deltas (if any)
+    for chunk in thinking_chunks or []:
+        events.append(
+            SimpleNamespace(
+                type="content_block_delta",
+                delta=SimpleNamespace(type="thinking_delta", thinking=chunk),
+                message=None,
+                usage=None,
+            )
+        )
+    # text deltas
+    for chunk in text_chunks:
+        events.append(
+            SimpleNamespace(
+                type="content_block_delta",
+                delta=SimpleNamespace(type="text_delta", text=chunk),
+                message=None,
+                usage=None,
+            )
+        )
+    # message_delta (usage)
+    events.append(
+        SimpleNamespace(
+            type="message_delta",
+            usage=SimpleNamespace(output_tokens=output_tokens),
+            message=None,
+            delta=None,
+        )
+    )
+    return events
+
+
+async def _async_iter(items: list[SimpleNamespace]) -> SimpleNamespace:  # type: ignore[misc]
+    """Convert a list to an async iterator."""
+    for item in items:
+        yield item
+
+
+@patch("app.services.llm_service.amessages", new_callable=AsyncMock)
+def test_parse_stream_text_deltas(mock_amessages: AsyncMock) -> None:
+    """parse_content_stream yields text tokens using attribute access on Pydantic models."""
+
+    async def _run() -> list[tuple[str, str]]:
+        events = _make_stream_events(["Hello ", "world"])
+        mock_amessages.return_value = _async_iter(events)
+        results = []
+        async for kind, text in parse_content_stream("test content", "openai", "gpt-4o"):
+            results.append((kind, text))
+        return results
+
+    results = asyncio.run(_run())
+    text_results = [(k, t) for k, t in results if k == "token"]
+    assert text_results == [("token", "Hello "), ("token", "world")]
+
+    usage_results = [(k, t) for k, t in results if k == "usage"]
+    assert len(usage_results) == 1
+    usage = json.loads(usage_results[0][1])
+    assert usage["input_tokens"] == 10
+    assert usage["output_tokens"] == 20
+
+
+@patch("app.services.llm_service.amessages", new_callable=AsyncMock)
+def test_parse_stream_thinking_deltas(mock_amessages: AsyncMock) -> None:
+    """parse_content_stream yields reasoning tokens from thinking_delta events."""
+
+    async def _run() -> list[tuple[str, str]]:
+        events = _make_stream_events(["result"], thinking_chunks=["Let me ", "think..."])
+        mock_amessages.return_value = _async_iter(events)
+        results = []
+        async for kind, text in parse_content_stream("test content", "openai", "gpt-4o"):
+            results.append((kind, text))
+        return results
+
+    results = asyncio.run(_run())
+    reasoning = [(k, t) for k, t in results if k == "reasoning"]
+    assert reasoning == [("reasoning", "Let me "), ("reasoning", "think...")]
+
+
+@patch("app.services.llm_service.amessages", new_callable=AsyncMock)
+def test_parse_stream_cache_usage(mock_amessages: AsyncMock) -> None:
+    """parse_content_stream includes cache tokens in usage when present."""
+
+    async def _run() -> list[tuple[str, str]]:
+        events = _make_stream_events(["ok"], cache_creation=100, cache_read=50)
+        mock_amessages.return_value = _async_iter(events)
+        results = []
+        async for kind, text in parse_content_stream("test content", "openai", "gpt-4o"):
+            results.append((kind, text))
+        return results
+
+    results = asyncio.run(_run())
+    usage_results = [(k, t) for k, t in results if k == "usage"]
+    usage = json.loads(usage_results[0][1])
+    assert usage["cache_creation_input_tokens"] == 100
+    assert usage["cache_read_input_tokens"] == 50
+
+
+@patch("app.services.llm_service.amessages", new_callable=AsyncMock)
+def test_chat_stream_text_deltas(mock_amessages: AsyncMock) -> None:
+    """chat_edit_content_stream yields text tokens using attribute access."""
+
+    async def _run() -> list[tuple[str, str]]:
+        events = _make_stream_events(["<content>", "\nHi", "\n</content>"])
+        mock_amessages.return_value = _async_iter(events)
+        song = SimpleNamespace(
+            original_content="G  Am\nHello world",
+            rewritten_content="G  Am\nHello changed world",
+        )
+        messages: list[dict[str, object]] = [{"role": "user", "content": "make it sadder"}]
+        results = []
+        async for kind, text in chat_edit_content_stream(
+            song,
+            messages,
+            "openai",
+            "gpt-4o",  # type: ignore[arg-type]
+        ):
+            results.append((kind, text))
+        return results
+
+    results = asyncio.run(_run())
+    text_results = [(k, t) for k, t in results if k == "token"]
+    assert len(text_results) == 3
+    assert text_results[0] == ("token", "<content>")
+
+
+@patch("app.services.llm_service.amessages", new_callable=AsyncMock)
+def test_chat_stream_thinking_deltas(mock_amessages: AsyncMock) -> None:
+    """chat_edit_content_stream yields reasoning tokens from thinking_delta events."""
+
+    async def _run() -> list[tuple[str, str]]:
+        events = _make_stream_events(["result"], thinking_chunks=["hmm"])
+        mock_amessages.return_value = _async_iter(events)
+        song = SimpleNamespace(
+            original_content="G  Am\nHello world",
+            rewritten_content="G  Am\nHello changed world",
+        )
+        messages: list[dict[str, object]] = [{"role": "user", "content": "test"}]
+        results = []
+        async for kind, text in chat_edit_content_stream(
+            song,
+            messages,
+            "openai",
+            "gpt-4o",  # type: ignore[arg-type]
+        ):
+            results.append((kind, text))
+        return results
+
+    results = asyncio.run(_run())
+    reasoning = [(k, t) for k, t in results if k == "reasoning"]
+    assert reasoning == [("reasoning", "hmm")]

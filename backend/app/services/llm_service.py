@@ -367,11 +367,10 @@ async def parse_content_stream(
                 "cache_read_input_tokens": u.cache_read_input_tokens,
             }
         elif event.type == "content_block_delta" and event.delta:
-            delta_type = event.delta.get("type")
-            if delta_type == "text_delta":
-                yield ("token", event.delta["text"])
-            elif delta_type == "thinking_delta":
-                yield ("reasoning", event.delta["thinking"])
+            if event.delta.type == "text_delta":
+                yield ("token", event.delta.text)
+            elif event.delta.type == "thinking_delta":
+                yield ("reasoning", event.delta.thinking)
         elif event.type == "message_delta" and event.usage:
             usage_data: dict[str, int | None] = {
                 "input_tokens": input_usage.get("input_tokens", 0),
@@ -612,11 +611,10 @@ async def chat_edit_content_stream(
                 "cache_read_input_tokens": u.cache_read_input_tokens,
             }
         elif event.type == "content_block_delta" and event.delta:
-            delta_type = event.delta.get("type")
-            if delta_type == "text_delta":
-                yield ("token", event.delta["text"])
-            elif delta_type == "thinking_delta":
-                yield ("reasoning", event.delta["thinking"])
+            if event.delta.type == "text_delta":
+                yield ("token", event.delta.text)
+            elif event.delta.type == "thinking_delta":
+                yield ("reasoning", event.delta.thinking)
         elif event.type == "message_delta" and event.usage:
             usage_data: dict[str, int | None] = {
                 "input_tokens": input_usage.get("input_tokens", 0),

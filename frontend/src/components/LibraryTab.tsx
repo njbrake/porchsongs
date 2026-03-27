@@ -232,27 +232,25 @@ function PerformanceSheet({ song, onSongUpdated }: { song: Song; onSongUpdated: 
         )}
       </div>
       {canSplit && (
-        <div className="hidden xl:inline-flex items-center gap-0.5 bg-panel border border-border rounded-md p-0.5">
-          <button
-            className={cn(
-              'px-2 py-1 text-xs rounded cursor-pointer transition-colors',
-              !showTwoCol ? 'bg-card text-foreground shadow-sm font-medium' : 'text-muted-foreground hover:text-foreground'
-            )}
-            onClick={() => setUserOverride(1)}
-            title="Single column layout"
-          >
-            1 Col
-          </button>
-          <button
-            className={cn(
-              'px-2 py-1 text-xs rounded cursor-pointer transition-colors',
-              showTwoCol ? 'bg-card text-foreground shadow-sm font-medium' : 'text-muted-foreground hover:text-foreground'
-            )}
-            onClick={() => setUserOverride(2)}
-            title="Two column layout"
-          >
-            2 Col
-          </button>
+        <div className="hidden xl:inline-flex items-center gap-0.5 bg-panel border border-border rounded-md p-0.5" role="radiogroup" aria-label="Column layout">
+          {([1, 2] as const).map(cols => {
+            const isActive = cols === 1 ? !showTwoCol : showTwoCol;
+            return (
+              <button
+                key={cols}
+                className={cn(
+                  'px-2.5 py-1.5 text-xs rounded cursor-pointer transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
+                  isActive ? 'bg-card text-foreground shadow-sm font-medium' : 'text-muted-foreground hover:text-foreground'
+                )}
+                onClick={() => setUserOverride(cols)}
+                role="radio"
+                aria-checked={isActive}
+                aria-label={`${cols} column layout`}
+              >
+                {cols} Col
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

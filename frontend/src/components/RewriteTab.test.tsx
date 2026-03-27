@@ -224,7 +224,7 @@ describe('RewriteTab', () => {
     });
   });
 
-  it('clears dirty state after chat update (server already persisted)', () => {
+  it('keeps dirty state after chat update so user can save (fixes #189)', () => {
     render(<RewriteTab {...makeProps({
       rewriteResult: {
         original_content: 'original lyrics',
@@ -236,20 +236,14 @@ describe('RewriteTab', () => {
       currentSongUuid: 'test-uuid-42',
     })} />);
 
-    // Edit title to make dirty
-    const titleInput = screen.getAllByLabelText('Song title')[0]!;
-    fireEvent.change(titleInput, { target: { value: 'Dirty Title' } });
-
-    // Buttons should say "Save"
-    expect(screen.getAllByRole('button', { name: 'Save' }).length).toBeGreaterThanOrEqual(1);
-
-    // Simulate chat update (server already persisted)
+    // Simulate chat update
     const chatOnContent = capturedChatPanelProps.onContentUpdated as (s: string) => void;
     act(() => chatOnContent('NEW content from chat'));
 
-    // After chat update, dirty should be cleared -> buttons say "Saved"
-    const savedBtns = screen.getAllByRole('button', { name: 'Saved' });
-    expect(savedBtns.length).toBeGreaterThanOrEqual(1);
+    // After chat update, dirty should be set so user can save
+    const saveBtns = screen.getAllByRole('button', { name: 'Save' });
+    expect(saveBtns.length).toBeGreaterThanOrEqual(1);
+    expect(saveBtns[0]).not.toBeDisabled();
   });
 
   it('Cmd+S triggers save', async () => {

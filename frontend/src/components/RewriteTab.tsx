@@ -289,7 +289,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
     } else {
       onContentUpdated(newContent);
     }
-    setIsDirty(false);
+    setIsDirty(true);
   }, [rewriteResult, parseResult, parsedContent, profile, songTitle, songArtist, llmSettings, onNewRewrite, onContentUpdated]);
 
   const handleNewSong = () => {

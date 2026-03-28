@@ -750,9 +750,9 @@ export default function LibraryTab() {
         <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center mb-3 gap-3">
           <Button variant="secondary" onClick={handleBack}>&larr; All Songs</Button>
           <div className="flex gap-2 justify-end flex-wrap">
+            <Button variant="default" onClick={() => onLoadSong(song)}>Edit in Rewrite</Button>
             <Button variant="secondary" onClick={() => handleDownloadPdf(song)}>Download PDF</Button>
-            <Button variant="secondary" onClick={() => onLoadSong(song)}>Edit in Rewrite</Button>
-            <Button variant="danger" onClick={() => handleDeleteRequest(song.uuid)}>Delete</Button>
+            <Button variant="ghost" className="text-muted-foreground hover:text-danger" onClick={() => handleDeleteRequest(song.uuid)}>Delete</Button>
           </div>
         </div>
 
@@ -966,7 +966,7 @@ export default function LibraryTab() {
             <Card
               key={song.uuid}
               className={cn(
-                'cursor-pointer transition-colors',
+                'group cursor-pointer transition-colors',
                 draggingSongUuid === song.uuid && 'opacity-40',
                 isSelected && 'border-primary bg-selected-bg'
               )}
@@ -977,7 +977,10 @@ export default function LibraryTab() {
             >
               <div className="flex justify-between items-center p-4 hover:bg-panel transition-colors">
                 <label
-                  className="flex items-center pr-2 cursor-pointer shrink-0"
+                  className={cn(
+                    'flex items-center pr-2 cursor-pointer shrink-0 transition-opacity',
+                    selectMode || isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                  )}
                   onClick={e => e.stopPropagation()}
                 >
                   <Checkbox

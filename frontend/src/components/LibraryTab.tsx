@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, type DragEvent, type MouseEvent } from 'react';
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
-import api from '@/api';
+import api, { STORAGE_KEYS } from '@/api';
 import { Button } from '@/components/ui/button';
 import Spinner from '@/components/ui/spinner';
 import { Input } from '@/components/ui/input';
@@ -425,6 +425,19 @@ export default function LibraryTab() {
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [page, setPage] = useState(0);
   const [dialogState, setDialogState] = useState<DialogState>({ kind: 'none' });
+  const [layoutWidth, setLayoutWidth] = useState<'default' | 'wide'>(() => {
+    return (localStorage.getItem(STORAGE_KEYS.LIBRARY_LAYOUT) as 'default' | 'wide') || 'default';
+  });
+
+  const toggleLayoutWidth = useCallback(() => {
+    setLayoutWidth(prev => {
+      const next = prev === 'default' ? 'wide' : 'default';
+      localStorage.setItem(STORAGE_KEYS.LIBRARY_LAYOUT, next);
+      return next;
+    });
+  }, []);
+
+  const containerClass = layoutWidth === 'wide' ? 'w-full' : 'max-w-[1120px] mx-auto w-full';
 
   useEffect(() => {
     api.listSongs().then(data => {
@@ -746,7 +759,7 @@ export default function LibraryTab() {
   if (viewingSong) {
     const song = viewingSong;
     return (
-      <div className="w-full max-w-[1120px] mx-auto">
+      <div className={containerClass}>
         <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center mb-3 gap-3">
           <Button variant="secondary" onClick={handleBack}>&larr; All Songs</Button>
           <div className="flex gap-2 justify-end flex-wrap">
@@ -843,7 +856,7 @@ export default function LibraryTab() {
   const hasFolders = folders.length > 0;
 
   return (
-    <div className="flex flex-col gap-4 max-w-[1120px] mx-auto w-full">
+    <div className={cn('flex flex-col gap-4', containerClass)}>
       <div className="flex flex-col gap-2">
         <div className="flex gap-2">
           <Input
@@ -870,6 +883,30 @@ export default function LibraryTab() {
             aria-label={sortDir === 'asc' ? 'Sort ascending' : 'Sort descending'}
           >
             {sortDir === 'asc' ? '\u2191' : '\u2193'}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleLayoutWidth}
+            title={layoutWidth === 'default' ? 'Switch to wide layout' : 'Switch to compact layout'}
+            aria-label={layoutWidth === 'default' ? 'Switch to wide layout' : 'Switch to compact layout'}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+              {layoutWidth === 'default' ? (
+                <>
+                  <rect x="2" y="3" width="12" height="10" rx="1" />
+                  <line x1="5" y1="3" x2="5" y2="13" />
+                  <line x1="11" y1="3" x2="11" y2="13" />
+                </>
+              ) : (
+                <>
+                  <rect x="1" y="3" width="14" height="10" rx="1" />
+                  <line x1="4" y1="6" x2="12" y2="6" />
+                  <line x1="4" y1="8" x2="12" y2="8" />
+                  <line x1="4" y1="10" x2="9" y2="10" />
+                </>
+              )}
+            </svg>
           </Button>
         </div>
         <div className="flex flex-wrap gap-1.5 items-center overflow-x-auto">
@@ -955,7 +992,7 @@ export default function LibraryTab() {
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
+      <div className={cn('gap-3', layoutWidth === 'wide' ? 'grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3' : 'flex flex-col')}>
         {pagedSongs.map(song => {
           const date = new Date(song.created_at).toLocaleDateString();
           const artist = song.artist ? ` by ${song.artist}` : '';

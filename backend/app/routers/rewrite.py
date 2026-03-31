@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..auth.dependencies import get_current_user
 from ..auth.scoping import get_user_profile, get_user_song
-from ..database import get_db
+from ..database import SessionLocal, get_db
 from ..models import ChatMessage as ChatMessageModel
 from ..models import Profile, ProfileModel, ProviderConnection, Song, SongRevision, User
 from ..schemas import (
@@ -29,6 +29,9 @@ from ..services import llm_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Strong references to background tasks so they aren't GC'd before completion.
+_background_tasks: set[asyncio.Task[None]] = set()
 
 # Maps provider names to the env var they need for authentication.
 _PROVIDER_KEY_ENV_VARS: dict[str, str] = {
@@ -368,6 +371,57 @@ def _persist_chat_result(
     )
 
 
+async def _finish_chat_in_background(
+    stream: AsyncIterator[tuple[str, str]],
+    accumulated: str,
+    reasoning_accumulated: str,
+    song_id: int,
+    model: str | None,
+) -> None:
+    """Continue consuming an LLM stream and persist the result after client disconnect.
+
+    Uses its own DB session since the request session may be closed.
+    """
+    try:
+        async for kind, text in stream:
+            if kind == "reasoning":
+                reasoning_accumulated += text
+            elif kind == "usage":
+                pass  # usage stats not needed for persistence
+            else:
+                accumulated += text
+    except Exception:
+        logger.exception("Background chat stream completion error (LLM)")
+        return
+
+    parsed = llm_service._parse_chat_response(accumulated)
+    changes_summary = parsed["explanation"] or "Chat edit applied."
+
+    db = SessionLocal()
+    try:
+        song = db.query(Song).filter(Song.id == song_id).first()
+        if not song:
+            logger.warning("Background chat persist: song %s not found", song_id)
+            return
+        _persist_chat_result(
+            db,
+            song,
+            rewritten_content=parsed["content"],
+            changes_summary=changes_summary,
+            assistant_content=accumulated,
+            original_content=parsed.get("original_content"),
+            reasoning=reasoning_accumulated or None,
+            model=model,
+        )
+        db.commit()
+        logger.info("Background chat persist succeeded for song %s", song_id)
+    except Exception:
+        logger.exception("Background chat stream DB persist error")
+        db.rollback()
+    finally:
+        db.close()
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     req: ChatRequest,
@@ -466,6 +520,20 @@ async def chat_stream(
             )
             async for kind, text in stream:
                 if await request.is_disconnected():
+                    # Client gone (e.g. mobile tab suspended).
+                    # Finish the LLM call in a background task so the
+                    # result is persisted and available when they return.
+                    task = asyncio.create_task(
+                        _finish_chat_in_background(
+                            stream,
+                            accumulated,
+                            reasoning_accumulated,
+                            song.id,
+                            req.model,
+                        )
+                    )
+                    _background_tasks.add(task)
+                    task.add_done_callback(_background_tasks.discard)
                     return
                 if kind == "reasoning":
                     reasoning_accumulated += text

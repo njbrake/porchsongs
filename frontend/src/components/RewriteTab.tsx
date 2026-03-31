@@ -66,6 +66,7 @@ interface RewriteTabProps {
   onParse: (params: { content: string; instruction?: string }) => Promise<ParseResult | null>;
   onCancelParse: () => void;
   onClearParse: () => void;
+  onChatStreamingChange?: (streaming: boolean) => void;
 }
 
 export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
@@ -103,6 +104,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
     onParse,
     onCancelParse,
     onClearParse,
+    onChatStreamingChange,
   } = { ...ctx, ...directProps } as RewriteTabProps;
   const [input, setInputRaw] = useState(
     () => sessionStorage.getItem(STORAGE_KEYS.DRAFT_INPUT) || ''
@@ -845,6 +847,7 @@ export default function RewriteTab(directProps?: Partial<RewriteTabProps>) {
                 initialLoading={false}
                 {...(isParsed ? { onBeforeSend: handleBeforeSend } : { onContentStreaming: handleChatUpdate })}
                 onOriginalContentUpdated={handleOriginalContentUpdated}
+                onStreamingChange={onChatStreamingChange}
                 flat
                 headerRight={
                   <>

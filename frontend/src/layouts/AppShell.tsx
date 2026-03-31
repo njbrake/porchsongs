@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Outlet, Navigate, useNavigate } from 'react-router-dom';
+import { Outlet, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import api, { STORAGE_KEYS } from '@/api';
 import { stripXmlTags } from '@/lib/utils';
 import useLocalStorage from '@/hooks/useLocalStorage';
 import useProviderConnections from '@/hooks/useProviderConnections';
 import useSavedModels from '@/hooks/useSavedModels';
+import useVisibilityRecovery from '@/hooks/useVisibilityRecovery';
 import Header from '@/components/Header';
 import Tabs from '@/components/Tabs';
 import MobileNav from '@/components/MobileNav';
@@ -80,11 +81,13 @@ export interface AppShellContext {
   onParse: (params: { content: string; instruction?: string }) => Promise<ParseResult | null>;
   onCancelParse: () => void;
   onClearParse: () => void;
+  onChatStreamingChange: (streaming: boolean) => void;
 }
 
 export default function AppShell() {
   const { authState, currentAuthUser, authConfig, isPremium, handleLogout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Profile state
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -113,6 +116,9 @@ export default function AppShell() {
   const [parseError, setParseError] = useState<string | null>(null);
   const parseAbortRef = useRef<AbortController | null>(null);
 
+  // Chat streaming state (reported by ChatPanel for visibility recovery)
+  const [chatStreaming, setChatStreaming] = useState(false);
+
   // Track current song: integer ID for chat requests, UUID for URL routing
   const [currentSongId, setCurrentSongIdRaw] = useState<number | null>(null);
   const [currentSongUuid, setCurrentSongUuidRaw] = useState<string | null>(() => {
@@ -132,6 +138,11 @@ export default function AppShell() {
   }, []);
 
   const llmSettings = { provider, model, reasoning_effort: reasoningEffort };
+
+  // Re-sync song state from DB when the tab becomes visible after a stream
+  // was active (handles mobile browser suspending the tab mid-generation).
+  const isStreaming = chatStreaming || parseLoading;
+  useVisibilityRecovery({ songUuid: currentSongUuid, isStreaming, setRewriteResult, setChatMessages });
 
   // Prevent iOS Safari auto-zoom on input focus.
   // Since iOS 10, maximum-scale=1 only blocks automatic zoom (not user pinch-zoom).
@@ -165,7 +176,9 @@ export default function AppShell() {
     loadProfile();
   }, [authState, loadProfile]);
 
-  // Auto-restore active song on mount (page refresh recovery)
+  // Auto-restore active song on mount (page refresh / PWA relaunch recovery).
+  // If the user had a song open and the app relaunched at /app, navigate
+  // back to /app/rewrite so they land where they left off.
   useEffect(() => {
     if (authState !== 'ready' || rewriteResult || !currentSongUuid) return;
     api.getSong(currentSongUuid).then(async (song: Song) => {
@@ -188,6 +201,11 @@ export default function AppShell() {
         setChatMessages(chatHistoryToMessages(history));
       } catch {
         setChatMessages([]);
+      }
+      // Restore route for PWA relaunch: if we're at the generic /app root,
+      // navigate to the rewrite tab where the user's song is.
+      if (location.pathname === '/app' || location.pathname === '/app/') {
+        navigate('/app/rewrite', { replace: true });
       }
     }).catch(() => {
       setCurrentSong(null);
@@ -384,6 +402,7 @@ export default function AppShell() {
     onParse: handleParse,
     onCancelParse: handleCancelParse,
     onClearParse: handleClearParse,
+    onChatStreamingChange: setChatStreaming,
   };
 
   return (

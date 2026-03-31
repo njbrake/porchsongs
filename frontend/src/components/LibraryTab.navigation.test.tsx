@@ -82,6 +82,7 @@ const stubContext: AppShellContext = {
   onParse: vi.fn().mockResolvedValue(null),
   onCancelParse: vi.fn(),
   onClearParse: vi.fn(),
+  onChatStreamingChange: vi.fn(),
 };
 
 /** Layout wrapper that provides AppShellContext via Outlet */

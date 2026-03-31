@@ -99,9 +99,10 @@ interface ChatPanelProps {
   onOriginalContentUpdated?: (content: string) => void;
   headerRight?: ReactNode;
   flat?: boolean;
+  onStreamingChange?: (streaming: boolean) => void;
 }
 
-export default function ChatPanel({ songId, messages, setMessages, llmSettings, onContentUpdated, initialLoading, onBeforeSend, onContentStreaming, onOriginalContentUpdated, headerRight, flat }: ChatPanelProps) {
+export default function ChatPanel({ songId, messages, setMessages, llmSettings, onContentUpdated, initialLoading, onBeforeSend, onContentStreaming, onOriginalContentUpdated, headerRight, flat, onStreamingChange }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [streaming, setStreaming] = useState(false);
@@ -278,12 +279,14 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
       const userMsg: ChatMessage = { role: 'user', content: displayText, images: attachedDataUrls.length > 0 ? attachedDataUrls : undefined };
       setMessages(prev => [...prev, userMsg].slice(-MAX_MESSAGES));
       setSending(true);
+      onStreamingChange?.(true);
       try {
         effectiveSongId = await onBeforeSend();
       } catch (err) {
         const errorMsg: ChatMessage = { role: 'assistant', content: 'Error: ' + (err as Error).message };
         setMessages(prev => [...prev, errorMsg]);
         setSending(false);
+        onStreamingChange?.(false);
         return;
       }
     } else {
@@ -297,7 +300,10 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
 
     const controller = new AbortController();
     abortRef.current = controller;
-    if (!sending) setSending(true);
+    if (!sending) {
+      setSending(true);
+      onStreamingChange?.(true);
+    }
     let streamStarted = false;
     const parser = new StreamParser();
     let reasoningAccumulated = '';
@@ -394,6 +400,7 @@ export default function ChatPanel({ songId, messages, setMessages, llmSettings, 
       abortRef.current = null;
       setSending(false);
       setStreaming(false);
+      onStreamingChange?.(false);
       setReasoningText('');
     }
   };

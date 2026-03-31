@@ -1,9 +1,15 @@
 """Tests for endpoints that call the LLM, using mocked amessages/list_models."""
 
+import asyncio
+from collections.abc import AsyncIterator
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
+from app.models import ChatMessage as ChatMessageModel
+from app.models import Profile, Song, SongRevision
 
 
 def _fake_message_response(text: str) -> MagicMock:
@@ -807,6 +813,65 @@ def test_chat_after_image_preserves_multimodal_for_llm(
     assert user_msgs[0]["content"][0]["type"] == "image_url"
     # Second user message is plain text
     assert user_msgs[1]["content"] == "Now improve the chorus"
+
+
+# --- Background stream completion (client disconnect recovery) ---
+
+
+def test_finish_chat_in_background_persists_result(
+    client: TestClient, db_session: Session
+) -> None:
+    """When a client disconnects mid-stream, _finish_chat_in_background should
+    consume remaining tokens and persist the result to the database."""
+    from app.routers.rewrite import _finish_chat_in_background
+
+    _, song_data = _make_profile_and_song(client)
+    song_id = song_data["id"]
+
+    # Verify starting state
+    song = db_session.query(Song).filter(Song.id == song_id).first()
+    assert song is not None
+    assert song.current_version == 1
+
+    # Simulate an async stream with remaining tokens (as if the client
+    # disconnected after receiving some tokens but before the stream ended).
+    async def _fake_remaining_stream() -> AsyncIterator[tuple[str, str]]:
+        yield ("token", "\nBetter lyrics here")
+        yield ("token", "\n</content>")
+        yield ("token", "\nI improved the lyrics.")
+        yield ("usage", '{"input_tokens": 10, "output_tokens": 20}')
+
+    # The accumulated text so far (before disconnect) already has the opening tag.
+    accumulated = "<content>\nHi there world"
+    reasoning = "thinking about improvements"
+
+    asyncio.run(
+        _finish_chat_in_background(
+            _fake_remaining_stream(),
+            accumulated,
+            reasoning,
+            song_id,
+            "gpt-4o-mini",
+        )
+    )
+
+    # Refresh the session to see changes from the background task's own session
+    db_session.expire_all()
+
+    # Song should be updated with new content and bumped version
+    song = db_session.query(Song).filter(Song.id == song_id).first()
+    assert song is not None
+    assert song.current_version == 2
+    assert "Better lyrics here" in song.rewritten_content
+
+    # A revision should have been created
+    revisions = db_session.query(SongRevision).filter(SongRevision.song_id == song_id).all()
+    assert len(revisions) == 2  # initial + background completion
+    assert revisions[1].edit_type == "chat"
+
+    # An assistant chat message should have been persisted
+    messages = db_session.query(ChatMessageModel).filter(ChatMessageModel.song_id == song_id).all()
+    assert any(m.role == "assistant" and m.model == "gpt-4o-mini" for m in messages)
 
 
 # --- Prompt caching tests ---

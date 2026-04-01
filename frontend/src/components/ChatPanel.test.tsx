@@ -263,6 +263,37 @@ describe('ChatPanel', () => {
       expect(bubble!.textContent).toContain('Queued request');
     });
 
+    it('clears queue and pending messages when onBeforeSend fails', async () => {
+      const setMessages = vi.fn();
+      const onBeforeSend = vi.fn().mockRejectedValue(new Error('Song creation failed'));
+      render(
+        <ChatPanel
+          {...defaults}
+          songId={undefined as unknown as number}
+          setMessages={setMessages}
+          onBeforeSend={onBeforeSend}
+        />,
+      );
+      const input = screen.getByPlaceholderText(/How would you like to change/) as HTMLTextAreaElement;
+
+      // Send first message (triggers onBeforeSend which will fail)
+      fireEvent.change(input, { target: { value: 'First request' } });
+      await act(async () => {
+        fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+      });
+
+      // The error message should be added and pending messages filtered out
+      const errorCall = setMessages.mock.calls.find(call => {
+        if (typeof call[0] === 'function') {
+          const result = call[0]([{ role: 'user', content: 'Queued', pending: true }]);
+          return result.some((m: ChatMessage) => m.content.includes('Song creation failed')) &&
+                 !result.some((m: ChatMessage) => m.pending === true);
+        }
+        return false;
+      });
+      expect(errorCall).toBeDefined();
+    });
+
     it('clears input after queuing a message', async () => {
       render(<ChatPanel {...defaults} />);
       const input = screen.getByPlaceholderText(/How would you like to change/) as HTMLTextAreaElement;

@@ -465,8 +465,9 @@ export default function ChatPanel({ songId, profileId, messages, setMessages, ll
       try {
         effectiveSongId = await onBeforeSend();
       } catch (err) {
+        pendingQueue.current = [];
         const errorMsg: ChatMessage = { role: 'assistant', content: 'Error: ' + (err as Error).message };
-        setMessages(prev => [...prev, errorMsg]);
+        setMessages(prev => [...prev.filter(m => !m.pending), errorMsg]);
         setSending(false);
         onStreamingChange?.(false);
         return;

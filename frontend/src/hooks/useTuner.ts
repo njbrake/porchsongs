@@ -60,6 +60,7 @@ export default function useTuner() {
   const lockedIntuneRef = useRef(false);
   const noteHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdingNoteRef = useRef(false);
+  const cancelledRef = useRef(false);
 
   const cleanup = useCallback(() => {
     if (rafRef.current) {
@@ -88,6 +89,7 @@ export default function useTuner() {
       noteHoldTimerRef.current = null;
     }
     holdingNoteRef.current = false;
+    cancelledRef.current = true;
   }, []);
 
   const stop = useCallback(() => {
@@ -116,14 +118,25 @@ export default function useTuner() {
       return;
     }
 
-    // Clean up any existing session
+    // Clean up any existing session and reset cancellation flag
     cleanup();
+    cancelledRef.current = false;
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // If stop() was called while awaiting getUserMedia, discard resources
+      if (cancelledRef.current) {
+        stream.getTracks().forEach(t => t.stop());
+        return;
+      }
       mediaStreamRef.current = stream;
 
       const audioContext = new AudioContext();
+      // Resume AudioContext (required on mobile browsers where it starts suspended)
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
       audioContextRef.current = audioContext;
 
       const source = audioContext.createMediaStreamSource(stream);

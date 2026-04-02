@@ -538,7 +538,11 @@ async def chat(
     system_prompt = profile.system_prompt_chat if profile else None
     original_content = song.original_content
     # Use frontend-provided rewritten_content (avoids autosave race), else DB value.
-    rewritten_content = req.rewritten_content or song.rewritten_content
+    # Explicit None check so an empty string from the client doesn't silently
+    # fall through to the DB value.
+    rewritten_content = (
+        req.rewritten_content if req.rewritten_content is not None else song.rewritten_content
+    )
 
     # Persist the user message before the LLM call so it survives cancellation
     _persist_user_message(db, song.id, req.messages)
@@ -610,7 +614,11 @@ async def chat_stream(
     system_prompt = profile.system_prompt_chat if profile else None
     original_content = song.original_content
     # Use frontend-provided rewritten_content (avoids autosave race), else DB value.
-    rewritten_content = req.rewritten_content or song.rewritten_content
+    # Explicit None check so an empty string from the client doesn't silently
+    # fall through to the DB value.
+    rewritten_content = (
+        req.rewritten_content if req.rewritten_content is not None else song.rewritten_content
+    )
     song_id = song.id
 
     # Persist the user message before streaming so it survives cancellation

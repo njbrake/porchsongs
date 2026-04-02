@@ -551,6 +551,8 @@ def _build_chat_params(
 
     # Prepend the current version to the final user message so the LLM sees
     # manual edits without changing the (cacheable) system prompt or history.
+    # Skipped for multimodal messages (list content) since those are image/PDF
+    # payloads where prepending plain text would break the content structure.
     if rewritten_content and rewritten_content != original_content and llm_messages:
         last = llm_messages[-1]
         if last["role"] == "user" and isinstance(last["content"], str):

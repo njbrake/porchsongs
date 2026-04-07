@@ -831,6 +831,31 @@ describe('RewriteTab', () => {
       expect(api.saveSong).not.toHaveBeenCalled();
     });
 
+    it('prevents duplicate saves from rapid sample clicks', async () => {
+      const onSongSaved = vi.fn();
+      let resolveFirst: (v: unknown) => void;
+      const slowSave = new Promise(r => { resolveFirst = r; });
+      vi.mocked(api.saveSong)
+        .mockReturnValueOnce(slowSave as never)
+        .mockResolvedValueOnce({ id: 51, uuid: 'uuid-51', profile_id: 1 } as never);
+
+      const props = makeProps({ onSongSaved });
+      render(<RewriteTab {...props} />);
+
+      // Click first sample
+      fireEvent.click(screen.getByText('When the Saints Go Marching In'));
+
+      // Click second sample while first save is still in-flight
+      // (the guard should prevent the second save from starting)
+      fireEvent.click(screen.getByText('When the Saints Go Marching In'));
+
+      // Resolve the first save
+      await act(async () => { resolveFirst!({ id: 50, uuid: 'uuid-50', profile_id: 1 }); });
+
+      // Only one saveSong call should have been made
+      expect(api.saveSong).toHaveBeenCalledTimes(1);
+    });
+
     it('autosaves title edits in PARSED state after song is created', async () => {
       vi.useFakeTimers();
       vi.mocked(api.updateSong).mockResolvedValue({} as never);

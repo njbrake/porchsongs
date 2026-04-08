@@ -579,26 +579,39 @@ export default function LibraryTab() {
 
   const containerClass = scrollDir === 'horizontal' ? 'w-full' : 'max-w-[1120px] mx-auto w-full';
 
-  // Calculate available height for the horizontal grid by measuring
-  // from the grid's top edge to the bottom of the viewport (minus footer).
+  // Calculate grid dimensions from the screen:
+  // - Column width matches the original responsive breakpoints (2 at lg, 3 at 2xl)
+  // - Row count fills the available viewport height
   const CARD_HEIGHT_PX = 76; // approximate height of a song card + gap
   const FOOTER_HEIGHT_PX = 44; // approximate footer height
   const [gridHeight, setGridHeight] = useState<number>(400);
+  const [colWidth, setColWidth] = useState<number>(400);
+  const measureGrid = useCallback(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const top = el.getBoundingClientRect().top;
+    const available = window.innerHeight - top - FOOTER_HEIGHT_PX;
+    const clamped = Math.max(200, available);
+    setGridHeight(clamped);
+    setVisibleRows(Math.max(1, Math.floor(clamped / CARD_HEIGHT_PX)));
+    const containerWidth = el.parentElement?.clientWidth ?? window.innerWidth;
+    const vw = window.innerWidth;
+    const cols = vw >= 1536 ? 3 : vw >= 1024 ? 2 : 1;
+    const gap = 12; // 0.75rem gap
+    setColWidth(Math.floor((containerWidth - gap * (cols - 1)) / cols));
+  }, []);
+
+  // Callback ref: fires when the horizontal grid mounts/unmounts
+  const setGridRef = useCallback((node: HTMLDivElement | null) => {
+    gridRef.current = node;
+    if (node) measureGrid();
+  }, [measureGrid]);
+
   useEffect(() => {
-    if (scrollDir !== 'horizontal' || !gridRef.current) return;
-    const measure = () => {
-      const el = gridRef.current;
-      if (!el) return;
-      const top = el.getBoundingClientRect().top;
-      const available = window.innerHeight - top - FOOTER_HEIGHT_PX;
-      const clamped = Math.max(200, available);
-      setGridHeight(clamped);
-      setVisibleRows(Math.max(1, Math.floor(clamped / CARD_HEIGHT_PX)));
-    };
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, [scrollDir]);
+    if (scrollDir !== 'horizontal') return;
+    window.addEventListener('resize', measureGrid);
+    return () => window.removeEventListener('resize', measureGrid);
+  }, [scrollDir, measureGrid]);
 
   useEffect(() => {
     api.listSongs().then(data => {
@@ -1155,7 +1168,7 @@ export default function LibraryTab() {
 
       {scrollDir === 'horizontal' ? (
         <div
-          ref={gridRef}
+          ref={setGridRef}
           data-testid="horizontal-grid"
           className="overflow-x-auto overflow-y-hidden"
           style={{
@@ -1163,7 +1176,7 @@ export default function LibraryTab() {
             display: 'grid',
             gridTemplateRows: `repeat(${visibleRows}, minmax(0, 1fr))`,
             gridAutoFlow: 'column',
-            gridAutoColumns: 'minmax(300px, 400px)',
+            gridAutoColumns: `${colWidth}px`,
             gap: '0.75rem',
             scrollSnapType: 'x mandatory',
           }}

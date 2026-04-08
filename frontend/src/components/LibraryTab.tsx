@@ -579,16 +579,21 @@ export default function LibraryTab() {
 
   const containerClass = scrollDir === 'horizontal' ? 'w-full' : 'max-w-[1120px] mx-auto w-full';
 
-  // Measure available height to calculate how many card rows fit
+  // Calculate available height for the horizontal grid by measuring
+  // from the grid's top edge to the bottom of the viewport (minus footer).
   const CARD_HEIGHT_PX = 76; // approximate height of a song card + gap
+  const FOOTER_HEIGHT_PX = 44; // approximate footer height
+  const [gridHeight, setGridHeight] = useState<number>(400);
   useEffect(() => {
     if (scrollDir !== 'horizontal' || !gridRef.current) return;
     const measure = () => {
-      const rect = gridRef.current?.getBoundingClientRect();
-      if (rect) {
-        const rows = Math.max(1, Math.floor(rect.height / CARD_HEIGHT_PX));
-        setVisibleRows(rows);
-      }
+      const el = gridRef.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      const available = window.innerHeight - top - FOOTER_HEIGHT_PX;
+      const clamped = Math.max(200, available);
+      setGridHeight(clamped);
+      setVisibleRows(Math.max(1, Math.floor(clamped / CARD_HEIGHT_PX)));
     };
     measure();
     window.addEventListener('resize', measure);
@@ -1151,12 +1156,14 @@ export default function LibraryTab() {
       {scrollDir === 'horizontal' ? (
         <div
           ref={gridRef}
-          className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden scroll-snap-x-mandatory"
+          data-testid="horizontal-grid"
+          className="overflow-x-auto overflow-y-hidden"
           style={{
+            height: `${gridHeight}px`,
             display: 'grid',
             gridTemplateRows: `repeat(${visibleRows}, minmax(0, 1fr))`,
             gridAutoFlow: 'column',
-            gridAutoColumns: 'minmax(320px, 1fr)',
+            gridAutoColumns: 'minmax(300px, 400px)',
             gap: '0.75rem',
             scrollSnapType: 'x mandatory',
           }}

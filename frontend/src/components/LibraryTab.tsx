@@ -24,13 +24,16 @@ import type { AppShellContext } from '@/layouts/AppShell';
 import type { Song, SongRevision } from '@/types';
 
 /**
- * Split lyrics into two balanced columns at the best section boundary.
+ * Split lyrics into N balanced columns at section boundaries.
+ * Returns null if the content is too short to split.
  */
-const MIN_LINES_FOR_SPLIT = 20;
+const MIN_LINES_PER_COLUMN = 10;
 
-function splitContentForColumns(text: string): { left: string; right: string } | null {
+export function splitContentForColumns(text: string, numCols: number): string[] | null {
+  if (numCols <= 1) return null;
+
   const lines = text.split('\n');
-  if (lines.length < MIN_LINES_FOR_SPLIT) return null;
+  if (lines.length < MIN_LINES_PER_COLUMN * numCols) return null;
 
   const boundaries: number[] = [];
   for (let i = 0; i < lines.length; i++) {
@@ -40,29 +43,41 @@ function splitContentForColumns(text: string): { left: string; right: string } |
     }
   }
 
-  if (boundaries.length === 0) return null;
+  if (boundaries.length < numCols - 1) return null;
 
-  const mid = lines.length / 2;
-  let bestIdx = boundaries[0]!;
-  let bestDist = Math.abs(bestIdx - mid);
-  for (const idx of boundaries) {
-    const dist = Math.abs(idx - mid);
-    if (dist < bestDist) {
-      bestDist = dist;
-      bestIdx = idx;
+  // Find numCols-1 split points that divide content most evenly
+  const targetSize = lines.length / numCols;
+  const splitPoints: number[] = [];
+
+  for (let col = 1; col < numCols; col++) {
+    const target = targetSize * col;
+    const minLine = splitPoints.length > 0 ? splitPoints[splitPoints.length - 1]! + MIN_LINES_PER_COLUMN : lines.length * 0.1;
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    for (const idx of boundaries) {
+      if (idx <= minLine) continue;
+      if (idx >= lines.length - MIN_LINES_PER_COLUMN) continue;
+      const dist = Math.abs(idx - target);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = idx;
+      }
     }
+    if (bestIdx === -1) return null;
+
+    const isSectionHeader = /^\[.+\]$/.test(lines[bestIdx]!.trim());
+    splitPoints.push(isSectionHeader ? bestIdx : bestIdx + 1);
   }
 
-  const minEdge = lines.length * 0.25;
-  if (bestIdx < minEdge || bestIdx > lines.length - minEdge) return null;
+  const columns: string[] = [];
+  let start = 0;
+  for (const sp of splitPoints) {
+    columns.push(lines.slice(start, sp).join('\n').replace(/\n+$/, ''));
+    start = sp;
+  }
+  columns.push(lines.slice(start).join('\n').replace(/^\n+/, ''));
 
-  const isSectionHeader = /^\[.+\]$/.test(lines[bestIdx]!.trim());
-  const splitAt = isSectionHeader ? bestIdx : bestIdx + 1;
-
-  return {
-    left: lines.slice(0, splitAt).join('\n').replace(/\n+$/, ''),
-    right: lines.slice(splitAt).join('\n').replace(/^\n+/, ''),
-  };
+  return columns;
 }
 
 const PRE_BASE_CLASS = 'font-mono text-xs sm:text-code leading-snug whitespace-pre-wrap break-words sm:whitespace-pre sm:break-normal sm:overflow-x-auto text-foreground';
@@ -147,16 +162,42 @@ function FolderPill({
   );
 }
 
+/**
+ * Determine the best auto column count based on viewport width.
+ * Returns 1-4 columns, scaling with available width.
+ */
+function autoColumnCount(viewportWidth: number): number {
+  if (viewportWidth >= 1920) return 4;
+  if (viewportWidth >= 1536) return 3;
+  if (viewportWidth >= 1280) return 2;
+  return 1;
+}
+
+/**
+ * Determine the max column count the content can support.
+ */
+function maxColumnsForContent(text: string): number {
+  const lineCount = text.split('\n').length;
+  if (lineCount >= MIN_LINES_PER_COLUMN * 4) return 4;
+  if (lineCount >= MIN_LINES_PER_COLUMN * 3) return 3;
+  if (lineCount >= MIN_LINES_PER_COLUMN * 2) return 2;
+  return 1;
+}
+
+const GRID_COL_CLASSES: Record<number, string> = {
+  2: 'grid grid-cols-2 gap-4',
+  3: 'grid grid-cols-3 gap-3',
+  4: 'grid grid-cols-4 gap-2',
+};
+
 function PerformanceSheet({ song, onSongUpdated }: { song: Song; onSongUpdated: (song: Song) => void }) {
   const text = song.rewritten_content;
-  const columns = useMemo(() => splitContentForColumns(text), [text]);
   const cardRef = useRef<HTMLDivElement>(null);
-  const [autoOneCol, setAutoOneCol] = useState(false);
   const [userOverride, setUserOverride] = useState<number | null>(null);
   const [localFontSize, setLocalFontSize] = useState<number | null>(song.font_size ?? null);
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
 
   useLayoutEffect(() => {
-    setAutoOneCol(false);
     setUserOverride(null);
   }, [text]);
 
@@ -164,20 +205,20 @@ function PerformanceSheet({ song, onSongUpdated }: { song: Song; onSongUpdated: 
     setLocalFontSize(song.font_size ?? null);
   }, [song.font_size]);
 
-  const canSplit = columns !== null;
-  const showTwoCol = canSplit && (userOverride === 2 || (userOverride === null && !autoOneCol));
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
-  useLayoutEffect(() => {
-    if (columns && !autoOneCol && userOverride === null && cardRef.current) {
-      const rect = cardRef.current.getBoundingClientRect();
-      const available = window.innerHeight - rect.top - 40;
-      if (cardRef.current.scrollHeight > available * 1.5) {
-        setAutoOneCol(true);
-      }
-    }
-  }, [columns, autoOneCol, userOverride]);
+  const maxCols = useMemo(() => maxColumnsForContent(text), [text]);
+  const autoCols = Math.min(autoColumnCount(viewportWidth), maxCols);
+  const activeCols = userOverride !== null ? Math.min(userOverride, maxCols) : autoCols;
+  const columns = useMemo(() => splitContentForColumns(text, activeCols), [text, activeCols]);
+  const isMultiCol = activeCols > 1 && columns !== null;
 
-  const autoFontSize = useAutoFontSize(cardRef, text, { columnOverhead: showTwoCol ? 33 : 0 });
+  const columnOverhead = isMultiCol ? 17 * (activeCols - 1) : 0;
+  const autoFontSize = useAutoFontSize(cardRef, text, { columnOverhead });
   const effectiveSize = localFontSize ?? autoFontSize;
   const fontStyle = effectiveSize !== undefined ? { fontSize: `${effectiveSize}px` } : undefined;
   const isAuto = localFontSize === null;
@@ -202,6 +243,10 @@ function PerformanceSheet({ song, onSongUpdated }: { song: Song; onSongUpdated: 
     setLocalFontSize(null);
     persistFontSize(null);
   };
+
+  // Build the list of column options available for this content
+  const colOptions: number[] = [1];
+  for (let c = 2; c <= maxCols; c++) colOptions.push(c);
 
   const controls = (
     <div className="flex items-center justify-end gap-2 mb-2 sm:mb-0 sm:absolute sm:top-2 sm:right-2 sm:z-10 sm:opacity-60 sm:hover:opacity-100 sm:transition-opacity">
@@ -231,10 +276,10 @@ function PerformanceSheet({ song, onSongUpdated }: { song: Song; onSongUpdated: 
           </button>
         )}
       </div>
-      {canSplit && (
+      {colOptions.length > 1 && (
         <div className="hidden xl:inline-flex items-center gap-0.5 bg-panel border border-border rounded-md p-0.5" role="radiogroup" aria-label="Column layout">
-          {([1, 2] as const).map(cols => {
-            const isActive = cols === 1 ? !showTwoCol : showTwoCol;
+          {colOptions.map(cols => {
+            const isActive = activeCols === cols;
             return (
               <button
                 key={cols}
@@ -261,13 +306,22 @@ function PerformanceSheet({ song, onSongUpdated }: { song: Song; onSongUpdated: 
       {controls}
       <Card
         ref={cardRef}
-        className={cn('p-4 sm:p-6', showTwoCol && 'xl:grid xl:grid-cols-2 xl:gap-6')}
+        className={cn('p-3 sm:p-4', isMultiCol && GRID_COL_CLASSES[activeCols])}
       >
-        {showTwoCol ? (
-          <>
-            <pre className={cn(PRE_BASE_CLASS, 'min-w-0 xl:border-r xl:border-border xl:pr-8')} style={fontStyle}>{columns!.left}</pre>
-            <pre className={cn(PRE_BASE_CLASS, 'min-w-0')} style={fontStyle}>{columns!.right}</pre>
-          </>
+        {isMultiCol && columns ? (
+          columns.map((col, i) => (
+            <pre
+              key={i}
+              className={cn(
+                PRE_BASE_CLASS,
+                'min-w-0',
+                i < columns.length - 1 && 'border-r border-border pr-3'
+              )}
+              style={fontStyle}
+            >
+              {col}
+            </pre>
+          ))
         ) : (
           <pre className={PRE_BASE_CLASS} style={fontStyle}>{text}</pre>
         )}

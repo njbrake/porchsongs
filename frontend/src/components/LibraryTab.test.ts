@@ -1,4 +1,74 @@
-import { lyricsPreview } from './LibraryTab';
+import { lyricsPreview, splitContentForColumns } from './LibraryTab';
+
+function makeSongText(sections: number, linesPerSection: number): string {
+  const parts: string[] = [];
+  for (let s = 1; s <= sections; s++) {
+    parts.push(`[Section ${s}]`);
+    for (let l = 1; l <= linesPerSection; l++) {
+      parts.push(`Line ${l} of section ${s}`);
+    }
+    parts.push('');
+  }
+  return parts.join('\n');
+}
+
+describe('splitContentForColumns', () => {
+  it('returns null for numCols=1', () => {
+    expect(splitContentForColumns(makeSongText(4, 10), 1)).toBeNull();
+  });
+
+  it('returns null when content is too short for requested columns', () => {
+    const short = makeSongText(2, 4); // ~12 lines, too short for 2 cols (needs 20)
+    expect(splitContentForColumns(short, 2)).toBeNull();
+  });
+
+  it('splits into 2 columns at section boundaries', () => {
+    const text = makeSongText(4, 8); // 4 sections x ~9 lines each = ~40 lines
+    const result = splitContentForColumns(text, 2);
+    expect(result).not.toBeNull();
+    expect(result).toHaveLength(2);
+    expect(result![0]).toContain('[Section 1]');
+    expect(result![1]).toContain(`[Section ${3}`);
+  });
+
+  it('splits into 3 columns', () => {
+    const text = makeSongText(6, 8); // 6 sections x ~9 lines = ~54 lines
+    const result = splitContentForColumns(text, 3);
+    expect(result).not.toBeNull();
+    expect(result).toHaveLength(3);
+    // Each column should contain content
+    for (const col of result!) {
+      expect(col.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it('splits into 4 columns', () => {
+    const text = makeSongText(8, 8); // 8 sections x ~9 lines = ~72 lines
+    const result = splitContentForColumns(text, 4);
+    expect(result).not.toBeNull();
+    expect(result).toHaveLength(4);
+    for (const col of result!) {
+      expect(col.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it('returns null when not enough boundaries for requested columns', () => {
+    // Single section with many lines but no internal boundaries
+    const lines = Array.from({ length: 60 }, (_, i) => `Line ${i + 1}`);
+    expect(splitContentForColumns(lines.join('\n'), 3)).toBeNull();
+  });
+
+  it('preserves all content across columns', () => {
+    const text = makeSongText(4, 8);
+    const result = splitContentForColumns(text, 2);
+    expect(result).not.toBeNull();
+    const joined = result!.join('\n');
+    // Every section header should appear somewhere in the result
+    for (let s = 1; s <= 4; s++) {
+      expect(joined).toContain(`[Section ${s}]`);
+    }
+  });
+});
 
 describe('lyricsPreview', () => {
   it('returns first two content lines joined by bullet', () => {

@@ -63,4 +63,15 @@ describe('MobileNav', () => {
 
     expect(screen.queryByText('Navigation')).not.toBeInTheDocument();
   });
+
+  it('shows footer links in sidebar when open', () => {
+    renderWithRouter(<MobileNav />, { route: '/app/rewrite' });
+
+    fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+
+    expect(screen.getByText('Report issue')).toBeInTheDocument();
+    expect(screen.getByText('Feature request')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'GitHub' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'X (Twitter)' })).toBeInTheDocument();
+  });
 });

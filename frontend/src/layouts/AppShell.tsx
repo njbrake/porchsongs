@@ -409,7 +409,7 @@ export default function AppShell() {
       <main className="flex-1 min-h-0 flex flex-col overflow-y-auto max-w-[1800px] w-full mx-auto px-2 sm:px-4 py-4">
         <Outlet context={ctx} />
       </main>
-      <footer className="shrink-0 border-t border-border py-2 sm:py-3 px-4 text-xs text-muted-foreground">
+      <footer className="hidden sm:block shrink-0 border-t border-border py-2 sm:py-3 px-4 text-xs text-muted-foreground">
         <div className="flex items-center justify-center sm:justify-between max-w-[1800px] w-full mx-auto">
           <span className="hidden sm:inline">Made with ❤️ from open source</span>
           <div className="flex items-center gap-3">

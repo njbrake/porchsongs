@@ -876,7 +876,7 @@ export default function LibraryTab() {
     const showScrollToggle = maxColumnsForContent(song.rewritten_content) >= 2;
     const sliderValue = perfFontSize ?? 16;
     return (
-      <div className="flex flex-col h-full min-h-0 w-full">
+      <div className="flex flex-col h-full min-h-0 w-full bg-card rounded-lg p-3 sm:p-4">
         <div className="shrink-0 mb-2">
           <div className="flex items-center gap-3">
             <button

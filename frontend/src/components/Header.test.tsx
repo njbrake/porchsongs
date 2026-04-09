@@ -20,6 +20,13 @@ describe('Header', () => {
     expect(screen.getByText('Make every song yours')).toBeInTheDocument();
   });
 
+  it('hides title text on mobile via hidden sm:inline class', () => {
+    renderWithRouter(<Header {...defaults} />);
+    const title = screen.getByText('porchsongs');
+    expect(title.className).toContain('hidden');
+    expect(title.className).toContain('sm:inline');
+  });
+
   it('links logo to /app/rewrite in OSS mode', () => {
     renderWithRouter(<Header {...defaults} />);
     const link = screen.getByText('porchsongs').closest('a');

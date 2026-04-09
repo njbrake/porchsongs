@@ -103,6 +103,30 @@ function NavButton() {
 
 import LibraryTab from '@/components/LibraryTab';
 
+describe('LibraryTab performance view', () => {
+  it('has white card background on song detail view', async () => {
+    render(
+      <MemoryRouter initialEntries={['/app/library/test-uuid-123']}>
+        <Routes>
+          <Route path="/app" element={<ContextWrapper />}>
+            <Route path="library/:id" element={<LibraryTab />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Amazing Grace')).toBeInTheDocument();
+    });
+
+    // The performance view wrapper should have bg-card for a white background
+    const backButton = screen.getByRole('button', { name: /back to library/i });
+    const perfWrapper = backButton.closest('.bg-card');
+    expect(perfWrapper).not.toBeNull();
+    expect(perfWrapper?.className).toContain('bg-card');
+  });
+});
+
 describe('LibraryTab navigation (issue #94)', () => {
   it('returns to song list when navigating from /app/library/:id to /app/library', async () => {
     const user = userEvent.setup();

@@ -725,6 +725,8 @@ async def chat_stream(
                 else:
                     accumulated += text
                     yield f"event: token\ndata: {json.dumps(text)}\n\n"
+            # Stream fully consumed; inline persist follows after finally.
+            _completed = True
         except Exception as e:
             _completed = True
             logger.exception("Chat stream LLM error")
@@ -786,7 +788,6 @@ async def chat_stream(
             persist_db.close()
 
         # Send final result
-        _completed = True
         done_data: dict[str, object] = {
             "rewritten_content": parsed["content"],
             "original_content": parsed.get("original_content"),

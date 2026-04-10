@@ -54,7 +54,7 @@ export type ApiError = Error & { errorType?: string };
 /** Thrown when a mid-stream SSE connection is lost (e.g. mobile tab suspended). */
 export class ConnectionLostError extends Error {
   constructor() {
-    super('Connection lost. Changes are being saved in the background.');
+    super('Connection lost');
     this.name = 'ConnectionLostError';
   }
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Outlet, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
-import api, { STORAGE_KEYS } from '@/api';
+import api, { ConnectionLostError, STORAGE_KEYS } from '@/api';
 import { chatHistoryToMessages } from '@/lib/chat-utils';
 import useLocalStorage from '@/hooks/useLocalStorage';
 import useProviderConnections from '@/hooks/useProviderConnections';
@@ -250,7 +250,10 @@ export default function AppShell() {
       setParsedContent(result.original_content);
       return result;
     } catch (err) {
-      if ((err as Error).name !== 'AbortError') {
+      if (err instanceof ConnectionLostError) {
+        // Parse results are not persisted; show a simple retry message.
+        setParseError('Connection lost. Please try again.');
+      } else if ((err as Error).name !== 'AbortError') {
         setParseError((err as Error).message);
         setParseErrorType((err as Error & { errorType?: string }).errorType);
       }

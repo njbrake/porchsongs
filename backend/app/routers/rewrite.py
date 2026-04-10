@@ -677,6 +677,8 @@ async def chat_stream(
         accumulated = ""
         reasoning_accumulated = ""
         usage_data: dict[str, int] | None = None
+        stream: AsyncIterator[tuple[str, str]] | None = None
+        _completed = False
         try:
             stream = llm_service.chat_edit_content_stream(
                 original_content=original_content,
@@ -713,6 +715,7 @@ async def chat_stream(
                     )
                     _background_tasks.add(task)
                     task.add_done_callback(_background_tasks.discard)
+                    _completed = True
                     return
                 if kind == "reasoning":
                     reasoning_accumulated += text
@@ -723,9 +726,32 @@ async def chat_stream(
                     accumulated += text
                     yield f"event: token\ndata: {json.dumps(text)}\n\n"
         except Exception as e:
+            _completed = True
             logger.exception("Chat stream LLM error")
             yield f"event: error\ndata: {json.dumps(_format_llm_error(e, req.provider))}\n\n"
             return
+        finally:
+            if not _completed and stream is not None and accumulated:
+                # Generator abandoned by Starlette (client disconnected between
+                # yields, so the is_disconnected() check never ran).  Spawn a
+                # background task to finish the LLM call and persist the result.
+                logger.info(
+                    "Chat stream generator abandoned with %d chars accumulated, "
+                    "spawning background task for song %s",
+                    len(accumulated),
+                    song_id,
+                )
+                task = asyncio.create_task(
+                    _finish_chat_in_background(
+                        stream,
+                        accumulated,
+                        reasoning_accumulated,
+                        song_id,
+                        req.model,
+                    )
+                )
+                _background_tasks.add(task)
+                task.add_done_callback(_background_tasks.discard)
 
         # Parse the accumulated response
         parsed = llm_service._parse_chat_response(accumulated)
@@ -760,6 +786,7 @@ async def chat_stream(
             persist_db.close()
 
         # Send final result
+        _completed = True
         done_data: dict[str, object] = {
             "rewritten_content": parsed["content"],
             "original_content": parsed.get("original_content"),

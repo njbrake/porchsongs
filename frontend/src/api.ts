@@ -51,6 +51,14 @@ function _getAuthHeaders(): Record<string, string> {
 /** Error with optional error_type from the backend. */
 export type ApiError = Error & { errorType?: string };
 
+/** Thrown when a mid-stream SSE connection is lost (e.g. mobile tab suspended). */
+export class ConnectionLostError extends Error {
+  constructor() {
+    super('Connection lost. Changes are being saved in the background.');
+    this.name = 'ConnectionLostError';
+  }
+}
+
 function _parseApiError(body: unknown, fallback: string): string {
   const b = body as { detail?: string | { message?: string; error?: string; detail?: string } };
   if (!b.detail) return fallback;
@@ -131,10 +139,22 @@ async function _streamSse<T>(
     let buffer = '';
     let eventType = '';
     let result: T | null = null;
+    let receivedData = false;
 
     for (;;) {
-      const { done, value } = await reader.read();
+      let readResult: ReadableStreamReadResult<Uint8Array>;
+      try {
+        readResult = await reader.read();
+      } catch {
+        // reader.read() rejects when the connection is killed (e.g. mobile
+        // browser suspended the tab). If we already received data, the
+        // backend continues the LLM call and persists the result.
+        if (receivedData) throw new ConnectionLostError();
+        throw new Error('Connection failed');
+      }
+      const { done, value } = readResult;
       if (done) break;
+      receivedData = true;
       buffer += decoder.decode(value, { stream: true });
 
       const lines = buffer.split('\n');
@@ -164,7 +184,11 @@ async function _streamSse<T>(
       }
     }
 
-    if (!result) throw new Error('Stream ended without result');
+    if (!result) {
+      // Stream ended without a done event — connection was dropped.
+      if (receivedData) throw new ConnectionLostError();
+      throw new Error('Stream ended without result');
+    }
     return result;
   };
   return doStream(true);

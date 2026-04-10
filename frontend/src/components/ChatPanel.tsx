@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react'
 import Markdown from 'react-markdown';
 import { toast } from 'sonner';
 import { cn, stripXmlTags } from '@/lib/utils';
-import api, { isProviderError } from '@/api';
+import api, { ConnectionLostError, isProviderError } from '@/api';
 import { isQuotaError, QuotaUpgradeLink, UsageFooter } from '@/extensions/quota';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -382,6 +382,12 @@ export default function ChatPanel({ songId, profileId, messages, setMessages, ll
       if ((err as Error).name === 'AbortError') {
         pendingQueue.current = [];
         setMessages(prev => [...prev.filter(m => !m.pending), { role: 'assistant' as const, content: 'Cancelled.' }]);
+      } else if (err instanceof ConnectionLostError) {
+        // Mobile tab suspended or connection dropped mid-stream.
+        // The backend continues the LLM call and persists the result.
+        // The visibility recovery hook will re-fetch when the tab returns.
+        pendingQueue.current = [];
+        setMessages(prev => [...prev.filter(m => !m.pending), { role: 'assistant' as const, content: 'Processing in background...', isNote: true }]);
       } else {
         pendingQueue.current = [];
         setLastFailedInput(text);

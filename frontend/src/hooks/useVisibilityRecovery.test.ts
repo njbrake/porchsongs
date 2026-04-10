@@ -188,4 +188,61 @@ describe('useVisibilityRecovery', () => {
 
     expect(api.getSong).toHaveBeenCalled();
   });
+
+  it('retries when song has not changed yet (backend still processing)', async () => {
+    const unchangedSong = {
+      id: 1,
+      uuid: 'test-uuid',
+      original_content: 'original',
+      rewritten_content: 'old content',
+      changes_summary: 'old',
+    };
+    const updatedSong = {
+      id: 1,
+      uuid: 'test-uuid',
+      original_content: 'original',
+      rewritten_content: 'new content from backend',
+      changes_summary: 'updated by background task',
+    };
+
+    // First call returns unchanged, second returns updated
+    vi.mocked(api.getSong)
+      .mockResolvedValueOnce(unchangedSong as never)
+      .mockResolvedValueOnce(updatedSong as never);
+    vi.mocked(api.getChatHistory).mockResolvedValue([] as never);
+
+    // setRewriteResult: updater receives prev state, hook compares content
+    const prev: RewriteResult = {
+      original_content: 'original',
+      rewritten_content: 'old content',
+      changes_summary: 'old',
+    };
+    setRewriteResult.mockImplementation((updater: SetStateAction<RewriteResult | null>) => {
+      if (typeof updater === 'function') updater(prev);
+    });
+
+    renderHook(
+      ({ isStreaming }) =>
+        useVisibilityRecovery({
+          songUuid: 'test-uuid',
+          isStreaming,
+          setRewriteResult,
+          setChatMessages,
+        }),
+      { initialProps: { isStreaming: true } },
+    );
+
+    simulateVisibilityChange('hidden');
+    simulateVisibilityChange('visible');
+
+    // Let all retries run (2.5s + 5s + 10s)
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    // Should have called getSong at least twice: first found no change, retried
+    expect(api.getSong).toHaveBeenCalledTimes(2);
+    // Eventually found the updated song
+    expect(toast.info).toHaveBeenCalledWith('Restored latest changes');
+  });
 });

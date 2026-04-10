@@ -4,9 +4,9 @@ import api from '@/api';
 import { chatHistoryToMessages } from '@/lib/chat-utils';
 import type { ChatMessage, ChatHistoryRow, RewriteResult, Song } from '@/types';
 
-/** Delay (ms) after tab becomes visible before re-fetching, giving the
- *  backend time to finish persisting if the LLM call was still running. */
-const RECOVERY_DELAY_MS = 2500;
+/** Retry delays (ms) after tab becomes visible again. Gives the backend
+ *  progressively more time to finish the LLM call and persist the result. */
+const RECOVERY_DELAYS_MS = [2500, 5000, 10000];
 
 interface RecoveryDeps {
   songUuid: string | null;
@@ -22,7 +22,8 @@ interface RecoveryDeps {
  *
  * This handles mobile browsers suspending tabs mid-generation: the backend
  * continues the LLM call and persists the result, and this hook picks it up
- * when the user returns.
+ * when the user returns.  Retries up to 3 times with increasing delays to
+ * accommodate longer LLM responses.
  */
 export default function useVisibilityRecovery({
   songUuid,
@@ -44,40 +45,46 @@ export default function useVisibilityRecovery({
         if (!songUuid) return;
         const uuid = songUuid;
 
-        // Wait for the backend to finish persisting, then re-fetch.
-        timerRef.current = setTimeout(async () => {
-          timerRef.current = null;
-          try {
-            const [song, history]: [Song, ChatHistoryRow[]] = await Promise.all([
-              api.getSong(uuid),
-              api.getChatHistory(uuid),
-            ]);
-            let changed = false;
-            setRewriteResult(prev => {
-              // Only update if the song actually changed (backend persisted
-              // a new version while we were away).
-              if (
-                prev &&
-                prev.rewritten_content === song.rewritten_content &&
-                prev.original_content === song.original_content
-              ) {
-                return prev;
+        const tryRecover = (attempt: number) => {
+          timerRef.current = setTimeout(async () => {
+            timerRef.current = null;
+            try {
+              const [song, history]: [Song, ChatHistoryRow[]] = await Promise.all([
+                api.getSong(uuid),
+                api.getChatHistory(uuid),
+              ]);
+              let changed = false;
+              setRewriteResult(prev => {
+                // Only update if the song actually changed (backend persisted
+                // a new version while we were away).
+                if (
+                  prev &&
+                  prev.rewritten_content === song.rewritten_content &&
+                  prev.original_content === song.original_content
+                ) {
+                  return prev;
+                }
+                changed = true;
+                return {
+                  original_content: song.original_content,
+                  rewritten_content: song.rewritten_content,
+                  changes_summary: song.changes_summary || '',
+                };
+              });
+              setChatMessages(chatHistoryToMessages(history));
+              if (changed) {
+                toast.info('Restored latest changes');
+              } else if (attempt < RECOVERY_DELAYS_MS.length - 1) {
+                // Backend hasn't persisted yet; retry with a longer delay.
+                tryRecover(attempt + 1);
               }
-              changed = true;
-              return {
-                original_content: song.original_content,
-                rewritten_content: song.rewritten_content,
-                changes_summary: song.changes_summary || '',
-              };
-            });
-            setChatMessages(chatHistoryToMessages(history));
-            if (changed) {
-              toast.info('Restored latest changes');
+            } catch {
+              // Silently ignore — the user can manually refresh.
             }
-          } catch {
-            // Silently ignore — the user can manually refresh.
-          }
-        }, RECOVERY_DELAY_MS);
+          }, RECOVERY_DELAYS_MS[attempt]);
+        };
+
+        tryRecover(0);
       }
     };
 

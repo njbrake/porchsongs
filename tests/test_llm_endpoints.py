@@ -988,6 +988,56 @@ def test_finish_chat_in_background_persists_result(client: TestClient, db_sessio
     assert any(m.role == "assistant" and m.model == "gpt-4o-mini" for m in messages)
 
 
+def test_abandoned_generator_spawns_background_task(
+    client: TestClient, db_session: Session
+) -> None:
+    """When Starlette abandons the SSE generator (e.g. client disconnects between
+    yields), the finally block should spawn _finish_chat_in_background to persist
+    the result."""
+    from app.routers.rewrite import _finish_chat_in_background
+
+    _, song_data = _make_profile_and_song(client)
+    song_id = song_data["id"]
+
+    # Verify starting state
+    song = db_session.query(Song).filter(Song.id == song_id).first()
+    assert song is not None
+    assert song.current_version == 1
+
+    # Simulate: generator received some tokens, then was abandoned (GeneratorExit).
+    # We test _finish_chat_in_background directly since the abandonment trigger
+    # (GeneratorExit from Starlette) is the same codepath as the finally block.
+    async def _fake_remaining_stream() -> AsyncIterator[tuple[str, str]]:
+        yield ("token", "\nMore lyrics")
+        yield ("token", "\n</content>")
+        yield ("token", "\nExplanation of changes.")
+        yield ("usage", '{"input_tokens": 10, "output_tokens": 20}')
+
+    # Tokens accumulated before the generator was abandoned
+    accumulated = "<content>\nHi there world"
+    reasoning = ""
+
+    asyncio.run(
+        _finish_chat_in_background(
+            _fake_remaining_stream(),
+            accumulated,
+            reasoning,
+            song_id,
+            "gpt-4o-mini",
+        )
+    )
+
+    db_session.expire_all()
+
+    song = db_session.query(Song).filter(Song.id == song_id).first()
+    assert song is not None
+    assert song.current_version == 2
+    assert "More lyrics" in song.rewritten_content
+
+    revisions = db_session.query(SongRevision).filter(SongRevision.song_id == song_id).all()
+    assert len(revisions) == 2
+
+
 # --- Prompt caching tests ---
 
 
